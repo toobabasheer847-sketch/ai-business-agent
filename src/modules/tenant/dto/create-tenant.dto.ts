@@ -1,0 +1,1 @@
+// Placeholder for CreateTenant DTO.

@@ -1,0 +1,1 @@
+// Placeholder for CommunicationHistory DTO.

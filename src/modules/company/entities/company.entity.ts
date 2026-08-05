@@ -1,0 +1,1 @@
+// Placeholder for Company entity.
