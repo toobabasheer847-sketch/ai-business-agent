@@ -14,6 +14,7 @@ import { phoneNumbers } from '../schema/phone-number.schema';
 import { twilioApps } from '../schema/twilio-app.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
+import { tasks } from '../schema/task.schema';
 
 export const tenantRelations = relations(tenants, ({ many, one }) => ({
   users: many(users),
@@ -29,6 +30,7 @@ export const tenantRelations = relations(tenants, ({ many, one }) => ({
   twilioApps: many(twilioApps),
   gmailConfigs: many(gmailConfigs),
   auditLogs: many(auditLogs),
+  tasks: many(tasks),
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -41,6 +43,8 @@ export const userRelations = relations(users, ({ one, many }) => ({
   messages: many(messages),
   proposals: many(proposals),
   auditLogs: many(auditLogs),
+  createdTasks: many(tasks, { relationName: 'createdTasks' }),
+  assignedTasks: many(tasks, { relationName: 'assignedTasks' }),
 }));
 
 export const brandRelations = relations(brands, ({ one }) => ({
@@ -211,3 +215,22 @@ export const auditLogRelations = relations(
     }),
   }),
 );
+
+export const taskRelations = relations(tasks, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tasks.tenantId],
+    references: [tenants.id],
+  }),
+
+  creator: one(users, {
+    fields: [tasks.createdBy],
+    references: [users.id],
+    relationName: 'createdTasks',
+  }),
+
+  assignee: one(users, {
+    fields: [tasks.assignedTo],
+    references: [users.id],
+    relationName: 'assignedTasks',
+  }),
+}));

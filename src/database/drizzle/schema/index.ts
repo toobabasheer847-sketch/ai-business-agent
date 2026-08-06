@@ -9,6 +9,7 @@ export * from './message.schema';
 export * from './phone-number.schema';
 export * from './proposal.schema';
 export * from './prospect.schema';
+export * from './task.schema';
 export * from './tenant.schema';
 export * from './twilio-app.schema';
 export * from './user.schema';
