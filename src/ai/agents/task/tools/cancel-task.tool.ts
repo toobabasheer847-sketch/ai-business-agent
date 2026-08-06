@@ -14,9 +14,10 @@ export class CancelTaskTool extends FunctionTool<any> {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, {
-        status: 'cancelled',
-      }),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, {
+          status: 'cancelled',
+        }),
     });
   }
 }

@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
@@ -14,7 +21,10 @@ export class TaskService {
     private readonly taskRepository: TaskRepository,
   ) {}
 
-  async createTask(dto: CreateTaskDto, context: TaskContext): Promise<TaskRecord> {
+  async createTask(
+    dto: CreateTaskDto,
+    context: TaskContext,
+  ): Promise<TaskRecord> {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
@@ -50,13 +60,18 @@ export class TaskService {
     }
 
     if (task.tenantId !== context.tenantId) {
-      throw new ForbiddenException('You cannot access tasks for another tenant');
+      throw new ForbiddenException(
+        'You cannot access tasks for another tenant',
+      );
     }
 
     return task;
   }
 
-  async listTasks(dto: TaskQueryDto, context: TaskContext): Promise<TaskRecord[]> {
+  async listTasks(
+    dto: TaskQueryDto,
+    context: TaskContext,
+  ): Promise<TaskRecord[]> {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
@@ -68,28 +83,41 @@ export class TaskService {
     });
   }
 
-  async updateTask(taskId: string, dto: UpdateTaskDto, context: TaskContext): Promise<TaskRecord> {
+  async updateTask(
+    taskId: string,
+    dto: UpdateTaskDto,
+    context: TaskContext,
+  ): Promise<TaskRecord> {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    const existing = await this.taskRepository.getTask(taskId, context.tenantId);
+    const existing = await this.taskRepository.getTask(
+      taskId,
+      context.tenantId,
+    );
     if (!existing) {
       throw new NotFoundException('Task not found');
     }
 
     if (existing.tenantId !== context.tenantId) {
-      throw new ForbiddenException('You cannot access tasks for another tenant');
+      throw new ForbiddenException(
+        'You cannot access tasks for another tenant',
+      );
     }
 
-    const updated = await this.taskRepository.updateTask(taskId, context.tenantId, {
-      title: dto.title,
-      description: dto.description,
-      status: dto.status as any,
-      priority: dto.priority as any,
-      assignedTo: dto.assignedTo,
-      dueAt: dto.dueAt,
-    });
+    const updated = await this.taskRepository.updateTask(
+      taskId,
+      context.tenantId,
+      {
+        title: dto.title,
+        description: dto.description,
+        status: dto.status as any,
+        priority: dto.priority as any,
+        assignedTo: dto.assignedTo,
+        dueAt: dto.dueAt,
+      },
+    );
 
     if (!updated) {
       throw new NotFoundException('Task not found');
@@ -98,15 +126,22 @@ export class TaskService {
     return updated;
   }
 
-  async completeTask(taskId: string, context: TaskContext): Promise<TaskRecord> {
+  async completeTask(
+    taskId: string,
+    context: TaskContext,
+  ): Promise<TaskRecord> {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    const updated = await this.taskRepository.updateTask(taskId, context.tenantId, {
-      status: 'completed',
-      completedAt: new Date().toISOString(),
-    });
+    const updated = await this.taskRepository.updateTask(
+      taskId,
+      context.tenantId,
+      {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      },
+    );
 
     if (!updated) {
       throw new NotFoundException('Task not found');
@@ -120,9 +155,13 @@ export class TaskService {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    const updated = await this.taskRepository.updateTask(taskId, context.tenantId, {
-      status: 'cancelled',
-    });
+    const updated = await this.taskRepository.updateTask(
+      taskId,
+      context.tenantId,
+      {
+        status: 'cancelled',
+      },
+    );
 
     if (!updated) {
       throw new NotFoundException('Task not found');
@@ -131,7 +170,10 @@ export class TaskService {
     return updated;
   }
 
-  async processNaturalLanguage(request: string, context: TaskContext): Promise<any> {
+  async processNaturalLanguage(
+    request: string,
+    context: TaskContext,
+  ): Promise<any> {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
@@ -140,7 +182,12 @@ export class TaskService {
   }
 
   private handleError(error: unknown, operation: string): never {
-    if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException) {
+    if (
+      error instanceof BadRequestException ||
+      error instanceof NotFoundException ||
+      error instanceof UnauthorizedException ||
+      error instanceof ForbiddenException
+    ) {
       throw error;
     }
 

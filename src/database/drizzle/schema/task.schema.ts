@@ -63,15 +63,22 @@ export const tasks = pgTable(
 
     completedAt: timestamp('completed_at', { withTimezone: true }),
 
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
 
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => ({
     tenantIdIdx: index('tasks_tenant_id_idx').on(table.tenantId),
     assignedToIdx: index('tasks_assigned_to_idx').on(table.assignedTo),
     statusIdx: index('tasks_status_idx').on(table.status),
     dueAtIdx: index('tasks_due_at_idx').on(table.dueAt),
-    tenantStatusIdx: index('tasks_tenant_status_idx').on(table.tenantId, table.status),
+    tenantStatusIdx: index('tasks_tenant_status_idx').on(
+      table.tenantId,
+      table.status,
+    ),
   }),
 );

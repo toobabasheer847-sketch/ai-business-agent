@@ -30,9 +30,7 @@ export const users = pgTable('users', {
     length: 255,
   }),
 
-  isActive: boolean('is_active')
-    .default(true)
-    .notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
 
   createdAt: timestamp('created_at', {
     withTimezone: true,

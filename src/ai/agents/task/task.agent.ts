@@ -13,7 +13,10 @@ export class TaskAgent {
     private readonly taskRepository: TaskRepository,
     private readonly configService: ConfigService,
   ) {
-    const modelName = this.configService.get<string>('GEMINI_MODEL', 'gemini-2.0-flash');
+    const modelName = this.configService.get<string>(
+      'GEMINI_MODEL',
+      'gemini-2.0-flash',
+    );
     const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
 
     if (!apiKey) {
@@ -45,7 +48,8 @@ export class TaskAgent {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.getTask(input.taskId, input.tenantId),
+      execute: async (input: any) =>
+        this.taskRepository.getTask(input.taskId, input.tenantId),
     });
 
     const listTasksTool = new FunctionTool({
@@ -53,11 +57,14 @@ export class TaskAgent {
       description: 'List tenant-scoped tasks with optional filters.',
       parameters: z.object({
         tenantId: z.string(),
-        status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+        status: z
+          .enum(['pending', 'in_progress', 'completed', 'cancelled'])
+          .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         search: z.string().optional(),
       }),
-      execute: async (input: any) => this.taskRepository.listTasks(input.tenantId, input),
+      execute: async (input: any) =>
+        this.taskRepository.listTasks(input.tenantId, input),
     });
 
     const updateTaskTool = new FunctionTool({
@@ -68,12 +75,15 @@ export class TaskAgent {
         tenantId: z.string(),
         title: z.string().optional(),
         description: z.string().optional(),
-        status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+        status: z
+          .enum(['pending', 'in_progress', 'completed', 'cancelled'])
+          .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
         dueAt: z.string().optional(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, input),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, input),
     });
 
     const completeTaskTool = new FunctionTool({
@@ -83,10 +93,11 @@ export class TaskAgent {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-      }),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        }),
     });
 
     const cancelTaskTool = new FunctionTool({
@@ -96,12 +107,20 @@ export class TaskAgent {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, {
-        status: 'cancelled',
-      }),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, {
+          status: 'cancelled',
+        }),
     });
 
-    this.agent = this.createAgent(modelName, apiKey, [createTaskTool, getTaskTool, listTasksTool, updateTaskTool, completeTaskTool, cancelTaskTool]);
+    this.agent = this.createAgent(modelName, apiKey, [
+      createTaskTool,
+      getTaskTool,
+      listTasksTool,
+      updateTaskTool,
+      completeTaskTool,
+      cancelTaskTool,
+    ]);
   }
 
   private createAgent(modelName: string, apiKey: string, tools: any[]) {
@@ -113,12 +132,16 @@ export class TaskAgent {
         model: modelName,
         apiKey,
       }),
-      instruction: 'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks. Never cross tenant boundaries. If the request is ambiguous, ask for clarification.',
+      instruction:
+        'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks. Never cross tenant boundaries. If the request is ambiguous, ask for clarification.',
       tools,
     });
   }
 
-  async processRequest(context: TaskContext, request: string): Promise<TaskAgentResponse> {
+  async processRequest(
+    context: TaskContext,
+    request: string,
+  ): Promise<TaskAgentResponse> {
     const fallback = this.parseNaturalLanguage(request, context);
 
     if (fallback.action === 'create') {
@@ -131,40 +154,67 @@ export class TaskAgent {
         assignedTo: fallback.data.assignedTo,
         dueAt: fallback.data.dueAt,
       });
-      return { action: 'create', data: created, message: 'Task created successfully.' };
+      return {
+        action: 'create',
+        data: created,
+        message: 'Task created successfully.',
+      };
     }
 
     if (fallback.action === 'list') {
-      const rows = await this.taskRepository.listTasks(context.tenantId, { status: fallback.data.status });
+      const rows = await this.taskRepository.listTasks(context.tenantId, {
+        status: fallback.data.status,
+      });
       return { action: 'list', data: rows, message: 'Tasks retrieved.' };
     }
 
     if (fallback.action === 'complete') {
-      const updated = await this.taskRepository.updateTask(fallback.data.id, context.tenantId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-      });
+      const updated = await this.taskRepository.updateTask(
+        fallback.data.id,
+        context.tenantId,
+        {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        },
+      );
       return { action: 'complete', data: updated, message: 'Task completed.' };
     }
 
     if (fallback.action === 'cancel') {
-      const updated = await this.taskRepository.updateTask(fallback.data.id, context.tenantId, {
-        status: 'cancelled',
-      });
+      const updated = await this.taskRepository.updateTask(
+        fallback.data.id,
+        context.tenantId,
+        {
+          status: 'cancelled',
+        },
+      );
       return { action: 'cancel', data: updated, message: 'Task cancelled.' };
     }
 
-    return { action: 'get', data: null, message: 'Task request could not be understood.' };
+    return {
+      action: 'get',
+      data: null,
+      message: 'Task request could not be understood.',
+    };
   }
 
   private parseNaturalLanguage(request: string, context: TaskContext): any {
     const lower = request.toLowerCase();
 
-    if (lower.includes('show') || lower.includes('list') || lower.includes('pending') || lower.includes('today')) {
+    if (
+      lower.includes('show') ||
+      lower.includes('list') ||
+      lower.includes('pending') ||
+      lower.includes('today')
+    ) {
       return {
         action: 'list',
         data: {
-          status: lower.includes('completed') ? 'completed' : lower.includes('cancelled') ? 'cancelled' : 'pending',
+          status: lower.includes('completed')
+            ? 'completed'
+            : lower.includes('cancelled')
+              ? 'cancelled'
+              : 'pending',
         },
       };
     }
@@ -181,7 +231,13 @@ export class TaskAgent {
 
     if (lower.includes('create') || lower.includes('new')) {
       const title = request.replace(/^(create|new)\s+/i, '').trim();
-      const priority = lower.includes('urgent') ? 'urgent' : lower.includes('high') ? 'high' : lower.includes('low') ? 'low' : 'medium';
+      const priority = lower.includes('urgent')
+        ? 'urgent'
+        : lower.includes('high')
+          ? 'high'
+          : lower.includes('low')
+            ? 'low'
+            : 'medium';
       return {
         action: 'create',
         data: {

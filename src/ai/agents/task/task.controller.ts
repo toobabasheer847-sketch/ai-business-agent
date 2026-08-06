@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 
 import { AuthGuard } from '../../../common/guards/auth.guard.js';
@@ -18,7 +27,7 @@ export class TaskController {
     return this.taskService.createTask(dto, context);
   }
 
-  @Get() 
+  @Get()
   async list(@Query() dto: TaskQueryDto, @Req() req: Request) {
     const context = this.buildContext(req);
     return this.taskService.listTasks(dto, context);
@@ -31,7 +40,11 @@ export class TaskController {
   }
 
   @Post(':taskId')
-  async update(@Param('taskId') taskId: string, @Body() dto: UpdateTaskDto, @Req() req: Request) {
+  async update(
+    @Param('taskId') taskId: string,
+    @Body() dto: UpdateTaskDto,
+    @Req() req: Request,
+  ) {
     const context = this.buildContext(req);
     return this.taskService.updateTask(taskId, dto, context);
   }
@@ -49,13 +62,20 @@ export class TaskController {
   }
 
   @Post('natural-language')
-  async handleNaturalLanguage(@Body('message') message: string, @Req() req: Request) {
+  async handleNaturalLanguage(
+    @Body('message') message: string,
+    @Req() req: Request,
+  ) {
     const context = this.buildContext(req);
     return this.taskService.processNaturalLanguage(message, context);
   }
 
   private buildContext(req: Request) {
-    const user = (req as Request & { user?: { id?: string; tenantId?: string; email?: string } }).user;
+    const user = (
+      req as Request & {
+        user?: { id?: string; tenantId?: string; email?: string };
+      }
+    ).user;
     return {
       userId: user?.id ?? '',
       tenantId: user?.tenantId ?? '',

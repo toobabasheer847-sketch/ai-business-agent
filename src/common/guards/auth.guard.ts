@@ -23,11 +23,16 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : authHeader;
 
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET', 'development-secret'),
+        secret: this.configService.get<string>(
+          'JWT_SECRET',
+          'development-secret',
+        ),
       });
 
       request.user = payload as typeof request.user;

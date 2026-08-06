@@ -15,12 +15,15 @@ export class UpdateTaskTool extends FunctionTool<any> {
         tenantId: z.string(),
         title: z.string().optional(),
         description: z.string().optional(),
-        status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+        status: z
+          .enum(['pending', 'in_progress', 'completed', 'cancelled'])
+          .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
         dueAt: z.string().optional(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, input),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, input),
     });
   }
 }

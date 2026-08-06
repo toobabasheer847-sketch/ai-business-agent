@@ -14,7 +14,8 @@ export class GetTaskTool extends FunctionTool<any> {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.getTask(input.taskId, input.tenantId),
+      execute: async (input: any) =>
+        this.taskRepository.getTask(input.taskId, input.tenantId),
     });
   }
 }

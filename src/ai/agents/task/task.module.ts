@@ -22,7 +22,11 @@ import { AuthGuard } from '../../../common/guards/auth.guard.js';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET', 'development-secret'),
-        signOptions: { expiresIn: Number(configService.get<string>('JWT_EXPIRES_IN', '86400')) },
+        signOptions: {
+          expiresIn: Number(
+            configService.get<string>('JWT_EXPIRES_IN', '86400'),
+          ),
+        },
       }),
     }),
   ],

@@ -14,10 +14,11 @@ export class CompleteTaskTool extends FunctionTool<any> {
         taskId: z.string(),
         tenantId: z.string(),
       }),
-      execute: async (input: any) => this.taskRepository.updateTask(input.taskId, input.tenantId, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-      }),
+      execute: async (input: any) =>
+        this.taskRepository.updateTask(input.taskId, input.tenantId, {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        }),
     });
   }
 }

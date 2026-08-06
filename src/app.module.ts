@@ -6,6 +6,7 @@ import { AppService } from './app.service.js';
 import { DatabaseModule } from './database/database.module.js';
 import { TaskModule } from './ai/agents/task/task.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { ProposalModule } from './ai/agents/proposal/proposal.module.js';
 
 @Module({
   imports: [
@@ -18,6 +19,8 @@ import { AuthModule } from './modules/auth/auth.module.js';
     AuthModule,
 
     TaskModule,
+
+    ProposalModule,
   ],
 
   controllers: [AppController],
