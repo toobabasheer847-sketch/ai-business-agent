@@ -4,6 +4,8 @@ import { tenants } from '../schema/tenant.schema';
 import { users } from '../schema/user.schema';
 import { brands } from '../schema/brand.schema';
 import { knowledgebases } from '../schema/knowledgebase.schema';
+import { knowledgeDocuments } from '../schema/knowledge-document.schema';
+import { knowledgeChunks } from '../schema/knowledge-chunk.schema';
 import { companies } from '../schema/company.schema';
 import { leads } from '../schema/lead.schema';
 import { prospects } from '../schema/prospect.schema';
@@ -15,95 +17,203 @@ import { twilioApps } from '../schema/twilio-app.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 
-export const tenantRelations = relations(tenants, ({ many, one }) => ({
-  users: many(users),
-  brand: one(brands),
-  knowledgebases: many(knowledgebases),
-  companies: many(companies),
-  leads: many(leads),
-  prospects: many(prospects),
-  conversations: many(conversations),
-  messages: many(messages),
-  proposals: many(proposals),
-  phoneNumbers: many(phoneNumbers),
-  twilioApps: many(twilioApps),
-  gmailConfigs: many(gmailConfigs),
-  auditLogs: many(auditLogs),
-}));
+/**
+ * Tenant relations
+ */
+export const tenantRelations = relations(
+  tenants,
+  ({ many, one }) => ({
+    users: many(users),
 
-export const userRelations = relations(users, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [users.tenantId],
-    references: [tenants.id],
+    brand: one(brands),
+
+    knowledgebases: many(knowledgebases),
+
+    knowledgeDocuments: many(knowledgeDocuments),
+
+    knowledgeChunks: many(knowledgeChunks),
+
+    companies: many(companies),
+
+    leads: many(leads),
+
+    prospects: many(prospects),
+
+    conversations: many(conversations),
+
+    messages: many(messages),
+
+    proposals: many(proposals),
+
+    phoneNumbers: many(phoneNumbers),
+
+    twilioApps: many(twilioApps),
+
+    gmailConfigs: many(gmailConfigs),
+
+    auditLogs: many(auditLogs),
   }),
+);
 
-  conversations: many(conversations),
-  messages: many(messages),
-  proposals: many(proposals),
-  auditLogs: many(auditLogs),
-}));
+/**
+ * User relations
+ */
+export const userRelations = relations(
+  users,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [users.tenantId],
+      references: [tenants.id],
+    }),
 
-export const brandRelations = relations(brands, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [brands.tenantId],
-    references: [tenants.id],
+    conversations: many(conversations),
+
+    messages: many(messages),
+
+    proposals: many(proposals),
+
+    auditLogs: many(auditLogs),
   }),
-}));
+);
 
-export const knowledgebaseRelations = relations(
-  knowledgebases,
+/**
+ * Brand relations
+ */
+export const brandRelations = relations(
+  brands,
   ({ one }) => ({
     tenant: one(tenants, {
-      fields: [knowledgebases.tenantId],
+      fields: [brands.tenantId],
       references: [tenants.id],
     }),
   }),
 );
 
-export const companyRelations = relations(companies, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [companies.tenantId],
-    references: [tenants.id],
+/**
+ * Knowledge base relations
+ */
+export const knowledgebaseRelations = relations(
+  knowledgebases,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [knowledgebases.tenantId],
+      references: [tenants.id],
+    }),
+
+    documents: many(knowledgeDocuments),
   }),
+);
 
-  leads: many(leads),
-  prospects: many(prospects),
-}));
+/**
+ * Knowledge document relations
+ */
+export const knowledgeDocumentRelations = relations(
+  knowledgeDocuments,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [knowledgeDocuments.tenantId],
+      references: [tenants.id],
+    }),
 
-export const leadRelations = relations(leads, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [leads.tenantId],
-    references: [tenants.id],
+    knowledgeBase: one(knowledgebases, {
+      fields: [knowledgeDocuments.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
+
+    chunks: many(knowledgeChunks),
   }),
+);
 
-  company: one(companies, {
-    fields: [leads.companyId],
-    references: [companies.id],
+/**
+ * Knowledge chunk relations
+ */
+export const knowledgeChunkRelations = relations(
+  knowledgeChunks,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [knowledgeChunks.tenantId],
+      references: [tenants.id],
+    }),
+
+    knowledgeBase: one(knowledgebases, {
+      fields: [knowledgeChunks.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
+
+    document: one(knowledgeDocuments, {
+      fields: [knowledgeChunks.documentId],
+      references: [knowledgeDocuments.id],
+    }),
   }),
-  
-  prospects: many(prospects),
-}));
+);
 
-export const prospectRelations = relations(prospects, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [prospects.tenantId],
-    references: [tenants.id],
+/**
+ * Company relations
+ */
+export const companyRelations = relations(
+  companies,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [companies.tenantId],
+      references: [tenants.id],
+    }),
+
+    leads: many(leads),
+
+    prospects: many(prospects),
   }),
+);
 
-  company: one(companies, {
-    fields: [prospects.companyId],
-    references: [companies.id],
+/**
+ * Lead relations
+ */
+export const leadRelations = relations(
+  leads,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [leads.tenantId],
+      references: [tenants.id],
+    }),
+
+    company: one(companies, {
+      fields: [leads.companyId],
+      references: [companies.id],
+    }),
+
+    prospects: many(prospects),
   }),
+);
 
-  lead: one(leads, {
-    fields: [prospects.leadId],
-    references: [leads.id],
+/**
+ * Prospect relations
+ */
+export const prospectRelations = relations(
+  prospects,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [prospects.tenantId],
+      references: [tenants.id],
+    }),
+
+    company: one(companies, {
+      fields: [prospects.companyId],
+      references: [companies.id],
+    }),
+
+    lead: one(leads, {
+      fields: [prospects.leadId],
+      references: [leads.id],
+    }),
+
+    conversations: many(conversations),
+
+    proposals: many(proposals),
   }),
+);
 
-  conversations: many(conversations),
-  proposals: many(proposals),
-}));
-
+/**
+ * Conversation relations
+ */
 export const conversationRelations = relations(
   conversations,
   ({ one, many }) => ({
@@ -126,40 +236,55 @@ export const conversationRelations = relations(
   }),
 );
 
-export const messageRelations = relations(messages, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [messages.tenantId],
-    references: [tenants.id],
-  }),
+/**
+ * Message relations
+ */
+export const messageRelations = relations(
+  messages,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [messages.tenantId],
+      references: [tenants.id],
+    }),
 
-  conversation: one(conversations, {
-    fields: [messages.conversationId],
-    references: [conversations.id],
-  }),
+    conversation: one(conversations, {
+      fields: [messages.conversationId],
+      references: [conversations.id],
+    }),
 
-  user: one(users, {
-    fields: [messages.userId],
-    references: [users.id],
+    user: one(users, {
+      fields: [messages.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
-export const proposalRelations = relations(proposals, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [proposals.tenantId],
-    references: [tenants.id],
+/**
+ * Proposal relations
+ */
+export const proposalRelations = relations(
+  proposals,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [proposals.tenantId],
+      references: [tenants.id],
+    }),
+
+    prospect: one(prospects, {
+      fields: [proposals.prospectId],
+      references: [prospects.id],
+    }),
+
+    creator: one(users, {
+      fields: [proposals.createdBy],
+      references: [users.id],
+    }),
   }),
+);
 
-  prospect: one(prospects, {
-    fields: [proposals.prospectId],
-    references: [prospects.id],
-  }),
-
-  creator: one(users, {
-    fields: [proposals.createdBy],
-    references: [users.id],
-  }),
-}));
-
+/**
+ * Phone number relations
+ */
 export const phoneNumberRelations = relations(
   phoneNumbers,
   ({ one, many }) => ({
@@ -172,6 +297,9 @@ export const phoneNumberRelations = relations(
   }),
 );
 
+/**
+ * Twilio app relations
+ */
 export const twilioAppRelations = relations(
   twilioApps,
   ({ one }) => ({
@@ -187,6 +315,9 @@ export const twilioAppRelations = relations(
   }),
 );
 
+/**
+ * Gmail configuration relations
+ */
 export const gmailConfigRelations = relations(
   gmailConfigs,
   ({ one }) => ({
@@ -197,6 +328,9 @@ export const gmailConfigRelations = relations(
   }),
 );
 
+/**
+ * Audit log relations
+ */
 export const auditLogRelations = relations(
   auditLogs,
   ({ one }) => ({
