@@ -13,10 +13,12 @@ export class GmailController {
   ) {}
 
   @Get('auth')
-  authorize() {
+  authorize(@Query('state') state?: string) {
     return {
       authorizationUrl:
-        this.gmailService.getAuthorizationUrl(),
+        this.gmailService.getAuthorizationUrl(
+          state ?? 'gmail-auth',
+        ),
     };
   }
 
