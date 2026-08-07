@@ -47,15 +47,12 @@ export const brandRelations = relations(brands, ({ one }) => ({
   }),
 }));
 
-export const knowledgebaseRelations = relations(
-  knowledgebases,
-  ({ one }) => ({
-    tenant: one(tenants, {
-      fields: [knowledgebases.tenantId],
-      references: [tenants.id],
-    }),
+export const knowledgebaseRelations = relations(knowledgebases, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [knowledgebases.tenantId],
+    references: [tenants.id],
   }),
-);
+}));
 
 export const companyRelations = relations(companies, ({ one, many }) => ({
   tenant: one(tenants, {
@@ -169,27 +166,21 @@ export const phoneNumberRelations = relations(
   }),
 );
 
-export const twilioAppRelations = relations(
-  twilioApps,
-  ({ one }) => ({
-    tenant: one(tenants, {
-      fields: [twilioApps.tenantId],
-      references: [tenants.id],
-    }),
-
-    phoneNumber: one(phoneNumbers, {
-      fields: [twilioApps.phoneNumberId],
-      references: [phoneNumbers.id],
-    }),
+export const twilioAppRelations = relations(twilioApps, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [twilioApps.tenantId],
+    references: [tenants.id],
   }),
-);
 
-export const gmailConfigRelations = relations(
-  gmailConfigs,
-  ({ one }) => ({
-    tenant: one(tenants, {
-      fields: [gmailConfigs.tenantId],
-      references: [tenants.id],
-    }),
+  phoneNumber: one(phoneNumbers, {
+    fields: [twilioApps.phoneNumberId],
+    references: [phoneNumbers.id],
   }),
-);
+}));
+
+export const gmailConfigRelations = relations(gmailConfigs, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [gmailConfigs.tenantId],
+    references: [tenants.id],
+  }),
+}));

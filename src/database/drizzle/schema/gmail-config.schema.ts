@@ -35,9 +35,7 @@ export const gmailConfigs = pgTable('gmail_configs', {
     withTimezone: true,
   }),
 
-  isActive: boolean('is_active')
-    .notNull()
-    .default(true),
+  isActive: boolean('is_active').notNull().default(true),
 
   createdAt: timestamp('created_at', {
     withTimezone: true,

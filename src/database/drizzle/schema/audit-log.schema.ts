@@ -1,4 +1,3 @@
-
 import {
   pgTable,
   uuid,
@@ -38,9 +37,7 @@ export const auditLogs = pgTable('audit_logs', {
 
   description: text('description'),
 
-  metadata: jsonb('metadata')
-    .notNull()
-    .default({}),
+  metadata: jsonb('metadata').notNull().default({}),
 
   createdAt: timestamp('created_at', {
     withTimezone: true,

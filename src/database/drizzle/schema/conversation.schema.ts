@@ -1,10 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
@@ -20,17 +14,15 @@ export const conversations = pgTable('conversations', {
       onUpdate: 'cascade',
     }),
 
-  userId: uuid('user_id')
-    .references(() => users.id, {
-      onDelete: 'set null',
-      onUpdate: 'cascade',
-    }),
+  userId: uuid('user_id').references(() => users.id, {
+    onDelete: 'set null',
+    onUpdate: 'cascade',
+  }),
 
-  prospectId: uuid('prospect_id')
-    .references(() => prospects.id, {
-      onDelete: 'set null',
-      onUpdate: 'cascade',
-    }),
+  prospectId: uuid('prospect_id').references(() => prospects.id, {
+    onDelete: 'set null',
+    onUpdate: 'cascade',
+  }),
 
   title: varchar('title', {
     length: 255,

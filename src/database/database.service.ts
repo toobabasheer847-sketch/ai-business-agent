@@ -1,20 +1,13 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
 @Injectable()
-export class DatabaseService
-  implements OnModuleInit, OnModuleDestroy
-{
+export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly pool: Pool;
 
   constructor(private readonly configService: ConfigService) {
-    const databaseUrl =
-      this.configService.get<string>('DATABASE_URL');
+    const databaseUrl = this.configService.get<string>('DATABASE_URL');
 
     if (!databaseUrl) {
       throw new Error('DATABASE_URL is not configured');
