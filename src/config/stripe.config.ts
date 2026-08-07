@@ -1,1 +1,3 @@
-// Placeholder for Stripe configuration.
+export default function stripeConfig() {
+  return {};
+}

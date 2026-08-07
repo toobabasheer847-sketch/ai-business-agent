@@ -1,1 +1,3 @@
-// Placeholder for Master settings configuration.
+export default function masterSettingsConfig() {
+  return {};
+}
