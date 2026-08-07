@@ -8,6 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 
+import type { JwtPayload } from '../../modules/auth/types/auth.types';
+import type { AuthenticatedUser } from '../../modules/auth/types/auth.types';
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -16,7 +19,7 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request & { user?: unknown }>();
+    const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
     const authHeader = request.headers.authorization;
 
     if (!authHeader || typeof authHeader !== 'string') {
@@ -28,14 +31,17 @@ export class AuthGuard implements CanActivate {
       : authHeader;
 
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>(
-          'JWT_SECRET',
-          'development-secret',
-        ),
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+        secret: this.configService.get<string>('JWT_SECRET', 'development-secret'),
       });
 
-      request.user = payload as typeof request.user;
+      request.user = {
+        userId: payload.sub,
+        tenantId: payload.tenantId,
+        email: payload.email,
+        name: (payload as any).name ?? '',
+      } as AuthenticatedUser;
+
       return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
