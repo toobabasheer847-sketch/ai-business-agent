@@ -17,7 +17,9 @@ import configuration from './config/configuration';
     DatabaseModule,
     AuthModule,
   ],
+
   controllers: [AppController],
+
   providers: [AppService],
 })
 export class AppModule {}
