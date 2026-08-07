@@ -27,15 +27,13 @@ export class RagAgent {
       parameters: z.object({
         tenantId: z.string(),
         query: z.string(),
-        knowledgeBaseId: z.string().optional(),
         topK: z.number().int().min(1).max(10).optional(),
       }),
       execute: async (input) => {
         const chunks = await this.ragTools.searchKnowledge(
           input.tenantId,
           input.query,
-          input.knowledgeBaseId,
-          input.topK ?? 5,
+            input.topK ?? 5,
         );
 
         return {
@@ -55,8 +53,8 @@ export class RagAgent {
     });
   }
 
-  async answerQuery(tenantId: string, query: string, knowledgeBaseId?: string): Promise<RagResponse> {
-    const chunks = await this.ragTools.searchKnowledge(tenantId, query, knowledgeBaseId, 5);
+  async answerQuery(tenantId: string, query: string): Promise<RagResponse> {
+    const chunks = await this.ragTools.searchKnowledge(tenantId, query, 5);
 
     if (!chunks.length) {
       return {
@@ -68,7 +66,7 @@ export class RagAgent {
     }
 
     const context = chunks
-      .map((chunk: RetrievedChunk) => `Source: ${chunk.documentTitle ?? 'Unknown'}\nChunk ${chunk.chunkIndex}: ${chunk.content}`)
+      .map((chunk: RetrievedChunk) => `Source: ${chunk.source ?? chunk.sourceType ?? 'Unknown'}\nChunk ${chunk.chunkIndex ?? 'N/A'}: ${chunk.content}`)
       .join('\n\n');
 
     const prompt = `Answer the user's question using only the following knowledge context. If the context does not contain enough information, state that clearly.\n\nContext:\n${context}\n\nQuestion: ${query}`;
@@ -112,12 +110,10 @@ export class RagAgent {
     return {
       answer: finalText || fallbackAnswer,
       sources: chunks.map((chunk) => ({
-        documentId: chunk.documentId,
-        knowledgeBaseId: chunk.knowledgeBaseId,
         chunkId: chunk.id,
         chunkIndex: chunk.chunkIndex,
-        documentTitle: chunk.documentTitle,
-        documentSource: chunk.documentSource,
+        source: chunk.source,
+        sourceType: chunk.sourceType ?? chunk.docType,
       })),
       usedKnowledge: true,
       message: modelError ? `Model generation failed: ${modelError}` : undefined,

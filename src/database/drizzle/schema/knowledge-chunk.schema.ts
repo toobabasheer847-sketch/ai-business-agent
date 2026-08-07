@@ -1,25 +1,20 @@
 import {
   pgTable,
   uuid,
+  varchar,
   text,
-  integer,
   timestamp,
   index,
-  uniqueIndex,
   vector,
-  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
-import { knowledgebases } from './knowledgebase.schema';
-import { knowledgeDocuments } from './knowledge-document.schema';
+import { users } from './user.schema';
 
 export const knowledgeChunks = pgTable(
   'knowledge_chunks',
   {
-    id: uuid('id')
-      .defaultRandom()
-      .primaryKey(),
+    id: uuid('id').defaultRandom().primaryKey(),
 
     tenantId: uuid('tenant_id')
       .notNull()
@@ -28,47 +23,49 @@ export const knowledgeChunks = pgTable(
         onUpdate: 'cascade',
       }),
 
-    knowledgeBaseId: uuid('knowledge_base_id')
-      .notNull()
-      .references(() => knowledgebases.id, {
-        onDelete: 'cascade',
-        onUpdate: 'cascade',
-      }),
+    userId: uuid('user_id').references(() => users.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
 
-    documentId: uuid('document_id')
-      .notNull()
-      .references(() => knowledgeDocuments.id, {
-        onDelete: 'cascade',
-        onUpdate: 'cascade',
-      }),
+    // S3 object URL/key
+    source: varchar('source', {
+      length: 2048,
+    }),
+
+    // Example: pdf, docx, txt, website, etc.
+    sourceType: varchar('source_type', {
+      length: 100,
+    }),
+
+    // Example: application/pdf, text/plain, etc.
+    docType: varchar('doc_type', {
+      length: 100,
+    }),
+
+    category: varchar('category', {
+      length: 255,
+    }),
 
     content: text('content').notNull(),
 
-    chunkIndex: integer('chunk_index')
-      .notNull(),
+    chunkIndex: varchar('chunk_index', {
+      length: 50,
+    }),
 
     /**
-     * Vector embedding generated from the chunk content.
+     * Vector embedding generated from chunk content.
      *
      * Model:
      * gemini-embedding-001
      *
      * Dimensions:
      * 3072
-     *
-     * Nullable because a chunk can exist before
-     * the asynchronous embedding process completes.
      */
     embedding: vector('embedding', {
       dimensions: 3072,
     }),
 
-    /**
-     * Store the embedding model used for this chunk.
-     * This becomes important if the embedding model
-     * is changed in the future and existing vectors
-     * need to be re-generated.
-     */
     embeddingModel: varchar('embedding_model', {
       length: 100,
     }),
@@ -87,38 +84,20 @@ export const knowledgeChunks = pgTable(
   },
 
   (table) => [
-    index(
-      'knowledge_chunks_tenant_id_idx',
-    ).on(table.tenantId),
+    index('knowledge_chunks_tenant_id_idx').on(table.tenantId),
 
-    index(
-      'knowledge_chunks_knowledge_base_id_idx',
-    ).on(table.knowledgeBaseId),
+    index('knowledge_chunks_user_id_idx').on(table.userId),
 
-    index(
-      'knowledge_chunks_document_id_idx',
-    ).on(table.documentId),
+    index('knowledge_chunks_source_type_idx').on(table.sourceType),
 
-    index(
-      'knowledge_chunks_tenant_knowledge_base_idx',
-    ).on(
-      table.tenantId,
-      table.knowledgeBaseId,
-    ),
+    index('knowledge_chunks_doc_type_idx').on(table.docType),
 
-    uniqueIndex(
-      'knowledge_chunks_document_chunk_index_unique',
-    ).on(
-      table.documentId,
-      table.chunkIndex,
-    ),
+    index('knowledge_chunks_category_idx').on(table.category),
 
     /**
      * HNSW index for fast cosine similarity search.
      */
-    index(
-      'knowledge_chunks_embedding_hnsw_idx',
-    ).using(
+    index('knowledge_chunks_embedding_hnsw_idx').using(
       'hnsw',
       table.embedding.op('vector_cosine_ops'),
     ),

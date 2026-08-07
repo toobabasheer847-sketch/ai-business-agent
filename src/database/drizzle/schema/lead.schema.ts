@@ -1,7 +1,14 @@
-import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { companies } from './company.schema';
+import { users } from './user.schema';
 
 export const leads = pgTable('leads', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -20,6 +27,11 @@ export const leads = pgTable('leads', {
       onUpdate: 'cascade',
     }),
 
+  userId: uuid('user_id').references(() => users.id, {
+    onDelete: 'set null',
+    onUpdate: 'cascade',
+  }),
+
   firstName: varchar('first_name', {
     length: 100,
   }).notNull(),
@@ -36,7 +48,23 @@ export const leads = pgTable('leads', {
     length: 50,
   }),
 
+  whatsapp: varchar('whatsapp', {
+    length: 50,
+  }),
+
+  linkedin: varchar('linkedin', {
+    length: 500,
+  }),
+
   jobTitle: varchar('job_title', {
+    length: 255,
+  }),
+
+  experience: varchar('experience', {
+    length: 100,
+  }),
+
+  education: varchar('education', {
     length: 255,
   }),
 

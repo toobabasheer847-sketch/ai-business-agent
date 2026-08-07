@@ -4,6 +4,7 @@ import {
   varchar,
   text,
   boolean,
+  integer,
   timestamp,
 } from 'drizzle-orm/pg-core';
 
@@ -19,10 +20,12 @@ export const gmailConfigs = pgTable('gmail_configs', {
       onUpdate: 'cascade',
     }),
 
+  // Gmail account email address
   email: varchar('email', {
     length: 255,
   }).notNull(),
 
+  // OAuth configuration
   clientId: text('client_id'),
 
   clientSecret: text('client_secret'),
@@ -35,7 +38,30 @@ export const gmailConfigs = pgTable('gmail_configs', {
     withTimezone: true,
   }),
 
-  isActive: boolean('is_active').notNull().default(true),
+  // SMTP configuration
+  smtpHost: varchar('smtp_host', {
+    length: 255,
+  })
+    .notNull()
+    .default('smtp.gmail.com'),
+
+  smtpPort: integer('smtp_port')
+    .notNull()
+    .default(587),
+
+  smtpUsername: varchar('smtp_username', {
+    length: 255,
+  }),
+
+  smtpPassword: text('smtp_password'),
+
+  fromName: varchar('from_name', {
+    length: 255,
+  }),
+
+  isActive: boolean('is_active')
+    .notNull()
+    .default(true),
 
   createdAt: timestamp('created_at', {
     withTimezone: true,

@@ -1,4 +1,10 @@
-import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
@@ -27,6 +33,10 @@ export const conversations = pgTable('conversations', {
   title: varchar('title', {
     length: 255,
   }),
+
+  slug: varchar('slug', {
+    length: 255,
+  }).notNull(),
 
   channel: varchar('channel', {
     length: 50,

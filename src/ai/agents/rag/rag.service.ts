@@ -35,13 +35,10 @@ export class RagService {
       );
     }
 
-    const knowledgeBaseId = dto?.knowledgeBaseId;
-
     try {
       return await this.ragAgent.answerQuery(
         resolvedTenantId,
         queryText,
-        knowledgeBaseId,
       );
     } catch (error) {
       const message =

@@ -34,19 +34,36 @@ export const messages = pgTable('messages', {
     onUpdate: 'cascade',
   }),
 
+  // human or ai
   role: varchar('role', {
     length: 50,
   })
     .notNull()
-    .default('user'),
+    .default('human'),
 
+  // Message / AI response text
   content: text('content').notNull(),
 
+  // Additional message information
   metadata: jsonb('metadata'),
 
-  tokenCount: integer('token_count'),
+  // LLM token usage
+  inputTokens: integer('input_tokens'),
+
+  outputTokens: integer('output_tokens'),
+
+  totalTokens: integer('total_tokens'),
+
+  // Media information such as audio/image/file URL
+  mediaFile: jsonb('media_file'),
 
   createdAt: timestamp('created_at', {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp('updated_at', {
     withTimezone: true,
   })
     .defaultNow()

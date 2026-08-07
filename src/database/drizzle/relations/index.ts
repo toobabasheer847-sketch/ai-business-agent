@@ -12,8 +12,7 @@ import { prospects } from '../schema/prospect.schema';
 import { conversations } from '../schema/conversation.schema';
 import { messages } from '../schema/message.schema';
 import { proposals } from '../schema/proposal.schema';
-import { phoneNumbers } from '../schema/phone-number.schema';
-import { twilioApps } from '../schema/twilio-app.schema';
+import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
@@ -26,18 +25,21 @@ export const tenantRelations = relations(
   ({ many, one }) => ({
     users: many(users),
     brand: one(brands),
+
     knowledgebases: many(knowledgebases),
     knowledgeDocuments: many(knowledgeDocuments),
     knowledgeChunks: many(knowledgeChunks),
+
     companies: many(companies),
     leads: many(leads),
     prospects: many(prospects),
     conversations: many(conversations),
     messages: many(messages),
     proposals: many(proposals),
-    phoneNumbers: many(phoneNumbers),
-    twilioApps: many(twilioApps),
+
+    twilioPhoneNumbers: many(twilioPhoneNumbers),
     gmailConfigs: many(gmailConfigs),
+
     auditLogs: many(auditLogs),
     tasks: many(tasks),
   }),
@@ -58,8 +60,16 @@ export const userRelations = relations(
     messages: many(messages),
     proposals: many(proposals),
     auditLogs: many(auditLogs),
-    createdTasks: many(tasks, { relationName: 'createdTasks' }),
-    assignedTasks: many(tasks, { relationName: 'assignedTasks' }),
+
+    twilioPhoneNumbers: many(twilioPhoneNumbers),
+
+    createdTasks: many(tasks, {
+      relationName: 'createdTasks',
+    }),
+
+    assignedTasks: many(tasks, {
+      relationName: 'assignedTasks',
+    }),
   }),
 );
 
@@ -77,7 +87,7 @@ export const brandRelations = relations(
 );
 
 /**
- * Knowledge base relations
+ * Knowledge Base relations
  */
 export const knowledgebaseRelations = relations(
   knowledgebases,
@@ -90,27 +100,20 @@ export const knowledgebaseRelations = relations(
 );
 
 /**
- * Knowledge document relations
+ * Knowledge Document relations
  */
 export const knowledgeDocumentRelations = relations(
   knowledgeDocuments,
-  ({ one, many }) => ({
+  ({ one }) => ({
     tenant: one(tenants, {
       fields: [knowledgeDocuments.tenantId],
       references: [tenants.id],
     }),
-
-    knowledgeBase: one(knowledgebases, {
-      fields: [knowledgeDocuments.knowledgeBaseId],
-      references: [knowledgebases.id],
-    }),
-
-    chunks: many(knowledgeChunks),
   }),
 );
 
 /**
- * Knowledge chunk relations
+ * Knowledge Chunk relations
  */
 export const knowledgeChunkRelations = relations(
   knowledgeChunks,
@@ -119,19 +122,8 @@ export const knowledgeChunkRelations = relations(
       fields: [knowledgeChunks.tenantId],
       references: [tenants.id],
     }),
-
-    knowledgeBase: one(knowledgebases, {
-      fields: [knowledgeChunks.knowledgeBaseId],
-      references: [knowledgebases.id],
-    }),
-
-    document: one(knowledgeDocuments, {
-      fields: [knowledgeChunks.documentId],
-      references: [knowledgeDocuments.id],
-    }),
   }),
 );
-
 /**
  * Company relations
  */
@@ -264,36 +256,20 @@ export const proposalRelations = relations(
     }),
   }),
 );
-
 /**
- * Phone number relations
+ * Twilio Phone Number relations
  */
-export const phoneNumberRelations = relations(
-  phoneNumbers,
-  ({ one, many }) => ({
-    tenant: one(tenants, {
-      fields: [phoneNumbers.tenantId],
-      references: [tenants.id],
-    }),
-
-    twilioApps: many(twilioApps),
-  }),
-);
-
-/**
- * Twilio app relations
- */
-export const twilioAppRelations = relations(
-  twilioApps,
+export const twilioPhoneNumberRelations = relations(
+  twilioPhoneNumbers,
   ({ one }) => ({
     tenant: one(tenants, {
-      fields: [twilioApps.tenantId],
+      fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
     }),
 
-    phoneNumber: one(phoneNumbers, {
-      fields: [twilioApps.phoneNumberId],
-      references: [phoneNumbers.id],
+    user: one(users, {
+      fields: [twilioPhoneNumbers.userId],
+      references: [users.id],
     }),
   }),
 );

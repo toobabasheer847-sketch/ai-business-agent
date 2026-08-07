@@ -13,7 +13,7 @@ export class RagQueryDto {
 
   @IsOptional()
   @IsString()
-  knowledgeBaseId?: string;
+  // knowledgeBaseId removed: tenant-scoped search only
 
   @IsOptional()
   @IsString()
