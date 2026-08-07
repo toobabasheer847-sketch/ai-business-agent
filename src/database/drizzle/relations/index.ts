@@ -84,7 +84,7 @@ export const knowledgebaseRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [knowledgebases.tenantId],
-      references: [knowledgebases.id],
+      references: [tenants.id],
     }),
   }),
 );
@@ -117,7 +117,7 @@ export const knowledgeChunkRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [knowledgeChunks.tenantId],
-      references: [knowledgeChunks.id],
+      references: [tenants.id],
     }),
 
     knowledgeBase: one(knowledgebases, {
@@ -140,7 +140,7 @@ export const companyRelations = relations(
   ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [companies.tenantId],
-      references: [companies.id],
+      references: [tenants.id],
     }),
 
     leads: many(leads),
@@ -156,7 +156,7 @@ export const leadRelations = relations(
   ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [leads.tenantId],
-      references: [leads.id],
+      references: [tenants.id],
     }),
 
     company: one(companies, {
@@ -176,7 +176,7 @@ export const prospectRelations = relations(
   ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [prospects.tenantId],
-      references: [prospects.id],
+      references: [tenants.id],
     }),
 
     company: one(companies, {
@@ -227,7 +227,7 @@ export const messageRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [messages.tenantId],
-      references: [messages.id],
+      references: [tenants.id],
     }),
 
     conversation: one(conversations, {
@@ -250,12 +250,12 @@ export const proposalRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [proposals.tenantId],
-      references: [proposals.id],
+      references: [tenants.id],
     }),
 
     prospect: one(prospects, {
       fields: [proposals.prospectId],
-      references: [proposals.id],
+      references: [prospects.id],
     }),
 
     creator: one(users, {
@@ -288,7 +288,7 @@ export const twilioAppRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [twilioApps.tenantId],
-      references: [twilioApps.id],
+      references: [tenants.id],
     }),
 
     phoneNumber: one(phoneNumbers, {
@@ -319,7 +319,7 @@ export const auditLogRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [auditLogs.tenantId],
-      references: [auditLogs.id],
+      references: [tenants.id],
     }),
 
     user: one(users, {
@@ -337,7 +337,7 @@ export const taskRelations = relations(
   ({ one }) => ({
     tenant: one(tenants, {
       fields: [tasks.tenantId],
-      references: [tasks.id],
+      references: [tenants.id],
     }),
 
     creator: one(users, {
