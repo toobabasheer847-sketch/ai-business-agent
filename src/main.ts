@@ -1,10 +1,21 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
+
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/exceptions/all-exceptions.filter';
+import { AppLogger } from './infrastructure/logging/logger.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  app.useLogger(app.get(AppLogger));
+
+  app.enableShutdownHooks();
+
+  app.use(helmet());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,7 +26,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.useGlobalFilters(new AllExceptionsFilter());
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

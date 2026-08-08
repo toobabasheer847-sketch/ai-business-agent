@@ -253,6 +253,34 @@ export class ProposalService {
     return this.proposalAgent.processRequest(context, request.trim());
   }
 
+  async runProposalExpiryJob(): Promise<{ tenantsScanned: number; proposalsExpired: number; perTenant: Record<string, number> }> {
+    const now = new Date();
+    const tenantIds = await this.proposalRepository.listTenantIdsWithStaleSentProposals(now);
+    const perTenant: Record<string, number> = {};
+    let proposalsExpired = 0;
+    for (const tenantId of tenantIds) {
+      const expiredCount = await this.proposalRepository.expireSentProposalsForTenant(tenantId, now);
+      perTenant[tenantId] = expiredCount;
+      proposalsExpired += expiredCount;
+      if (expiredCount > 0) {
+        try {
+          await this.proposalRepository.writeAuditLog({
+            tenantId,
+            userId: null,
+            action: 'proposal.expired_batch',
+            entityType: 'proposal',
+            entityId: null,
+            description: `Scheduler expired ${expiredCount} stale sent proposals for tenant`,
+            metadata: { count: expiredCount, triggeredBy: 'scheduler' },
+          });
+        } catch (err) {
+          console.error('ProposalService.runProposalExpiryJob audit write failed (non-fatal)', err);
+        }
+      }
+    }
+    return { tenantsScanned: tenantIds.length, proposalsExpired, perTenant };
+  }
+
   private requireContext(context: ProposalContext): void {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
@@ -339,7 +367,7 @@ NON-HALLUCINATION RULES (CRITICAL):
 - Only use factual data provided below. Do NOT invent company taglines, case studies, pricing, addresses, team names, or service lists that are not present in the provided context.
 - If service/offering details are missing from knowledge bases, clearly mark the section "To be filled with our service details" rather than inventing content.
 - For pricing, use ${proposal.price ? proposal.price + ' ' + (proposal.currency ?? 'USD') : 'NOT SPECIFIED — show a clearly marked placeholder.'}.
-- For validity/expiry, use ${proposal.validUntil ? new Date(proposal.validUntil as any).toISOString() : 'NOT SPECIFIED.'}.
+- For validity/expiry, use ${proposal.validUntil ? new Date(proposal.validUntil as Date | string).toISOString() : 'NOT SPECIFIED.'}.
 
 GENERATED SECTIONS (all as Markdown):
 1. Proposal Title (Header 1, include prospect company name)
@@ -441,7 +469,7 @@ ${ctx.knowledgeBases?.length ? 'Leveraging our documented offerings (see knowled
 ## Pricing
 Total: **${proposal.price ? proposal.price + ' ' + (proposal.currency ?? 'USD') : '[To be determined]'}**
 
-Valid until: **${proposal.validUntil ? new Date(proposal.validUntil as any).toLocaleDateString() : '30 days from proposal date'}**
+Valid until: **${proposal.validUntil ? new Date(proposal.validUntil as Date | string).toLocaleDateString() : '30 days from proposal date'}**
 
 ## Terms & Conditions
 - Standard payment terms: 50% deposit, 50% upon delivery

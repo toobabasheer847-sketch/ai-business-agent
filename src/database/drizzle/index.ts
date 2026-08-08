@@ -1,16 +1,20 @@
-import 'dotenv/config';
+export * from './schema';
 
-import { Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
-
-import * as schema from './schema';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-export const db = drizzle(pool, {
-  schema,
-});
-
-export { pool };
+export {
+  tenantRelations,
+  userRelations,
+  brandRelations,
+  knowledgebaseRelations,
+  knowledgeDocumentRelations,
+  knowledgeChunkRelations,
+  companyRelations,
+  leadRelations,
+  prospectRelations,
+  conversationRelations,
+  messageRelations,
+  proposalRelations,
+  twilioPhoneNumberRelations,
+  gmailConfigRelations,
+  auditLogRelations,
+  taskRelations,
+} from './relations';

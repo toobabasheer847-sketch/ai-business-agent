@@ -4,6 +4,8 @@ export interface JwtPayload {
   sub: string;
   tenantId: string;
   email: string;
+  name?: string;
+  role?: string;
 }
 
 export interface AuthenticatedUser {
@@ -11,6 +13,7 @@ export interface AuthenticatedUser {
   tenantId: string;
   email: string;
   name: string;
+  role?: string;
 }
 
 export interface AuthenticatedRequest extends Request {

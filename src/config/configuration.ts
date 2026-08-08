@@ -26,5 +26,8 @@ export default function configuration() {
     ...gmailConfig(),
     ...masterSettingsConfig(),
     ...stripeConfig(),
+    redis: {
+      url: process.env.REDIS_URL,
+    },
   };
 }

@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { eq, sql } from 'drizzle-orm';
 
-import { db } from '../../../database/drizzle';
+import { DRIZZLE_DB } from '../../../database/database.module';
+import type { DrizzleDb } from '../../../database/database.service';
 import { knowledgeChunks, knowledgeDocuments } from '../../../database/drizzle/schema';
 import { RetrievedChunk } from './types/rag.types';
 
@@ -11,7 +12,10 @@ import { RetrievedChunk } from './types/rag.types';
 export class RagTools {
   private readonly embeddingModel = 'gemini-embedding-001';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
 
   async embedText(text: string): Promise<number[]> {
     const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
@@ -50,7 +54,7 @@ export class RagTools {
         whereClauses.push(eq(knowledgeChunks.knowledgeBaseId, knowledgeBaseId));
       }
 
-      const rows = await db.execute(sql`
+      const rows = await this.db.execute(sql`
         SELECT
           kc.id,
           kc.content,

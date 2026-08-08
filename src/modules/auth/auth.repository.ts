@@ -1,19 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { tenants, users } from '../../database/drizzle/schema';
 
 @Injectable()
 export class AuthRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findUserByEmail(email: string) {
-    return db.query.users.findFirst({
+    return this.db.query.users.findFirst({
       where: eq(users.email, email),
     });
   }
 
   async findUserById(id: string) {
-    return db.query.users.findFirst({
+    return this.db.query.users.findFirst({
       where: eq(users.id, id),
     });
   }
@@ -24,7 +29,7 @@ export class AuthRepository {
     email: string;
     passwordHash: string;
   }) {
-    return db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       const [tenant] = await tx
         .insert(tenants)
         .values({
