@@ -12,8 +12,7 @@ import { prospects } from '../schema/prospect.schema';
 import { conversations } from '../schema/conversation.schema';
 import { messages } from '../schema/message.schema';
 import { proposals } from '../schema/proposal.schema';
-import { phoneNumbers } from '../schema/phone-number.schema';
-import { twilioApps } from '../schema/twilio-app.schema';
+import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
@@ -35,8 +34,7 @@ export const tenantRelations = relations(
     conversations: many(conversations),
     messages: many(messages),
     proposals: many(proposals),
-    phoneNumbers: many(phoneNumbers),
-    twilioApps: many(twilioApps),
+    twilioPhoneNumbers: many(twilioPhoneNumbers),
     gmailConfigs: many(gmailConfigs),
     auditLogs: many(auditLogs),
     tasks: many(tasks),
@@ -268,32 +266,17 @@ export const proposalRelations = relations(
 /**
  * Phone number relations
  */
-export const phoneNumberRelations = relations(
-  phoneNumbers,
-  ({ one, many }) => ({
-    tenant: one(tenants, {
-      fields: [phoneNumbers.tenantId],
-      references: [tenants.id],
-    }),
-
-    twilioApps: many(twilioApps),
-  }),
-);
-
-/**
- * Twilio app relations
- */
-export const twilioAppRelations = relations(
-  twilioApps,
+export const twilioPhoneNumberRelations = relations(
+  twilioPhoneNumbers,
   ({ one }) => ({
     tenant: one(tenants, {
-      fields: [twilioApps.tenantId],
+      fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
     }),
 
-    phoneNumber: one(phoneNumbers, {
-      fields: [twilioApps.phoneNumberId],
-      references: [phoneNumbers.id],
+    user: one(users, {
+      fields: [twilioPhoneNumbers.userId],
+      references: [users.id],
     }),
   }),
 );

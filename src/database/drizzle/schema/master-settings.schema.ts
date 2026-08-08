@@ -10,8 +10,7 @@ import { prospects } from '../schema/prospect.schema';
 import { conversations } from '../schema/conversation.schema';
 import { messages } from '../schema/message.schema';
 import { proposals } from '../schema/proposal.schema';
-import { phoneNumbers } from '../schema/phone-number.schema';
-import { twilioApps } from '../schema/twilio-app.schema';
+import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 
 export const tenantRelations = relations(tenants, ({ many, one }) => ({
@@ -24,8 +23,7 @@ export const tenantRelations = relations(tenants, ({ many, one }) => ({
   conversations: many(conversations),
   messages: many(messages),
   proposals: many(proposals),
-  phoneNumbers: many(phoneNumbers),
-  twilioApps: many(twilioApps),
+  twilioPhoneNumbers: many(twilioPhoneNumbers),
   gmailConfigs: many(gmailConfigs),
 }));
 
@@ -38,6 +36,7 @@ export const userRelations = relations(users, ({ one, many }) => ({
   conversations: many(conversations),
   messages: many(messages),
   proposals: many(proposals),
+  twilioPhoneNumbers: many(twilioPhoneNumbers),
 }));
 
 export const brandRelations = relations(brands, ({ one }) => ({
@@ -154,29 +153,20 @@ export const proposalRelations = relations(proposals, ({ one }) => ({
   }),
 }));
 
-export const phoneNumberRelations = relations(
-  phoneNumbers,
-  ({ one, many }) => ({
+export const twilioPhoneNumberRelations = relations(
+  twilioPhoneNumbers,
+  ({ one }) => ({
     tenant: one(tenants, {
-      fields: [phoneNumbers.tenantId],
+      fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
     }),
 
-    twilioApps: many(twilioApps),
+    user: one(users, {
+      fields: [twilioPhoneNumbers.userId],
+      references: [users.id],
+    }),
   }),
 );
-
-export const twilioAppRelations = relations(twilioApps, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [twilioApps.tenantId],
-    references: [tenants.id],
-  }),
-
-  phoneNumber: one(phoneNumbers, {
-    fields: [twilioApps.phoneNumberId],
-    references: [phoneNumbers.id],
-  }),
-}));
 
 export const gmailConfigRelations = relations(gmailConfigs, ({ one }) => ({
   tenant: one(tenants, {
