@@ -90,4 +90,21 @@ export class GmailRepository {
 
     return result[0] ?? null;
   }
+
+  async findAllForTenant(tenantId: string) {
+    return this.db
+      .select()
+      .from(gmailConfigs)
+      .where(eq(gmailConfigs.tenantId, tenantId));
+  }
+
+  async findFirstActiveForTenant(tenantId: string) {
+    const result = await this.db
+      .select()
+      .from(gmailConfigs)
+      .where(and(eq(gmailConfigs.tenantId, tenantId), eq(gmailConfigs.isActive, true)))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
 }

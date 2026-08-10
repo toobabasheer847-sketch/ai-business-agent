@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TaskModule } from './ai/agents/task/task.module';
 import { ProposalModule } from './ai/agents/proposal/proposal.module';
 import { AiModule } from './ai/ai.module';
+import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -22,6 +23,7 @@ import configuration from './config/configuration';
     TaskModule,
     ProposalModule,
     AiModule,
+    TwilioWebhooksModule,
   ],
 
   controllers: [AppController],

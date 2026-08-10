@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { google, gmail_v1 } from 'googleapis';
+import { gmail_v1 } from 'googleapis';
+
+import {
+  GmailOAuthService,
+  GoogleOAuthTokens,
+} from '../../../../integrations/gmail/gmail-oauth';
+import { GmailTokenService } from '../../../../integrations/gmail/gmail-tokens';
+import { MailOperationsService } from '../../../../integrations/gmail/mail-operations';
+
+import { GmailRepository } from './gmail.repository';
 
 export interface GoogleTokens {
   access_token?: string | null;
@@ -10,162 +18,120 @@ export interface GoogleTokens {
   token_type?: string;
 }
 
+export interface TenantGmailCredentials {
+  configId: string;
+  tenantId: string;
+  email: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  tokenExpiry: Date | null;
+}
+
 @Injectable()
 export class GmailService {
   constructor(
-    private readonly configService: ConfigService,
+    private readonly gmailOAuthService: GmailOAuthService,
+    private readonly gmailTokenService: GmailTokenService,
+    private readonly mailOperationsService: MailOperationsService,
+    private readonly gmailRepository: GmailRepository,
   ) {}
 
-  /**
-   * Creates a fresh OAuth2 client for each operation.
-   *
-   * We intentionally do not keep one OAuth2 client as a singleton
-   * because OAuth credentials are user/tenant specific.
-   */
-  private createOAuthClient() {
-    const clientId =
-      this.configService.get<string>('GOOGLE_CLIENT_ID');
-
-    const clientSecret =
-      this.configService.get<string>('GOOGLE_CLIENT_SECRET');
-
-    const redirectUri =
-      this.configService.get<string>('GOOGLE_REDIRECT_URI');
-
-    if (!clientId) {
-      throw new Error('GOOGLE_CLIENT_ID is not configured');
-    }
-
-    if (!clientSecret) {
-      throw new Error('GOOGLE_CLIENT_SECRET is not configured');
-    }
-
-    if (!redirectUri) {
-      throw new Error('GOOGLE_REDIRECT_URI is not configured');
-    }
-
-    return new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      redirectUri,
-    );
-  }
-
-  /**
-   * Generates the Google OAuth authorization URL.
-   *
-   * The state parameter will be used later for
-   * OAuth CSRF protection and tenant identification.
-   */
-  getAuthorizationUrl(state: string): string {
-    const oauth2Client = this.createOAuthClient();
-
-    return oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-      scope: [
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.compose',
-        'https://www.googleapis.com/auth/gmail.send',
-      ],
-    });
-  }
-
-  /**
-   * Exchanges Google's authorization code for OAuth tokens.
-   */
-  async exchangeCode(code: string): Promise<GoogleTokens> {
-    if (!code) {
-      throw new Error('Google authorization code is required');
-    }
-
-    const oauth2Client = this.createOAuthClient();
-
-    const { tokens } =
-      await oauth2Client.getToken(code);
-
+  static toStoredTokens(tokens: GoogleTokens | GoogleOAuthTokens): {
+    accessToken: string | null;
+    refreshToken: string | null;
+    tokenExpiry: Date | null;
+  } {
     return {
-      access_token: tokens.access_token ?? undefined,
-      refresh_token: tokens.refresh_token ?? undefined,
-      expiry_date: tokens.expiry_date ?? undefined,
-      scope: tokens.scope ?? undefined,
-      token_type: tokens.token_type ?? undefined,
+      accessToken: tokens.access_token ?? null,
+      refreshToken: tokens.refresh_token ?? null,
+      tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     };
   }
 
-  /**
-   * Creates an authenticated Gmail API client.
-   *
-   * The OAuth client is created from the credentials
-   * belonging to the specific Gmail configuration.
-   */
+  getAuthorizationUrl(state: string): string {
+    return this.gmailOAuthService.generateAuthorizationUrl(state);
+  }
+
+  async exchangeCode(code: string): Promise<GoogleTokens> {
+    const tokens = await this.gmailOAuthService.exchangeAuthorizationCode(code);
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date,
+      scope: tokens.scope,
+      token_type: tokens.token_type,
+    };
+  }
+
   createGmailClient(
     accessToken: string,
     refreshToken: string,
   ): gmail_v1.Gmail {
-    if (!accessToken) {
-      throw new Error('Google access token is required');
+    return this.gmailOAuthService.createAuthenticatedClient(
+      accessToken,
+      refreshToken,
+    );
+  }
+
+  async getAuthenticatedEmail(tokens: GoogleTokens): Promise<string> {
+    return this.gmailOAuthService.fetchAuthenticatedEmail(tokens);
+  }
+
+  async findActiveCredentialsForTenant(
+    tenantId: string,
+    emailHint?: string,
+  ): Promise<TenantGmailCredentials | null> {
+    if (!tenantId) {
+      return null;
     }
 
-    if (!refreshToken) {
-      throw new Error('Google refresh token is required');
+    if (emailHint) {
+      const found = await this.gmailRepository.findByTenantAndEmail(
+        tenantId,
+        emailHint,
+      );
+      if (found && found.isActive) {
+        return {
+          configId: found.id,
+          tenantId: found.tenantId,
+          email: found.email,
+          accessToken: found.accessToken ?? null,
+          refreshToken: found.refreshToken ?? null,
+          tokenExpiry: found.tokenExpiry ?? null,
+        };
+      }
     }
 
-    const oauth2Client = this.createOAuthClient();
+    const primary = await this.gmailRepository.findFirstActiveForTenant(tenantId);
+    if (!primary) {
+      return null;
+    }
 
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
+    return {
+      configId: primary.id,
+      tenantId: primary.tenantId,
+      email: primary.email,
+      accessToken: primary.accessToken ?? null,
+      refreshToken: primary.refreshToken ?? null,
+      tokenExpiry: primary.tokenExpiry ?? null,
+    };
+  }
 
-    return google.gmail({
-      version: 'v1',
-      auth: oauth2Client,
+  async refreshAndSave(
+    creds: TenantGmailCredentials,
+    refreshed: { accessToken: string; tokenExpiry: Date },
+  ): Promise<void> {
+    await this.gmailRepository.updateTokens(creds.configId, {
+      accessToken: refreshed.accessToken,
+      tokenExpiry: refreshed.tokenExpiry,
     });
   }
 
-  /**
-   * Gets the Gmail account email associated with the OAuth credentials.
-   *
-   * We use this during OAuth callback so that the
-   * gmail_configs.email field contains the actual Google account.
-   */
-  async getAuthenticatedEmail(
-    tokens: GoogleTokens,
-  ): Promise<string> {
-    if (!tokens.access_token) {
-      throw new Error(
-        'Google access token is missing',
-      );
-    }
+  get mailOperations(): MailOperationsService {
+    return this.mailOperationsService;
+  }
 
-    const oauth2Client = this.createOAuthClient();
-
-    oauth2Client.setCredentials({
-      access_token: tokens.access_token,
-      refresh_token:
-        tokens.refresh_token ?? undefined,
-    });
-
-    const gmail = google.gmail({
-      version: 'v1',
-      auth: oauth2Client,
-    });
-
-    const response =
-      await gmail.users.getProfile({
-        userId: 'me',
-      });
-
-    const email = response.data.emailAddress;
-
-    if (!email) {
-      throw new Error(
-        'Unable to determine authenticated Gmail address',
-      );
-    }
-
-    return email;
+  get tokens(): GmailTokenService {
+    return this.gmailTokenService;
   }
 }

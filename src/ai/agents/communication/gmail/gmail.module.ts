@@ -2,16 +2,17 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { DatabaseModule } from '../../../../database/database.module';
+import { GmailIntegrationModule } from '../../../../integrations/gmail/gmail.module';
 
 import { GmailController } from './gmail.controller';
-// GmailRepository import removed: module file not found. If a repository is added,
-// re-add it here (e.g. import { GmailRepository } from './gmail.repository';)
+import { GmailRepository } from './gmail.repository';
 import { GmailService } from './gmail.service';
 
 @Module({
   imports: [
     ConfigModule,
     DatabaseModule,
+    GmailIntegrationModule,
   ],
 
   controllers: [
@@ -20,10 +21,12 @@ import { GmailService } from './gmail.service';
 
   providers: [
     GmailService,
+    GmailRepository,
   ],
 
   exports: [
     GmailService,
+    GmailRepository,
   ],
 })
 export class GmailModule {}
