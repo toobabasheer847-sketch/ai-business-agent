@@ -18,6 +18,7 @@ import { MessageModule } from './modules/message/message.module';
 import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
 import { ProposalModule } from './modules/proposal/proposal.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
+import { TenantModule } from './modules/tenant/tenant.module';
 
 @Module({
 
@@ -41,6 +42,7 @@ import { ProspectModule } from './modules/prospect/prospect.module';
     PhoneNumberModule,
     ProposalModule,
     ProspectModule,
+    TenantModule,
   ],
   controllers: [AppController],
   providers: [AppService],

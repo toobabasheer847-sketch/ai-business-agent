@@ -1,1 +1,6 @@
-// Placeholder for Tenant entity.
+export interface Tenant {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
