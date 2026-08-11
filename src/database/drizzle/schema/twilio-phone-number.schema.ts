@@ -30,6 +30,10 @@ export const twilioPhoneNumbers = pgTable(
 
     phoneNumber: varchar('phone_number', { length: 50 }).notNull(),
 
+    provider: varchar('provider', { length: 100 }).notNull().default('twilio'),
+
+    label: varchar('label', { length: 255 }),
+
     phoneNumberSid: varchar('phone_number_sid', { length: 255 }),
 
     friendlyName: varchar('friendly_name', { length: 255 }),
