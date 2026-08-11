@@ -30,6 +30,6 @@ import { CancelTaskTool } from './tools/cancel-task.tool.js';
     CompleteTaskTool,
     CancelTaskTool,
   ],
-  exports: [TaskService],
+  exports: [TaskService, TaskAgent],
 })
 export class TaskModule {}

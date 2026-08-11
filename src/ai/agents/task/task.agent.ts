@@ -257,4 +257,8 @@ export class TaskAgent {
     const match = request.match(/([a-f0-9-]{8,})/i);
     return match ? match[1] : undefined;
   }
+
+  getAgentInstance() {
+    return this.agent;
+  }
 }

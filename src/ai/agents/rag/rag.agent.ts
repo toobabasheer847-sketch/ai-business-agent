@@ -53,6 +53,10 @@ export class RagAgent {
     });
   }
 
+  getAgentInstance() {
+    return this.agent;
+  }
+
   async answerQuery(tenantId: string, query: string): Promise<RagResponse> {
     const chunks = await this.ragTools.searchKnowledge(tenantId, query, 5);
 

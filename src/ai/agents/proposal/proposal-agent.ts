@@ -468,6 +468,10 @@ export class ProposalAgent {
     return updated;
   }
 
+  getAgentInstance() {
+    return this.agent;
+  }
+
   private buildPrompt(
     proposal: any,
     ctx: any,

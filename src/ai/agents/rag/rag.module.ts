@@ -10,7 +10,7 @@ import { RagTools } from './rag.tools';
   imports: [ConfigModule],
   controllers: [RagController],
   providers: [RagService, RagAgent, RagTools],
-  exports: [RagService],
+  exports: [RagService, RagAgent],
 })
 export class RagModule {}
 

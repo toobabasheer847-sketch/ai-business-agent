@@ -72,12 +72,6 @@ export class ProposalController {
     return this.proposalService.changeProposalStatus(proposalId, dto, context);
   }
 
-  @Post('agent')
-  async agent(@Body('message') message: string, @Req() req: AuthenticatedRequest) {
-    const context = this.buildContext(req);
-    return this.proposalService.processNaturalLanguage(message, context);
-  }
-
   private buildContext(req: AuthenticatedRequest) {
     const user = req.user;
     return {
