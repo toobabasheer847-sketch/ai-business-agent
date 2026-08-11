@@ -16,6 +16,7 @@ import { LogsModule } from './modules/logs/logs.module';
 import { MasterSettingsModule } from './modules/master-settings/master-settings.module';
 import { MessageModule } from './modules/message/message.module';
 import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
+import { ProposalModule } from './modules/proposal/proposal.module';
 
 @Module({
 
@@ -37,6 +38,7 @@ import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
     MasterSettingsModule,
     MessageModule,
     PhoneNumberModule,
+    ProposalModule,
   ],
   controllers: [AppController],
   providers: [AppService],
