@@ -11,6 +11,7 @@ import { CompanyModule } from './modules/company/company.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
+import { LeadModule } from './modules/lead/lead.module';
 
 @Module({
 
@@ -27,6 +28,7 @@ import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.modul
     ConversationModule,
     GmailConfigurationModule,
     KnowledgebaseModule,
+    LeadModule,
   ],
   controllers: [AppController],
   providers: [AppService],
