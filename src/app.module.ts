@@ -9,6 +9,7 @@ import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
 import { CompanyModule } from './modules/company/company.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
+import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ConversationModule } from './modules/conversation/conversation.module';
     CommunicationHubModule,
     CompanyModule,
     ConversationModule,
+    GmailConfigurationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
