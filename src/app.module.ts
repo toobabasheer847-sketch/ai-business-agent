@@ -14,6 +14,7 @@ import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.modul
 import { LeadModule } from './modules/lead/lead.module';
 import { LogsModule } from './modules/logs/logs.module';
 import { MasterSettingsModule } from './modules/master-settings/master-settings.module';
+import { MessageModule } from './modules/message/message.module';
 
 @Module({
 
@@ -33,6 +34,7 @@ import { MasterSettingsModule } from './modules/master-settings/master-settings.
     LeadModule,
     LogsModule,
     MasterSettingsModule,
+    MessageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
