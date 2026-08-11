@@ -7,6 +7,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
+import { CompanyModule } from './modules/company/company.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CommunicationHubModule } from './modules/communication-hub/communicatio
     AuthModule,
     BrandModule,
     CommunicationHubModule,
+    CompanyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
