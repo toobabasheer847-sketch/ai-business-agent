@@ -15,6 +15,7 @@ import { LeadModule } from './modules/lead/lead.module';
 import { LogsModule } from './modules/logs/logs.module';
 import { MasterSettingsModule } from './modules/master-settings/master-settings.module';
 import { MessageModule } from './modules/message/message.module';
+import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
 
 @Module({
 
@@ -35,6 +36,7 @@ import { MessageModule } from './modules/message/message.module';
     LogsModule,
     MasterSettingsModule,
     MessageModule,
+    PhoneNumberModule,
   ],
   controllers: [AppController],
   providers: [AppService],
