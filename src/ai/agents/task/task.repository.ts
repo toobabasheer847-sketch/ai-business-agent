@@ -1,12 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, SQL, sql } from 'drizzle-orm';
 
-import { db } from '../../../database/drizzle/index.js';
+import { DRIZZLE_DB } from '../../../database/database.module.js';
+import type { DrizzleDb } from '../../../database/database.service.js';
 import { tasks } from '../../../database/drizzle/schema/task.schema.js';
 import { TaskRecord, TaskPriority, TaskStatus } from './types/task.types.js';
 
 @Injectable()
 export class TaskRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async createTask(input: {
     tenantId: string;
     createdBy: string;
@@ -17,7 +22,7 @@ export class TaskRepository {
     priority?: TaskPriority;
     dueAt?: Date | string | null;
   }): Promise<TaskRecord> {
-    const [row] = await db
+    const [row] = await this.db
       .insert(tasks)
       .values({
         tenantId: input.tenantId,
@@ -35,7 +40,7 @@ export class TaskRepository {
   }
 
   async getTask(taskId: string, tenantId: string): Promise<TaskRecord | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(tasks)
       .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
@@ -64,7 +69,7 @@ export class TaskRepository {
       );
     }
 
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(tasks)
       .where(and(...clauses))
@@ -88,7 +93,7 @@ export class TaskRepository {
       >
     >,
   ): Promise<TaskRecord | null> {
-    const [row] = await db
+    const [row] = await this.db
       .update(tasks)
       .set({
         ...input,
@@ -111,7 +116,7 @@ export class TaskRepository {
   }
 
   async deleteTask(taskId: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(tasks)
       .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)));
     return (result.rowCount ?? 0) > 0;

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 
-import { db } from '../../../../database/drizzle';
+import { DRIZZLE_DB } from '../../../../database/database.module';
+import type { DrizzleDb } from '../../../../database/database.service';
 
 import { gmailConfigs } from '../../../../database/drizzle/schema/gmail-config.schema';
 
@@ -17,11 +18,15 @@ export interface SaveGmailConfigInput {
 
 @Injectable()
 export class GmailRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findByTenantAndEmail(
     tenantId: string,
     email: string,
   ) {
-    const result = await db
+    const result = await this.db
       .select()
       .from(gmailConfigs)
       .where(
@@ -38,7 +43,7 @@ export class GmailRepository {
   async create(
     data: SaveGmailConfigInput,
   ) {
-    const result = await db
+    const result = await this.db
       .insert(gmailConfigs)
       .values({
         tenantId: data.tenantId,
@@ -62,7 +67,7 @@ export class GmailRepository {
       tokenExpiry?: Date | null;
     },
   ) {
-    const result = await db
+    const result = await this.db
       .update(gmailConfigs)
       .set({
         accessToken: data.accessToken,
@@ -77,7 +82,7 @@ export class GmailRepository {
   }
 
   async findById(id: string) {
-    const result = await db
+    const result = await this.db
       .select()
       .from(gmailConfigs)
       .where(eq(gmailConfigs.id, id))

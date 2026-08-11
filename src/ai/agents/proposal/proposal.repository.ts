@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { and, desc, eq, SQL, sql } from 'drizzle-orm';
+import { Inject, Injectable } from '@nestjs/common';
+import { and, desc, eq, isNotNull, lt, ne, SQL, sql } from 'drizzle-orm';
 
-import { db } from '../../../database/drizzle/index.js';
+import { DRIZZLE_DB } from '../../../database/database.module.js';
+import type { DrizzleDb } from '../../../database/database.service.js';
 import { proposals } from '../../../database/drizzle/schema/proposal.schema.js';
 import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { companies } from '../../../database/drizzle/schema/company.schema.js';
@@ -22,6 +23,10 @@ import {
 
 @Injectable()
 export class ProposalRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async createProposal(input: {
     tenantId: string;
     prospectId: string;
@@ -42,7 +47,7 @@ export class ProposalRepository {
           ? String(input.price)
           : input.price;
 
-    const [row] = await db
+    const [row] = await this.db
       .insert(proposals)
       .values({
         tenantId: input.tenantId,
@@ -51,7 +56,7 @@ export class ProposalRepository {
         title: input.title,
         description: input.description ?? null,
         requirements: input.requirements ?? null,
-        status: (input.status ?? 'draft') as any,
+        status: (input.status ?? 'draft'),
         price: priceValue,
         currency: input.currency ?? 'USD',
         validUntil: input.validUntil ? new Date(input.validUntil) : null,
@@ -63,7 +68,7 @@ export class ProposalRepository {
   }
 
   async getProposal(proposalId: string, tenantId: string): Promise<ProposalRecord | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(proposals)
       .where(and(eq(proposals.id, proposalId), eq(proposals.tenantId, tenantId)))
@@ -78,7 +83,7 @@ export class ProposalRepository {
     const clauses: SQL[] = [eq(proposals.tenantId, tenantId)];
 
     if (filters?.status) {
-      clauses.push(eq(proposals.status, filters.status as any));
+      clauses.push(eq(proposals.status, filters.status));
     }
 
     if (filters?.prospectId) {
@@ -92,7 +97,7 @@ export class ProposalRepository {
       );
     }
 
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(proposals)
       .where(and(...clauses))
@@ -132,14 +137,14 @@ export class ProposalRepository {
             : input.price;
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(proposals)
       .set({
         prospectId: input.prospectId,
         title: input.title,
         description: input.description,
         requirements: input.requirements,
-        status: input.status as any,
+        status: input.status,
         price: priceValue,
         currency: input.currency,
         validUntil: input.validUntil ? new Date(input.validUntil) : input.validUntil === null ? null : undefined,
@@ -157,14 +162,14 @@ export class ProposalRepository {
   }
 
   async deleteProposal(proposalId: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(proposals)
       .where(and(eq(proposals.id, proposalId), eq(proposals.tenantId, tenantId)));
     return (result.rowCount ?? 0) > 0;
   }
 
   async getProspect(prospectId: string, tenantId: string): Promise<ProspectContext | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(prospects)
       .where(and(eq(prospects.id, prospectId), eq(prospects.tenantId, tenantId)))
@@ -184,7 +189,7 @@ export class ProposalRepository {
   }
 
   async getCompany(companyId: string, tenantId: string): Promise<CompanyContext | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(companies)
       .where(and(eq(companies.id, companyId), eq(companies.tenantId, tenantId)))
@@ -201,7 +206,7 @@ export class ProposalRepository {
   }
 
   async getLead(leadId: string, tenantId: string): Promise<LeadContext | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(leads)
       .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
@@ -221,7 +226,7 @@ export class ProposalRepository {
   }
 
   async getBrand(tenantId: string): Promise<BrandContext | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select()
       .from(brands)
       .where(eq(brands.tenantId, tenantId))
@@ -238,7 +243,7 @@ export class ProposalRepository {
   }
 
   async listKnowledgeBases(tenantId: string, limit = 20): Promise<KnowledgeContextItem[]> {
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(knowledgebases)
       .where(eq(knowledgebases.tenantId, tenantId))
@@ -252,7 +257,7 @@ export class ProposalRepository {
   }
 
   async getProspectCompanyId(prospectId: string, tenantId: string): Promise<string | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select({ companyId: prospects.companyId })
       .from(prospects)
       .where(and(eq(prospects.id, prospectId), eq(prospects.tenantId, tenantId)))
@@ -261,7 +266,7 @@ export class ProposalRepository {
   }
 
   async getProspectLeadId(prospectId: string, tenantId: string): Promise<string | null> {
-    const [row] = await db
+    const [row] = await this.db
       .select({ leadId: prospects.leadId })
       .from(prospects)
       .where(and(eq(prospects.id, prospectId), eq(prospects.tenantId, tenantId)))
@@ -303,12 +308,12 @@ export class ProposalRepository {
     tenantId: string;
     userId?: string | null;
     action: string;
-    entityType?: string;
-    entityId?: string;
-    description?: string;
-    metadata?: Record<string, any>;
+    entityType?: string | null;
+    entityId?: string | null;
+    description?: string | null;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
-    await db.insert(auditLogs).values({
+    await this.db.insert(auditLogs).values({
       tenantId: input.tenantId,
       userId: input.userId ?? null,
       action: input.action,
@@ -319,26 +324,61 @@ export class ProposalRepository {
     });
   }
 
-  private mapRow(row: any): ProposalRecord {
+  async listTenantIdsWithStaleSentProposals(beforeDate: Date): Promise<string[]> {
+    const sentStatus: ProposalStatus = 'sent';
+    const expiredStatus: ProposalStatus = 'expired';
+    const rows = await this.db
+      .selectDistinct({ tenantId: proposals.tenantId })
+      .from(proposals)
+      .where(and(
+        eq(proposals.status, sentStatus),
+        isNotNull(proposals.validUntil),
+        lt(proposals.validUntil, beforeDate),
+        ne(proposals.status, expiredStatus),
+      ));
+    return rows.map((row) => row.tenantId);
+  }
+
+  async expireSentProposalsForTenant(tenantId: string, beforeDate: Date): Promise<number> {
+    const sentStatus: ProposalStatus = 'sent';
+    const expiredStatus: ProposalStatus = 'expired';
+    const now = new Date();
+    const result = await this.db
+      .update(proposals)
+      .set({
+        status: expiredStatus,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(proposals.tenantId, tenantId),
+        eq(proposals.status, sentStatus),
+        isNotNull(proposals.validUntil),
+        lt(proposals.validUntil, beforeDate),
+        ne(proposals.status, expiredStatus),
+      ));
+    return Number(result.rowCount ?? 0);
+  }
+
+  private mapRow(row: Record<string, unknown>): ProposalRecord {
     return {
-      id: row.id,
-      tenantId: row.tenantId,
-      prospectId: row.prospectId,
-      createdBy: row.createdBy,
-      title: row.title,
-      description: row.description,
-      requirements: row.requirements,
-      status: row.status,
-      price: row.price,
-      currency: row.currency ?? 'USD',
-      validUntil: row.validUntil,
-      content: row.content,
-      sentAt: row.sentAt,
-      viewedAt: row.viewedAt,
-      acceptedAt: row.acceptedAt,
-      rejectedAt: row.rejectedAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      id: row.id as string,
+      tenantId: row.tenantId as string,
+      prospectId: row.prospectId as string,
+      createdBy: (row.createdBy as string | null) ?? null,
+      title: row.title as string,
+      description: (row.description as string | null) ?? null,
+      requirements: (row.requirements as string | null) ?? null,
+      status: row.status as ProposalStatus,
+      price: (row.price as string | number | null) ?? null,
+      currency: (row.currency as string) ?? 'USD',
+      validUntil: (row.validUntil as Date | string | null) ?? null,
+      content: (row.content as string | null) ?? null,
+      sentAt: (row.sentAt as Date | string | null) ?? null,
+      viewedAt: (row.viewedAt as Date | string | null) ?? null,
+      acceptedAt: (row.acceptedAt as Date | string | null) ?? null,
+      rejectedAt: (row.rejectedAt as Date | string | null) ?? null,
+      createdAt: (row.createdAt as Date | string | null) ?? null,
+      updatedAt: (row.updatedAt as Date | string | null) ?? null,
     };
   }
 }

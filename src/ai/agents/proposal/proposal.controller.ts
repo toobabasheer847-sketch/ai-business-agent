@@ -9,9 +9,9 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
 
-import { AuthGuard } from '../../../common/guards/auth.guard.js';
+import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard.js';
+import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types.js';
 import { CreateProposalDto } from './dto/create-proposal.dto.js';
 import { UpdateProposalDto } from './dto/update-proposal.dto.js';
 import { ProposalQueryDto } from './dto/proposal-query.dto.js';
@@ -20,24 +20,24 @@ import { ChangeProposalStatusDto } from './dto/change-proposal-status.dto.js';
 import { ProposalService } from './proposal.service.js';
 
 @Controller('api/ai/proposals')
-@UseGuards(AuthGuard)
+@UseGuards(JwtAuthGuard)
 export class ProposalController {
   constructor(private readonly proposalService: ProposalService) {}
 
   @Post()
-  async create(@Body() dto: CreateProposalDto, @Req() req: Request) {
+  async create(@Body() dto: CreateProposalDto, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.proposalService.createProposal(dto, context);
   }
 
   @Get()
-  async list(@Query() dto: ProposalQueryDto, @Req() req: Request) {
+  async list(@Query() dto: ProposalQueryDto, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.proposalService.listProposals(dto, context);
   }
 
   @Get(':proposalId')
-  async get(@Param('proposalId') proposalId: string, @Req() req: Request) {
+  async get(@Param('proposalId') proposalId: string, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.proposalService.getProposal(proposalId, context);
   }
@@ -46,7 +46,7 @@ export class ProposalController {
   async update(
     @Param('proposalId') proposalId: string,
     @Body() dto: UpdateProposalDto,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     const context = this.buildContext(req);
     return this.proposalService.updateProposal(proposalId, dto, context);
@@ -56,7 +56,7 @@ export class ProposalController {
   async generate(
     @Param('proposalId') proposalId: string,
     @Body() dto: GenerateProposalDto,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     const context = this.buildContext(req);
     return this.proposalService.generateProposal(proposalId, dto, context);
@@ -66,24 +66,22 @@ export class ProposalController {
   async changeStatus(
     @Param('proposalId') proposalId: string,
     @Body() dto: ChangeProposalStatusDto,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     const context = this.buildContext(req);
     return this.proposalService.changeProposalStatus(proposalId, dto, context);
   }
 
   @Post('agent')
-  async agent(@Body('message') message: string, @Req() req: Request) {
+  async agent(@Body('message') message: string, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.proposalService.processNaturalLanguage(message, context);
   }
 
-  private buildContext(req: Request) {
-    const user = (req as Request & {
-      user?: { id?: string; tenantId?: string; email?: string };
-    }).user;
+  private buildContext(req: AuthenticatedRequest) {
+    const user = req.user;
     return {
-      userId: user?.id ?? '',
+      userId: user?.userId ?? '',
       tenantId: user?.tenantId ?? '',
       email: user?.email,
     };
