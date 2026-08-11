@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
 import { CompanyModule } from './modules/company/company.module';
+import { ConversationModule } from './modules/conversation/conversation.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CompanyModule } from './modules/company/company.module';
     BrandModule,
     CommunicationHubModule,
     CompanyModule,
+    ConversationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
