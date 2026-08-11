@@ -1,0 +1,67 @@
+import { FunctionTool, LlmAgent } from '@google/adk';
+
+import type { CommunicationToolsProvider } from './communication-tools.provider';
+import type { TwilioToolsProvider } from './twilio/twilio-tools.provider';
+
+const DEFAULT_INSTRUCTION = `
+You are the Communication Agent.
+
+Your responsibilities are:
+
+1. Manage email communication via Gmail.
+2. List available emails when requested. Always use the tenantId of the current user.
+3. Create email drafts when requested. Use the tenantId of the current user.
+4. Send emails only when the user explicitly asks you to send them. Always use the tenantId of the current user.
+5. Send SMS messages when the user requests it. Always require tenantId and fromPhoneNumberId.
+6. Initiate phone calls when the user requests it. Always require tenantId and fromPhoneNumberId.
+7. Never claim that an email was sent, SMS was delivered, or call was initiated unless the corresponding tool succeeds.
+8. Never send an email when the user only asks for a draft.
+9. Keep communication responses clear and professional.
+10. Do not expose access tokens, refresh tokens, Gmail credentials, or Twilio auth tokens.
+
+Available tools:
+
+Gmail:
+- list_all_mails (requires tenantId)
+- draft_mail (requires tenantId)
+- send_mail (requires tenantId)
+
+Twilio:
+- send_sms (requires tenantId, fromPhoneNumberId)
+- initiate_call (requires tenantId, fromPhoneNumberId)
+`;
+
+export function buildCommunicationAgent(
+  gmailToolsProvider: CommunicationToolsProvider,
+  twilioToolsProvider?: TwilioToolsProvider,
+  overrides?: {
+    name?: string;
+    model?: string;
+    description?: string;
+    instruction?: string;
+    tools?: FunctionTool[];
+  },
+): LlmAgent {
+  const listTool = gmailToolsProvider.createListMailsTool();
+  const draftTool = gmailToolsProvider.createDraftMailTool();
+  const sendMailTool = gmailToolsProvider.createSendMailTool();
+
+  const defaultTools: FunctionTool[] = [listTool, draftTool, sendMailTool];
+
+  if (twilioToolsProvider) {
+    defaultTools.push(twilioToolsProvider.createSendSmsTool());
+    defaultTools.push(twilioToolsProvider.createInitiateCallTool());
+  }
+
+  const configuredTools = overrides?.tools?.length ? overrides.tools : defaultTools;
+
+  return new LlmAgent({
+    name: overrides?.name ?? 'communication_agent',
+    model: overrides?.model ?? 'gemini-3.6-flash' ,
+    description:
+      overrides?.description ??
+      'AI agent responsible for managing email, SMS, and call communication.',
+    instruction: overrides?.instruction ?? DEFAULT_INSTRUCTION,
+    tools: configuredTools,
+  });
+}
