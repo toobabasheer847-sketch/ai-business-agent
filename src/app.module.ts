@@ -13,6 +13,7 @@ import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-co
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
 import { LogsModule } from './modules/logs/logs.module';
+import { MasterSettingsModule } from './modules/master-settings/master-settings.module';
 
 @Module({
 
@@ -31,6 +32,7 @@ import { LogsModule } from './modules/logs/logs.module';
     KnowledgebaseModule,
     LeadModule,
     LogsModule,
+    MasterSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

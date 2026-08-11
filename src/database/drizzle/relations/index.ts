@@ -14,10 +14,12 @@ import { phoneNumbers } from '../schema/phone-number.schema';
 import { twilioApps } from '../schema/twilio-app.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
+import { masterSettings } from '../schema/master-settings.schema';
 
 export const tenantRelations = relations(tenants, ({ many, one }) => ({
   users: many(users),
   brand: one(brands),
+  masterSettings: one(masterSettings),
   knowledgebases: many(knowledgebases),
   companies: many(companies),
   leads: many(leads),
@@ -211,3 +213,10 @@ export const auditLogRelations = relations(
     }),
   }),
 );
+
+export const masterSettingsRelations = relations(masterSettings, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [masterSettings.tenantId],
+    references: [tenants.id],
+  }),
+}));

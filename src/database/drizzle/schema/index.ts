@@ -5,6 +5,7 @@ export * from './conversation.schema';
 export * from './gmail-config.schema';
 export * from './knowledgebase.schema';
 export * from './lead.schema';
+export * from './master-settings.schema';
 export * from './message.schema';
 export * from './phone-number.schema';
 export * from './proposal.schema';
