@@ -12,6 +12,7 @@ import { ConversationModule } from './modules/conversation/conversation.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
+import { LogsModule } from './modules/logs/logs.module';
 
 @Module({
 
@@ -29,6 +30,7 @@ import { LeadModule } from './modules/lead/lead.module';
     GmailConfigurationModule,
     KnowledgebaseModule,
     LeadModule,
+    LogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
