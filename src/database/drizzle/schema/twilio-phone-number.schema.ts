@@ -1,11 +1,11 @@
 import {
+  index,
   pgTable,
-  uuid,
-  varchar,
   text,
   timestamp,
   uniqueIndex,
-  index,
+  uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
@@ -28,49 +28,31 @@ export const twilioPhoneNumbers = pgTable(
       onUpdate: 'cascade',
     }),
 
-    phoneNumber: varchar('phone_number', {
-      length: 50,
-    }).notNull(),
+    phoneNumber: varchar('phone_number', { length: 50 }).notNull(),
 
-    phoneNumberSid: varchar('phone_number_sid', {
-      length: 255,
-    }),
+    phoneNumberSid: varchar('phone_number_sid', { length: 255 }),
 
-    friendlyName: varchar('friendly_name', {
-      length: 255,
-    }),
+    friendlyName: varchar('friendly_name', { length: 255 }),
 
-    accountSid: varchar('account_sid', {
-      length: 255,
-    }),
+    accountSid: varchar('account_sid', { length: 255 }),
 
     authToken: text('auth_token'),
 
-    appSid: varchar('app_sid', {
-      length: 255,
-    }),
+    appSid: varchar('app_sid', { length: 255 }),
 
-    appName: varchar('app_name', {
-      length: 255,
-    }),
+    appName: varchar('app_name', { length: 255 }),
 
     webhookUrl: text('webhook_url'),
 
-    status: varchar('status', {
-      length: 50,
-    })
+    status: varchar('status', { length: 50 })
       .notNull()
       .default('active'),
 
-    createdAt: timestamp('created_at', {
-      withTimezone: true,
-    })
+    createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
 
-    updatedAt: timestamp('updated_at', {
-      withTimezone: true,
-    })
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
@@ -79,9 +61,7 @@ export const twilioPhoneNumbers = pgTable(
       table.tenantId,
       table.phoneNumber,
     ),
-
     index('twilio_phone_numbers_tenant_id_idx').on(table.tenantId),
-
     index('twilio_phone_numbers_user_id_idx').on(table.userId),
   ],
 );

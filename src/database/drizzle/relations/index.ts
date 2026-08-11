@@ -36,7 +36,6 @@ export const tenantRelations = relations(
     conversations: many(conversations),
     messages: many(messages),
     proposals: many(proposals),
-
     twilioPhoneNumbers: many(twilioPhoneNumbers),
     gmailConfigs: many(gmailConfigs),
 

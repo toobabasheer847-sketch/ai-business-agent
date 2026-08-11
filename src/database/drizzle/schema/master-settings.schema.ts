@@ -1,17 +1,17 @@
 import { relations } from 'drizzle-orm';
 
-import { tenants } from './tenant.schema';
-import { users } from './user.schema';
-import { brands } from './brand.schema';
-import { knowledgebases } from './knowledgebase.schema';
-import { companies } from './company.schema';
-import { leads } from './lead.schema';
-import { prospects } from './prospect.schema';
-import { conversations } from './conversation.schema';
-import { messages } from './message.schema';
-import { proposals } from './proposal.schema';
-import { twilioPhoneNumbers } from './twilio-phone-number.schema';
-import { gmailConfigs } from './gmail-config.schema';
+import { tenants } from '../schema/tenant.schema';
+import { users } from '../schema/user.schema';
+import { brands } from '../schema/brand.schema';
+import { knowledgebases } from '../schema/knowledgebase.schema';
+import { companies } from '../schema/company.schema';
+import { leads } from '../schema/lead.schema';
+import { prospects } from '../schema/prospect.schema';
+import { conversations } from '../schema/conversation.schema';
+import { messages } from '../schema/message.schema';
+import { proposals } from '../schema/proposal.schema';
+import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
+import { gmailConfigs } from '../schema/gmail-config.schema';
 
 export const tenantRelations = relations(tenants, ({ many, one }) => ({
   users: many(users),
