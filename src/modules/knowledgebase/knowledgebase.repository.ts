@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { knowledgebases } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -15,11 +16,15 @@ const RETURNING_COLUMNS = {
 
 @Injectable()
 export class KnowledgebaseRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findAllByTenant(tenantId: string, search?: string) {
     const baseWhere = eq(knowledgebases.tenantId, tenantId);
 
     if (search && search.trim()) {
-      return db
+      return this.db
         .select(RETURNING_COLUMNS)
         .from(knowledgebases)
         .where(
@@ -31,7 +36,7 @@ export class KnowledgebaseRepository {
         .orderBy(desc(knowledgebases.updatedAt));
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(knowledgebases)
       .where(baseWhere)
@@ -39,7 +44,7 @@ export class KnowledgebaseRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.knowledgebases.findFirst({
+    return this.db.query.knowledgebases.findFirst({
       where: and(
         eq(knowledgebases.id, id),
         eq(knowledgebases.tenantId, tenantId),
@@ -56,7 +61,7 @@ export class KnowledgebaseRepository {
   }
 
   async findByNameAndTenant(name: string, tenantId: string) {
-    return db.query.knowledgebases.findFirst({
+    return this.db.query.knowledgebases.findFirst({
       where: and(
         eq(knowledgebases.tenantId, tenantId),
         eq(knowledgebases.name, name),
@@ -69,7 +74,7 @@ export class KnowledgebaseRepository {
     name: string;
     description?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(knowledgebases)
       .values({
         tenantId: input.tenantId,
@@ -98,7 +103,7 @@ export class KnowledgebaseRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(knowledgebases)
       .set(values)
       .where(
@@ -113,7 +118,7 @@ export class KnowledgebaseRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(knowledgebases)
       .where(
         and(

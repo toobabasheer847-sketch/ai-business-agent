@@ -1,13 +1,15 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { companies } from '../../database/drizzle/schema';
-import { LeadRepository, ListLeadsOptions } from './lead.repository';
+import { LeadRepository } from './lead.repository';
 import { CreateLeadDto, LeadStatus } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 
@@ -15,6 +17,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 export class LeadService {
   constructor(
     private readonly leadRepository: LeadRepository,
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
   ) {}
 
   /**
@@ -25,7 +28,7 @@ export class LeadService {
     companyId: string,
     tenantId: string,
   ): Promise<void> {
-    const company = await db.query.companies.findFirst({
+    const company = await this.db.query.companies.findFirst({
       where: and(
         eq(companies.id, companyId),
         eq(companies.tenantId, tenantId),

@@ -28,8 +28,12 @@ export class CompanyController {
     private readonly companyService: CompanyService,
   ) {}
 
+  private getUser(req: Request): AuthenticatedUser {
+    return req.user as AuthenticatedUser;
+  }
+
   private getTenantId(req: Request): string {
-    return (req.user as AuthenticatedUser).tenantId;
+    return this.getUser(req).tenantId;
   }
 
   @Post()
@@ -38,7 +42,8 @@ export class CompanyController {
     @Req() req: Request,
     @Body() dto: CreateCompanyDto,
   ) {
-    return this.companyService.create(this.getTenantId(req), dto);
+    const user = this.getUser(req);
+    return this.companyService.create(user.tenantId, user.userId, dto);
   }
 
   @Get()

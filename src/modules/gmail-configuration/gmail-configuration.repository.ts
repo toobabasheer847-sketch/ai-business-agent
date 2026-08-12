@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { gmailConfigs } from '../../database/drizzle/schema';
 
 /** All columns — used internally only, never sent to the client directly. */
@@ -35,16 +36,20 @@ export type GmailConfigRow = {
 
 @Injectable()
 export class GmailConfigurationRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   /** Find existing config for a tenant — returns all columns for internal use. */
   async findByTenantId(tenantId: string): Promise<GmailConfigRow | undefined> {
-    return db.query.gmailConfigs.findFirst({
+    return this.db.query.gmailConfigs.findFirst({
       where: eq(gmailConfigs.tenantId, tenantId),
     });
   }
 
   /** Find by id and tenant — returns all columns for internal use. */
   async findByIdAndTenant(id: string, tenantId: string): Promise<GmailConfigRow | undefined> {
-    return db.query.gmailConfigs.findFirst({
+    return this.db.query.gmailConfigs.findFirst({
       where: and(
         eq(gmailConfigs.id, id),
         eq(gmailConfigs.tenantId, tenantId),
@@ -62,7 +67,7 @@ export class GmailConfigurationRepository {
     tokenExpiry?: Date;
     isActive: boolean;
   }): Promise<GmailConfigRow> {
-    const [row] = await db
+    const [row] = await this.db
       .insert(gmailConfigs)
       .values({
         tenantId: input.tenantId,
@@ -106,7 +111,7 @@ export class GmailConfigurationRepository {
       return (await this.findByIdAndTenant(id, tenantId)) ?? null;
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(gmailConfigs)
       .set(values)
       .where(
@@ -121,7 +126,7 @@ export class GmailConfigurationRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(gmailConfigs)
       .where(
         and(

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { tenants } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -13,8 +14,12 @@ const RETURNING_COLUMNS = {
 
 @Injectable()
 export class TenantRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findById(id: string) {
-    return db.query.tenants.findFirst({
+    return this.db.query.tenants.findFirst({
       where: eq(tenants.id, id),
       columns: {
         id: true,
@@ -39,7 +44,7 @@ export class TenantRepository {
       return this.findById(id);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(tenants)
       .set(values)
       .where(eq(tenants.id, id))

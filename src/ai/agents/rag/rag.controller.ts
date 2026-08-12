@@ -1,22 +1,13 @@
-
 import {
   Body,
   Controller,
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
 
+import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types';
 import { RagQueryDto } from './dto/rag-query.dto';
 import { RagService } from './rag.service';
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    tenantId?: string;
-    id?: string;
-    email?: string;
-  };
-}
 
 @Controller('api/ai/rag')
 export class RagController {
@@ -29,9 +20,8 @@ export class RagController {
     @Body() dto: RagQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const tenantId = req.user?.tenantId;
+    const tenantId = req.user.tenantId;
 
     return this.ragService.query(dto, tenantId);
   }
 }
-

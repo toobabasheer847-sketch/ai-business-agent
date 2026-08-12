@@ -23,7 +23,7 @@ export class CompanyService {
     return trimmed.length === 0 ? null : trimmed;
   }
 
-  async create(tenantId: string, dto: CreateCompanyDto) {
+  async create(tenantId: string, userId: string, dto: CreateCompanyDto) {
     const existing = await this.companyRepository.findByNameAndTenant(
       dto.name.trim(),
       tenantId,
@@ -37,6 +37,7 @@ export class CompanyService {
 
     return this.companyRepository.create({
       tenantId,
+      userId,
       name: dto.name.trim(),
       domain: this.normalizeOptional(dto.domain) ?? undefined,
       website: this.normalizeOptional(dto.website) ?? undefined,

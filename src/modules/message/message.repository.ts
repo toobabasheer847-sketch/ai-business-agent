@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { conversations, messages } from '../../database/drizzle/schema';
 
 const MSG_COLUMNS = {
@@ -12,17 +13,21 @@ const MSG_COLUMNS = {
   role: messages.role,
   content: messages.content,
   metadata: messages.metadata,
-  tokenCount: messages.tokenCount,
+  tokenCount: messages.totalTokens,
   createdAt: messages.createdAt,
 } as const;
 
 @Injectable()
 export class MessageRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   /**
    * Verify a conversation belongs to the tenant before performing message ops.
    */
   async findConversationByIdAndTenant(conversationId: string, tenantId: string) {
-    return db.query.conversations.findFirst({
+    return this.db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
         eq(conversations.tenantId, tenantId),
@@ -45,7 +50,7 @@ export class MessageRepository {
       conditions.push(eq(messages.role, role));
     }
 
-    return db
+    return this.db
       .select(MSG_COLUMNS)
       .from(messages)
       .where(and(...conditions))
@@ -53,23 +58,18 @@ export class MessageRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.messages.findFirst({
-      where: and(
-        eq(messages.id, id),
-        eq(messages.tenantId, tenantId),
-      ),
-      columns: {
-        id: true,
-        tenantId: true,
-        conversationId: true,
-        userId: true,
-        role: true,
-        content: true,
-        metadata: true,
-        tokenCount: true,
-        createdAt: true,
-      },
-    });
+    const [row] = await this.db
+      .select(MSG_COLUMNS)
+      .from(messages)
+      .where(
+        and(
+          eq(messages.id, id),
+          eq(messages.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    return row ?? undefined;
   }
 
   async create(input: {
@@ -81,7 +81,7 @@ export class MessageRepository {
     metadata?: Record<string, unknown>;
     tokenCount?: number;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(messages)
       .values({
         tenantId: input.tenantId,
@@ -90,7 +90,7 @@ export class MessageRepository {
         role: input.role,
         content: input.content,
         metadata: (input.metadata ?? null) as any,
-        tokenCount: input.tokenCount ?? null,
+        totalTokens: input.tokenCount ?? null,
       })
       .returning(MSG_COLUMNS);
 
@@ -107,14 +107,14 @@ export class MessageRepository {
   ) {
     const values: Partial<typeof messages.$inferInsert> = {};
 
-    if (input.tokenCount !== undefined) values.tokenCount = input.tokenCount;
+    if (input.tokenCount !== undefined) values.totalTokens = input.tokenCount;
     if (input.metadata !== undefined) values.metadata = input.metadata as any;
 
     if (Object.keys(values).length === 0) {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(messages)
       .set(values)
       .where(
@@ -129,7 +129,7 @@ export class MessageRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(messages)
       .where(
         and(

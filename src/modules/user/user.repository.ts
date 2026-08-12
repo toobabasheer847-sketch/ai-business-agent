@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { users } from '../../database/drizzle/schema';
 
 /** Never include passwordHash in API-facing selects. */
@@ -22,6 +23,10 @@ export interface ListUsersOptions {
 
 @Injectable()
 export class UserRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findAllByTenant(tenantId: string, options: ListUsersOptions = {}) {
     const { isActive, search } = options;
 
@@ -40,7 +45,7 @@ export class UserRepository {
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(users)
       .where(and(...conditions))
@@ -48,7 +53,7 @@ export class UserRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.users.findFirst({
+    return this.db.query.users.findFirst({
       where: and(
         eq(users.id, id),
         eq(users.tenantId, tenantId),
@@ -70,7 +75,7 @@ export class UserRepository {
    * Does not return passwordHash.
    */
   async findByEmail(email: string) {
-    return db.query.users.findFirst({
+    return this.db.query.users.findFirst({
       where: eq(users.email, email),
       columns: {
         id: true,
@@ -87,7 +92,7 @@ export class UserRepository {
     passwordHash: string;
     isActive?: boolean;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(users)
       .values({
         tenantId: input.tenantId,
@@ -122,7 +127,7 @@ export class UserRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(users)
       .set(values)
       .where(
@@ -137,7 +142,7 @@ export class UserRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(users)
       .where(
         and(

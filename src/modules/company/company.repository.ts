@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { companies } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -18,9 +19,13 @@ const RETURNING_COLUMNS = {
 
 @Injectable()
 export class CompanyRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findAllByTenant(tenantId: string, search?: string) {
     if (search && search.trim()) {
-      return db
+      return this.db
         .select(RETURNING_COLUMNS)
         .from(companies)
         .where(
@@ -35,14 +40,14 @@ export class CompanyRepository {
         );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(companies)
       .where(eq(companies.tenantId, tenantId));
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.companies.findFirst({
+    return this.db.query.companies.findFirst({
       where: and(
         eq(companies.id, id),
         eq(companies.tenantId, tenantId),
@@ -62,7 +67,7 @@ export class CompanyRepository {
   }
 
   async findByNameAndTenant(name: string, tenantId: string) {
-    return db.query.companies.findFirst({
+    return this.db.query.companies.findFirst({
       where: and(
         eq(companies.tenantId, tenantId),
         eq(companies.name, name),
@@ -72,16 +77,18 @@ export class CompanyRepository {
 
   async create(input: {
     tenantId: string;
+    userId: string;
     name: string;
     domain?: string;
     website?: string;
     industry?: string;
     description?: string;
   }) {
-    const [company] = await db
+    const [company] = await this.db
       .insert(companies)
       .values({
         tenantId: input.tenantId,
+        userId: input.userId,
         name: input.name,
         domain: input.domain ?? null,
         website: input.website ?? null,
@@ -116,7 +123,7 @@ export class CompanyRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [company] = await db
+    const [company] = await this.db
       .update(companies)
       .set(values)
       .where(
@@ -131,7 +138,7 @@ export class CompanyRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(companies)
       .where(
         and(

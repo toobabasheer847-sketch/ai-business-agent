@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { proposals, prospects } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -26,11 +27,15 @@ export interface ListProposalsOptions {
 
 @Injectable()
 export class ProposalRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   /**
    * Verify a prospect belongs to the tenant before creating/relating a proposal.
    */
   async findProspectByIdAndTenant(prospectId: string, tenantId: string) {
-    return db.query.prospects.findFirst({
+    return this.db.query.prospects.findFirst({
       where: and(
         eq(prospects.id, prospectId),
         eq(prospects.tenantId, tenantId),
@@ -45,7 +50,12 @@ export class ProposalRepository {
     const conditions = [eq(proposals.tenantId, tenantId)];
 
     if (status) {
-      conditions.push(eq(proposals.status, status));
+      conditions.push(
+        eq(
+          proposals.status,
+          status as (typeof proposals.status.enumValues)[number],
+        ),
+      );
     }
 
     if (prospectId) {
@@ -65,7 +75,7 @@ export class ProposalRepository {
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(proposals)
       .where(and(...conditions))
@@ -73,7 +83,7 @@ export class ProposalRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.proposals.findFirst({
+    return this.db.query.proposals.findFirst({
       where: and(
         eq(proposals.id, id),
         eq(proposals.tenantId, tenantId),
@@ -102,7 +112,7 @@ export class ProposalRepository {
     content?: string;
     status?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(proposals)
       .values({
         tenantId: input.tenantId,
@@ -111,7 +121,7 @@ export class ProposalRepository {
         title: input.title,
         description: input.description ?? null,
         content: input.content ?? null,
-        status: input.status ?? 'draft',
+        status: (input.status ?? 'draft') as typeof proposals.$inferInsert.status,
       })
       .returning(RETURNING_COLUMNS);
 
@@ -133,13 +143,15 @@ export class ProposalRepository {
     if (input.title !== undefined) values.title = input.title;
     if (input.description !== undefined) values.description = input.description;
     if (input.content !== undefined) values.content = input.content;
-    if (input.status !== undefined) values.status = input.status;
+    if (input.status !== undefined) {
+      values.status = input.status as typeof proposals.$inferInsert.status;
+    }
 
     if (Object.keys(values).length === 0) {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(proposals)
       .set(values)
       .where(
@@ -154,7 +166,7 @@ export class ProposalRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(proposals)
       .where(
         and(

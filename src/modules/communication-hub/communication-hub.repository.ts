@@ -1,10 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, ilike, or, sql, count, desc } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { conversations, messages } from '../../database/drizzle/schema';
 import { CommunicationChannel, CommunicationDirection } from './dto/communication-history.dto';
 import { CommunicationStats } from './entities/communication-history.entity';
+
+const MSG_COLUMNS = {
+  id: messages.id,
+  role: messages.role,
+  content: messages.content,
+  metadata: messages.metadata,
+  tokenCount: messages.totalTokens,
+  createdAt: messages.createdAt,
+} as const;
 
 interface ListHistoryOptions {
   channel?: CommunicationChannel;
@@ -17,6 +27,10 @@ interface ListHistoryOptions {
 
 @Injectable()
 export class CommunicationHubRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async listHistory(tenantId: string, options: ListHistoryOptions) {
     const { channel, prospectId, search, page, limit } = options;
     const offset = (page - 1) * limit;
@@ -43,7 +57,7 @@ export class CommunicationHubRepository {
 
     const where = and(...conditions);
 
-    const rows = await db
+    const rows = await this.db
       .select({
         id: conversations.id,
         tenantId: conversations.tenantId,
@@ -67,7 +81,7 @@ export class CommunicationHubRepository {
       .limit(limit)
       .offset(offset);
 
-    const [{ total }] = await db
+    const [{ total }] = await this.db
       .select({ total: count() })
       .from(conversations)
       .where(where);
@@ -95,7 +109,7 @@ export class CommunicationHubRepository {
   }
 
   async findConversationById(tenantId: string, conversationId: string) {
-    const conversation = await db.query.conversations.findFirst({
+    const conversation = await this.db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
         eq(conversations.tenantId, tenantId),
@@ -106,15 +120,8 @@ export class CommunicationHubRepository {
       return null;
     }
 
-    const conversationMessages = await db
-      .select({
-        id: messages.id,
-        role: messages.role,
-        content: messages.content,
-        metadata: messages.metadata,
-        tokenCount: messages.tokenCount,
-        createdAt: messages.createdAt,
-      })
+    const conversationMessages = await this.db
+      .select(MSG_COLUMNS)
       .from(messages)
       .where(
         and(
@@ -154,7 +161,7 @@ export class CommunicationHubRepository {
 
     const where = and(...conditions);
 
-    const rows = await db
+    const rows = await this.db
       .select({
         id: conversations.id,
         tenantId: conversations.tenantId,
@@ -177,7 +184,7 @@ export class CommunicationHubRepository {
       .limit(limit)
       .offset(offset);
 
-    const [{ total }] = await db
+    const [{ total }] = await this.db
       .select({ total: count() })
       .from(conversations)
       .where(where);
@@ -225,7 +232,7 @@ export class CommunicationHubRepository {
 
     const where = and(...conditions);
 
-    const rows = await db
+    const rows = await this.db
       .select({
         id: conversations.id,
         tenantId: conversations.tenantId,
@@ -248,7 +255,7 @@ export class CommunicationHubRepository {
       .limit(limit)
       .offset(offset);
 
-    const [{ total }] = await db
+    const [{ total }] = await this.db
       .select({ total: count() })
       .from(conversations)
       .where(where);
@@ -273,7 +280,7 @@ export class CommunicationHubRepository {
   }
 
   async getStats(tenantId: string): Promise<CommunicationStats> {
-    const rows = await db
+    const rows = await this.db
       .select({
         channel: conversations.channel,
         status: conversations.status,

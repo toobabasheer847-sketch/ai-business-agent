@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { companies, leads, prospects } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -29,11 +30,15 @@ export interface ListProspectsOptions {
 
 @Injectable()
 export class ProspectRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   /**
    * Verify a company belongs to the tenant before creating/relating a prospect.
    */
   async findCompanyByIdAndTenant(companyId: string, tenantId: string) {
-    return db.query.companies.findFirst({
+    return this.db.query.companies.findFirst({
       where: and(
         eq(companies.id, companyId),
         eq(companies.tenantId, tenantId),
@@ -46,7 +51,7 @@ export class ProspectRepository {
    * Verify a lead belongs to the tenant before creating/relating a prospect.
    */
   async findLeadByIdAndTenant(leadId: string, tenantId: string) {
-    return db.query.leads.findFirst({
+    return this.db.query.leads.findFirst({
       where: and(
         eq(leads.id, leadId),
         eq(leads.tenantId, tenantId),
@@ -82,7 +87,7 @@ export class ProspectRepository {
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(prospects)
       .where(and(...conditions))
@@ -90,7 +95,7 @@ export class ProspectRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.prospects.findFirst({
+    return this.db.query.prospects.findFirst({
       where: and(
         eq(prospects.id, id),
         eq(prospects.tenantId, tenantId),
@@ -125,7 +130,7 @@ export class ProspectRepository {
     status?: string;
     notes?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(prospects)
       .values({
         tenantId: input.tenantId,
@@ -175,7 +180,7 @@ export class ProspectRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(prospects)
       .set(values)
       .where(
@@ -190,7 +195,7 @@ export class ProspectRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(prospects)
       .where(
         and(

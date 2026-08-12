@@ -1,25 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { brands } from '../../database/drizzle/schema';
 
 @Injectable()
 export class BrandRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findByTenantId(tenantId: string) {
-    return db.query.brands.findFirst({
+    return this.db.query.brands.findFirst({
       where: eq(brands.tenantId, tenantId),
     });
   }
 
   async findById(id: string) {
-    return db.query.brands.findFirst({
+    return this.db.query.brands.findFirst({
       where: eq(brands.id, id),
     });
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.brands.findFirst({
+    return this.db.query.brands.findFirst({
       where: and(
         eq(brands.id, id),
         eq(brands.tenantId, tenantId),
@@ -35,7 +40,7 @@ export class BrandRepository {
     apiUrl?: string;
     phone?: string;
   }) {
-    const [brand] = await db
+    const [brand] = await this.db
       .insert(brands)
       .values({
         tenantId: input.tenantId,
@@ -83,7 +88,7 @@ export class BrandRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [brand] = await db
+    const [brand] = await this.db
       .update(brands)
       .set(values)
       .where(
@@ -108,7 +113,7 @@ export class BrandRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(brands)
       .where(
         and(

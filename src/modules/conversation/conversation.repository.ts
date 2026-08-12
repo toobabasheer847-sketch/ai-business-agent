@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+
+import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { conversations, messages } from '../../database/drizzle/schema';
 import { ConversationChannel, ConversationStatus } from './dto/create-conversation.dto';
 
@@ -12,6 +15,7 @@ const CONV_COLUMNS = {
   userId: conversations.userId,
   prospectId: conversations.prospectId,
   title: conversations.title,
+  slug: conversations.slug,
   channel: conversations.channel,
   status: conversations.status,
   summary: conversations.summary,
@@ -28,7 +32,7 @@ const MSG_COLUMNS = {
   role: messages.role,
   content: messages.content,
   metadata: messages.metadata,
-  tokenCount: messages.tokenCount,
+  tokenCount: messages.totalTokens,
   createdAt: messages.createdAt,
 } as const;
 
@@ -41,6 +45,10 @@ interface ListConversationsOptions {
 
 @Injectable()
 export class ConversationRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   // ─── Conversations ────────────────────────────────────────────────────────
 
   async findAllByTenant(tenantId: string, options: ListConversationsOptions = {}) {
@@ -69,7 +77,7 @@ export class ConversationRepository {
       );
     }
 
-    return db
+    return this.db
       .select(CONV_COLUMNS)
       .from(conversations)
       .where(and(...conditions))
@@ -77,7 +85,7 @@ export class ConversationRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.conversations.findFirst({
+    return this.db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, id),
         eq(conversations.tenantId, tenantId),
@@ -105,13 +113,22 @@ export class ConversationRepository {
     channel?: string;
     summary?: string;
   }) {
-    const [conversation] = await db
+    const baseSlug =
+      input.title
+        ?.toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 200) || 'conversation';
+
+    const [conversation] = await this.db
       .insert(conversations)
       .values({
         tenantId: input.tenantId,
         userId: input.userId,
         prospectId: input.prospectId ?? null,
         title: input.title ?? null,
+        slug: `${baseSlug}-${randomUUID().slice(0, 8)}`,
         channel: input.channel ?? 'web',
         status: 'active',
         summary: input.summary ?? null,
@@ -142,7 +159,7 @@ export class ConversationRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [conversation] = await db
+    const [conversation] = await this.db
       .update(conversations)
       .set(values)
       .where(
@@ -157,7 +174,7 @@ export class ConversationRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(conversations)
       .where(
         and(
@@ -172,7 +189,7 @@ export class ConversationRepository {
   // ─── Messages ─────────────────────────────────────────────────────────────
 
   async findMessagesByConversation(conversationId: string, tenantId: string) {
-    return db
+    return this.db
       .select(MSG_COLUMNS)
       .from(messages)
       .where(
@@ -193,7 +210,7 @@ export class ConversationRepository {
     metadata?: Record<string, unknown>;
     tokenCount?: number;
   }) {
-    const [message] = await db
+    const [message] = await this.db
       .insert(messages)
       .values({
         tenantId: input.tenantId,
@@ -202,7 +219,7 @@ export class ConversationRepository {
         role: input.role,
         content: input.content,
         metadata: (input.metadata ?? null) as any,
-        tokenCount: input.tokenCount ?? null,
+        totalTokens: input.tokenCount ?? null,
       })
       .returning(MSG_COLUMNS);
 

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { leads } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -29,6 +30,10 @@ export interface ListLeadsOptions {
 
 @Injectable()
 export class LeadRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findAllByTenant(tenantId: string, options: ListLeadsOptions = {}) {
     const { status, companyId, source, search } = options;
 
@@ -56,7 +61,7 @@ export class LeadRepository {
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(leads)
       .where(and(...conditions))
@@ -64,7 +69,7 @@ export class LeadRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.leads.findFirst({
+    return this.db.query.leads.findFirst({
       where: and(
         eq(leads.id, id),
         eq(leads.tenantId, tenantId),
@@ -99,7 +104,7 @@ export class LeadRepository {
     status?: string;
     notes?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(leads)
       .values({
         tenantId: input.tenantId,
@@ -149,7 +154,7 @@ export class LeadRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(leads)
       .set(values)
       .where(
@@ -164,7 +169,7 @@ export class LeadRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(leads)
       .where(
         and(
