@@ -5,7 +5,6 @@ import { Inject } from '@nestjs/common';
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
 import { phoneNumbers } from '../../database/drizzle/schema/phone-number.schema';
-import { twilioPhoneNumbers } from '../../database/drizzle/schema/twilio-phone-number.schema';
 
 export interface TenantPhoneNumber {
   id: string;
@@ -16,16 +15,16 @@ export interface TenantPhoneNumber {
   status: string;
 }
 
+/**
+ * Webhook / Twilio lookup shape aligned to live public.phone_numbers columns.
+ * Fields that previously assumed a twilio_phone_numbers-only schema are omitted.
+ */
 export interface TenantTwilioPhoneNumber {
   id: string;
   tenantId: string;
-  userId: string | null;
   phoneNumber: string;
-  phoneNumberSid: string | null;
-  friendlyName: string | null;
-  accountSid: string | null;
-  appSid: string | null;
-  webhookUrl: string | null;
+  label: string | null;
+  provider: string;
   status: string;
 }
 
@@ -80,19 +79,15 @@ export class PhoneNumberManagementService {
 
     return this.db
       .select({
-        id: twilioPhoneNumbers.id,
-        tenantId: twilioPhoneNumbers.tenantId,
-        userId: twilioPhoneNumbers.userId,
-        phoneNumber: twilioPhoneNumbers.phoneNumber,
-        phoneNumberSid: twilioPhoneNumbers.phoneNumberSid,
-        friendlyName: twilioPhoneNumbers.friendlyName,
-        accountSid: twilioPhoneNumbers.accountSid,
-        appSid: twilioPhoneNumbers.appSid,
-        webhookUrl: twilioPhoneNumbers.webhookUrl,
-        status: twilioPhoneNumbers.status,
+        id: phoneNumbers.id,
+        tenantId: phoneNumbers.tenantId,
+        phoneNumber: phoneNumbers.phoneNumber,
+        label: phoneNumbers.label,
+        provider: phoneNumbers.provider,
+        status: phoneNumbers.status,
       })
-      .from(twilioPhoneNumbers)
-      .where(eq(twilioPhoneNumbers.tenantId, tenantId));
+      .from(phoneNumbers)
+      .where(eq(phoneNumbers.tenantId, tenantId));
   }
 
   async findTwilioPhoneNumberByNumber(
@@ -101,25 +96,21 @@ export class PhoneNumberManagementService {
   ): Promise<TenantTwilioPhoneNumber | null> {
     if (!phoneNumber) return null;
 
-    const clauses = [eq(twilioPhoneNumbers.phoneNumber, phoneNumber)];
+    const clauses = [eq(phoneNumbers.phoneNumber, phoneNumber)];
     if (tenantId) {
-      clauses.push(eq(twilioPhoneNumbers.tenantId, tenantId));
+      clauses.push(eq(phoneNumbers.tenantId, tenantId));
     }
 
     const result = await this.db
       .select({
-        id: twilioPhoneNumbers.id,
-        tenantId: twilioPhoneNumbers.tenantId,
-        userId: twilioPhoneNumbers.userId,
-        phoneNumber: twilioPhoneNumbers.phoneNumber,
-        phoneNumberSid: twilioPhoneNumbers.phoneNumberSid,
-        friendlyName: twilioPhoneNumbers.friendlyName,
-        accountSid: twilioPhoneNumbers.accountSid,
-        appSid: twilioPhoneNumbers.appSid,
-        webhookUrl: twilioPhoneNumbers.webhookUrl,
-        status: twilioPhoneNumbers.status,
+        id: phoneNumbers.id,
+        tenantId: phoneNumbers.tenantId,
+        phoneNumber: phoneNumbers.phoneNumber,
+        label: phoneNumbers.label,
+        provider: phoneNumbers.provider,
+        status: phoneNumbers.status,
       })
-      .from(twilioPhoneNumbers)
+      .from(phoneNumbers)
       .where(and(...clauses))
       .limit(1);
 

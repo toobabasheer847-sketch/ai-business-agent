@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { phoneNumbers } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -11,7 +12,6 @@ const RETURNING_COLUMNS = {
   label: phoneNumbers.label,
   provider: phoneNumbers.provider,
   status: phoneNumbers.status,
-  description: phoneNumbers.description,
   createdAt: phoneNumbers.createdAt,
   updatedAt: phoneNumbers.updatedAt,
 } as const;
@@ -24,6 +24,10 @@ export interface ListPhoneNumbersOptions {
 
 @Injectable()
 export class PhoneNumberRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   async findAllByTenant(tenantId: string, options: ListPhoneNumbersOptions = {}) {
     const { provider, status, search } = options;
 
@@ -42,12 +46,11 @@ export class PhoneNumberRepository {
         or(
           ilike(phoneNumbers.phoneNumber, `%${search.trim()}%`),
           ilike(phoneNumbers.label, `%${search.trim()}%`),
-          ilike(phoneNumbers.description, `%${search.trim()}%`),
         )!,
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(phoneNumbers)
       .where(and(...conditions))
@@ -55,32 +58,33 @@ export class PhoneNumberRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.phoneNumbers.findFirst({
-      where: and(
-        eq(phoneNumbers.id, id),
-        eq(phoneNumbers.tenantId, tenantId),
-      ),
-      columns: {
-        id: true,
-        tenantId: true,
-        phoneNumber: true,
-        label: true,
-        provider: true,
-        status: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const rows = await this.db
+      .select(RETURNING_COLUMNS)
+      .from(phoneNumbers)
+      .where(
+        and(
+          eq(phoneNumbers.id, id),
+          eq(phoneNumbers.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
   }
 
   async findByPhoneNumberAndTenant(phoneNumber: string, tenantId: string) {
-    return db.query.phoneNumbers.findFirst({
-      where: and(
-        eq(phoneNumbers.phoneNumber, phoneNumber),
-        eq(phoneNumbers.tenantId, tenantId),
-      ),
-    });
+    const rows = await this.db
+      .select(RETURNING_COLUMNS)
+      .from(phoneNumbers)
+      .where(
+        and(
+          eq(phoneNumbers.phoneNumber, phoneNumber),
+          eq(phoneNumbers.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
   }
 
   async create(input: {
@@ -89,9 +93,8 @@ export class PhoneNumberRepository {
     label?: string;
     provider?: string;
     status?: string;
-    description?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(phoneNumbers)
       .values({
         tenantId: input.tenantId,
@@ -99,7 +102,6 @@ export class PhoneNumberRepository {
         label: input.label ?? null,
         provider: input.provider ?? 'twilio',
         status: input.status ?? 'active',
-        description: input.description ?? null,
       })
       .returning(RETURNING_COLUMNS);
 
@@ -114,7 +116,6 @@ export class PhoneNumberRepository {
       label?: string | null;
       provider?: string;
       status?: string;
-      description?: string | null;
     },
   ) {
     const values: Partial<typeof phoneNumbers.$inferInsert> = {};
@@ -123,13 +124,12 @@ export class PhoneNumberRepository {
     if (input.label !== undefined) values.label = input.label;
     if (input.provider !== undefined) values.provider = input.provider;
     if (input.status !== undefined) values.status = input.status;
-    if (input.description !== undefined) values.description = input.description;
 
     if (Object.keys(values).length === 0) {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(phoneNumbers)
       .set(values)
       .where(
@@ -144,7 +144,7 @@ export class PhoneNumberRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(phoneNumbers)
       .where(
         and(

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
-import { db } from '../../database/drizzle';
+import { DRIZZLE_DB } from '../../database/database.module';
+import type { DrizzleDb } from '../../database/database.service';
 import { phoneNumbers, twilioApps } from '../../database/drizzle/schema';
 
 const RETURNING_COLUMNS = {
@@ -25,17 +26,26 @@ export interface ListTwilioAppsOptions {
 
 @Injectable()
 export class TwilioAppRepository {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+  ) {}
+
   /**
    * Verify a phone number belongs to the tenant before creating/relating a Twilio App.
    */
   async findPhoneNumberByIdAndTenant(phoneNumberId: string, tenantId: string) {
-    return db.query.phoneNumbers.findFirst({
-      where: and(
-        eq(phoneNumbers.id, phoneNumberId),
-        eq(phoneNumbers.tenantId, tenantId),
-      ),
-      columns: { id: true },
-    });
+    const rows = await this.db
+      .select({ id: phoneNumbers.id })
+      .from(phoneNumbers)
+      .where(
+        and(
+          eq(phoneNumbers.id, phoneNumberId),
+          eq(phoneNumbers.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
   }
 
   async findAllByTenant(tenantId: string, options: ListTwilioAppsOptions = {}) {
@@ -61,7 +71,7 @@ export class TwilioAppRepository {
       );
     }
 
-    return db
+    return this.db
       .select(RETURNING_COLUMNS)
       .from(twilioApps)
       .where(and(...conditions))
@@ -69,24 +79,18 @@ export class TwilioAppRepository {
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
-    return db.query.twilioApps.findFirst({
-      where: and(
-        eq(twilioApps.id, id),
-        eq(twilioApps.tenantId, tenantId),
-      ),
-      columns: {
-        id: true,
-        tenantId: true,
-        phoneNumberId: true,
-        accountSid: true,
-        authToken: true,
-        appSid: true,
-        webhookUrl: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const rows = await this.db
+      .select(RETURNING_COLUMNS)
+      .from(twilioApps)
+      .where(
+        and(
+          eq(twilioApps.id, id),
+          eq(twilioApps.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
   }
 
   async create(input: {
@@ -98,7 +102,7 @@ export class TwilioAppRepository {
     webhookUrl?: string;
     status?: string;
   }) {
-    const [row] = await db
+    const [row] = await this.db
       .insert(twilioApps)
       .values({
         tenantId: input.tenantId,
@@ -139,7 +143,7 @@ export class TwilioAppRepository {
       return this.findByIdAndTenant(id, tenantId);
     }
 
-    const [row] = await db
+    const [row] = await this.db
       .update(twilioApps)
       .set(values)
       .where(
@@ -154,7 +158,7 @@ export class TwilioAppRepository {
   }
 
   async delete(id: string, tenantId: string): Promise<boolean> {
-    const result = await db
+    const result = await this.db
       .delete(twilioApps)
       .where(
         and(

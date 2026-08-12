@@ -34,8 +34,4 @@ export class UpdatePhoneNumberDto {
   @IsOptional()
   @IsEnum(PhoneNumberStatus)
   status?: PhoneNumberStatus;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
 }

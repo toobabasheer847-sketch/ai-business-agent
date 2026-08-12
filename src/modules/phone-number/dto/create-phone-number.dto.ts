@@ -54,11 +54,4 @@ export class CreatePhoneNumberDto {
   @IsOptional()
   @IsEnum(PhoneNumberStatus)
   status?: PhoneNumberStatus;
-
-  /**
-   * Optional description or notes about this phone number.
-   */
-  @IsOptional()
-  @IsString()
-  description?: string;
 }

@@ -22,7 +22,7 @@ export class PhoneNumberQueryDto {
   status?: PhoneNumberStatus;
 
   /**
-   * Search by label, phoneNumber, or description (case-insensitive).
+   * Search by label or phoneNumber (case-insensitive).
    */
   @IsOptional()
   @IsString()

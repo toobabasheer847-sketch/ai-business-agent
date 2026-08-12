@@ -5,7 +5,6 @@ export interface PhoneNumber {
   label: string | null;
   provider: string;
   status: string;
-  description: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

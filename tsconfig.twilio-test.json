@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "files": [
+    "src/main.twilio-test.ts",
+    "src/common/types/express.d.ts"
+  ]
+}

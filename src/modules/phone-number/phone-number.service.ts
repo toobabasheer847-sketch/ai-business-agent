@@ -23,7 +23,6 @@ export class PhoneNumberService {
   }
 
   async create(tenantId: string, dto: CreatePhoneNumberDto) {
-    // Enforce uniqueness per tenant — same phone number cannot be registered twice
     const existing = await this.phoneNumberRepository.findByPhoneNumberAndTenant(
       dto.phoneNumber,
       tenantId,
@@ -41,7 +40,6 @@ export class PhoneNumberService {
       label: dto.label?.trim(),
       provider: dto.provider,
       status: dto.status,
-      description: dto.description?.trim(),
     });
   }
 
@@ -70,7 +68,6 @@ export class PhoneNumberService {
       throw new NotFoundException('Phone number not found.');
     }
 
-    // If phoneNumber is changing, check for duplicates
     if (dto.phoneNumber !== undefined && dto.phoneNumber !== existing.phoneNumber) {
       const duplicate = await this.phoneNumberRepository.findByPhoneNumberAndTenant(
         dto.phoneNumber,
@@ -89,7 +86,6 @@ export class PhoneNumberService {
       label: this.normalizeOptional(dto.label),
       provider: dto.provider,
       status: dto.status,
-      description: this.normalizeOptional(dto.description),
     });
   }
 

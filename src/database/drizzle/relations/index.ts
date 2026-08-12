@@ -61,8 +61,6 @@ export const userRelations = relations(
     proposals: many(proposals),
     auditLogs: many(auditLogs),
 
-    twilioPhoneNumbers: many(twilioPhoneNumbers),
-
     createdTasks: many(tasks, {
       relationName: 'createdTasks',
     }),
@@ -257,7 +255,7 @@ export const proposalRelations = relations(
   }),
 );
 /**
- * Twilio Phone Number relations
+ * Phone Number relations (table: phone_numbers; export alias: twilioPhoneNumbers)
  */
 export const twilioPhoneNumberRelations = relations(
   twilioPhoneNumbers,
@@ -265,11 +263,6 @@ export const twilioPhoneNumberRelations = relations(
     tenant: one(tenants, {
       fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
-    }),
-
-    user: one(users, {
-      fields: [twilioPhoneNumbers.userId],
-      references: [users.id],
     }),
   }),
 );
