@@ -19,6 +19,7 @@ import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
 import { ProposalModule } from './modules/proposal/proposal.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
 import { TenantModule } from './modules/tenant/tenant.module';
+import { TwilioAppModule } from './modules/twilio-app/twilio-app.module';
 
 @Module({
 
@@ -43,6 +44,7 @@ import { TenantModule } from './modules/tenant/tenant.module';
     ProposalModule,
     ProspectModule,
     TenantModule,
+    TwilioAppModule,
   ],
   controllers: [AppController],
   providers: [AppService],
