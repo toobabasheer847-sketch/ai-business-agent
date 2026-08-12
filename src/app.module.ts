@@ -20,6 +20,7 @@ import { ProposalModule } from './modules/proposal/proposal.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { TwilioAppModule } from './modules/twilio-app/twilio-app.module';
+import { UserModule } from './modules/user/user.module';
 
 @Module({
 
@@ -45,6 +46,7 @@ import { TwilioAppModule } from './modules/twilio-app/twilio-app.module';
     ProspectModule,
     TenantModule,
     TwilioAppModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
