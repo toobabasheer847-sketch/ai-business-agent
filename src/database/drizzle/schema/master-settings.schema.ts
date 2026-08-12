@@ -1,176 +1,86 @@
-import { relations } from 'drizzle-orm';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  boolean,
+  integer,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
-import { tenants } from '../schema/tenant.schema';
-import { users } from '../schema/user.schema';
-import { brands } from '../schema/brand.schema';
-import { knowledgebases } from '../schema/knowledgebase.schema';
-import { companies } from '../schema/company.schema';
-import { leads } from '../schema/lead.schema';
-import { prospects } from '../schema/prospect.schema';
-import { conversations } from '../schema/conversation.schema';
-import { messages } from '../schema/message.schema';
-import { proposals } from '../schema/proposal.schema';
-import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
-import { gmailConfigs } from '../schema/gmail-config.schema';
+import { tenants } from './tenant.schema';
 
-export const tenantRelations = relations(tenants, ({ many, one }) => ({
-  users: many(users),
-  brand: one(brands),
-  knowledgebases: many(knowledgebases),
-  companies: many(companies),
-  leads: many(leads),
-  prospects: many(prospects),
-  conversations: many(conversations),
-  messages: many(messages),
-  proposals: many(proposals),
-  twilioPhoneNumbers: many(twilioPhoneNumbers),
-  gmailConfigs: many(gmailConfigs),
-}));
+export const masterSettings = pgTable('master_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
 
-export const userRelations = relations(users, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [users.tenantId],
-    references: [tenants.id],
-  }),
-
-  conversations: many(conversations),
-  messages: many(messages),
-  proposals: many(proposals),
-  twilioPhoneNumbers: many(twilioPhoneNumbers),
-}));
-
-export const brandRelations = relations(brands, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [brands.tenantId],
-    references: [tenants.id],
-  }),
-}));
-
-export const knowledgebaseRelations = relations(knowledgebases, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [knowledgebases.tenantId],
-    references: [tenants.id],
-  }),
-}));
-
-export const companyRelations = relations(companies, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [companies.tenantId],
-    references: [tenants.id],
-  }),
-
-  leads: many(leads),
-  prospects: many(prospects),
-}));
-
-export const leadRelations = relations(leads, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [leads.tenantId],
-    references: [tenants.id],
-  }),
-
-  company: one(companies, {
-    fields: [leads.companyId],
-    references: [companies.id],
-  }),
-
-  prospects: many(prospects),
-}));
-
-export const prospectRelations = relations(prospects, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [prospects.tenantId],
-    references: [tenants.id],
-  }),
-
-  company: one(companies, {
-    fields: [prospects.companyId],
-    references: [companies.id],
-  }),
-
-  lead: one(leads, {
-    fields: [prospects.leadId],
-    references: [leads.id],
-  }),
-
-  conversations: many(conversations),
-  proposals: many(proposals),
-}));
-
-export const conversationRelations = relations(
-  conversations,
-  ({ one, many }) => ({
-    tenant: one(tenants, {
-      fields: [conversations.tenantId],
-      references: [tenants.id],
+  /** One settings record per tenant — enforced at the application level. */
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .unique()
+    .references(() => tenants.id, {
+      onDelete: 'cascade',
+      onUpdate: 'cascade',
     }),
 
-    user: one(users, {
-      fields: [conversations.userId],
-      references: [users.id],
-    }),
+  /** Default language/locale for the tenant (e.g. 'en', 'en-US'). */
+  defaultLanguage: varchar('default_language', { length: 10 })
+    .notNull()
+    .default('en'),
 
-    prospect: one(prospects, {
-      fields: [conversations.prospectId],
-      references: [prospects.id],
-    }),
+  /** Default timezone string (IANA format, e.g. 'America/New_York'). */
+  defaultTimezone: varchar('default_timezone', { length: 100 })
+    .notNull()
+    .default('UTC'),
 
-    messages: many(messages),
-  }),
-);
+  /** Default currency code (ISO 4217, e.g. 'USD', 'EUR'). */
+  defaultCurrency: varchar('default_currency', { length: 3 })
+    .notNull()
+    .default('USD'),
 
-export const messageRelations = relations(messages, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [messages.tenantId],
-    references: [tenants.id],
-  }),
+  /**
+   * AI model override for this tenant.
+   * If null, the system default from environment variables is used.
+   */
+  aiModel: varchar('ai_model', { length: 100 }),
 
-  conversation: one(conversations, {
-    fields: [messages.conversationId],
-    references: [conversations.id],
-  }),
+  /**
+   * Maximum number of conversation history turns to include in AI context.
+   * Controls token usage and AI memory window.
+   */
+  maxConversationHistory: integer('max_conversation_history')
+    .notNull()
+    .default(20),
 
-  user: one(users, {
-    fields: [messages.userId],
-    references: [users.id],
-  }),
-}));
+  /** Whether email notifications are enabled for this tenant. */
+  enableNotifications: boolean('enable_notifications')
+    .notNull()
+    .default(true),
 
-export const proposalRelations = relations(proposals, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [proposals.tenantId],
-    references: [tenants.id],
-  }),
+  /** Email address for receiving tenant-level notifications. */
+  notificationEmail: varchar('notification_email', { length: 255 }),
 
-  prospect: one(prospects, {
-    fields: [proposals.prospectId],
-    references: [prospects.id],
-  }),
+  /**
+   * Business hours start (0-23, local time in defaultTimezone).
+   * Used for AI agent scheduling and communication preferences.
+   */
+  businessHoursStart: integer('business_hours_start')
+    .notNull()
+    .default(9),
 
-  creator: one(users, {
-    fields: [proposals.createdBy],
-    references: [users.id],
-  }),
-}));
+  /**
+   * Business hours end (0-23, local time in defaultTimezone).
+   */
+  businessHoursEnd: integer('business_hours_end')
+    .notNull()
+    .default(18),
 
-export const twilioPhoneNumberRelations = relations(
-  twilioPhoneNumbers,
-  ({ one }) => ({
-    tenant: one(tenants, {
-      fields: [twilioPhoneNumbers.tenantId],
-      references: [tenants.id],
-    }),
+  /** Whether master settings (and by extension the tenant) are active. */
+  isActive: boolean('is_active').notNull().default(true),
 
-    user: one(users, {
-      fields: [twilioPhoneNumbers.userId],
-      references: [users.id],
-    }),
-  }),
-);
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 
-export const gmailConfigRelations = relations(gmailConfigs, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [gmailConfigs.tenantId],
-    references: [tenants.id],
-  }),
-}));
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});

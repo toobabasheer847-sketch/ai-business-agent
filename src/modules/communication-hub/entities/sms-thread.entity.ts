@@ -1,1 +1,11 @@
-// Placeholder for SMSThread entity.
+export interface SmsThread {
+  id: string;
+  tenantId: string;
+  prospectId: string | null;
+  title: string | null;
+  status: string;
+  summary: string | null;
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}

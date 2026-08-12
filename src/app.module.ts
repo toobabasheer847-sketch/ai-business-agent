@@ -5,13 +5,25 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { TaskModule } from './ai/agents/task/task.module';
-import { ProposalModule } from './ai/agents/proposal/proposal.module';
-import { AiModule } from './ai/ai.module';
-import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
-import configuration from './config/configuration';
+import { BrandModule } from './modules/brand/brand.module';
+import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
+import { CompanyModule } from './modules/company/company.module';
+import { ConversationModule } from './modules/conversation/conversation.module';
+import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
+import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
+import { LeadModule } from './modules/lead/lead.module';
+import { LogsModule } from './modules/logs/logs.module';
+import { MasterSettingsModule } from './modules/master-settings/master-settings.module';
+import { MessageModule } from './modules/message/message.module';
+import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
+import { ProposalModule } from './modules/proposal/proposal.module';
+import { ProspectModule } from './modules/prospect/prospect.module';
+import { TenantModule } from './modules/tenant/tenant.module';
+import { TwilioAppModule } from './modules/twilio-app/twilio-app.module';
+import { UserModule } from './modules/user/user.module';
 
 @Module({
+
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
@@ -20,10 +32,6 @@ import configuration from './config/configuration';
 
     InfrastructureModule,
     AuthModule,
-    TaskModule,
-    ProposalModule,
-    AiModule,
-    TwilioWebhooksModule,
   ],
 
   controllers: [AppController],

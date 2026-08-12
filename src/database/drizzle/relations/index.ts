@@ -16,6 +16,7 @@ import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
+import { masterSettings } from '../schema/master-settings.schema';
 
 /**
  * Tenant relations
@@ -25,7 +26,7 @@ export const tenantRelations = relations(
   ({ many, one }) => ({
     users: many(users),
     brand: one(brands),
-
+    masterSettings: one(masterSettings),
     knowledgebases: many(knowledgebases),
     knowledgeDocuments: many(knowledgeDocuments),
     knowledgeChunks: many(knowledgeChunks),
