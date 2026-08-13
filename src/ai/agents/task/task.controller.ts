@@ -16,7 +16,7 @@ import { TaskQueryDto } from './dto/task-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskService } from './task.service.js';
 
-@Controller('api/ai/task')
+@Controller('ai/task')
 @UseGuards(JwtAuthGuard)
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}

@@ -19,7 +19,7 @@ import { GenerateProposalDto } from './dto/generate-proposal.dto.js';
 import { ChangeProposalStatusDto } from './dto/change-proposal-status.dto.js';
 import { ProposalService } from './proposal.service.js';
 
-@Controller('api/ai/proposals')
+@Controller('ai/proposals')
 @UseGuards(JwtAuthGuard)
 export class ProposalController {
   constructor(private readonly proposalService: ProposalService) {}

@@ -9,7 +9,7 @@ import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.type
 import { RagQueryDto } from './dto/rag-query.dto';
 import { RagService } from './rag.service';
 
-@Controller('api/ai/rag')
+@Controller('ai/rag')
 export class RagController {
   constructor(
     private readonly ragService: RagService,
