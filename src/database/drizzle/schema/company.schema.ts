@@ -21,12 +21,11 @@ export const companies = pgTable('companies', {
       onUpdate: 'cascade',
     }),
 
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, {
-      onDelete: 'set null',
-      onUpdate: 'cascade',
-    }),
+  /** userid — nullable so existing rows stay valid. */
+  userId: uuid('user_id').references(() => users.id, {
+    onDelete: 'set null',
+    onUpdate: 'cascade',
+  }),
 
   name: varchar('name', {
     length: 255,
@@ -44,29 +43,35 @@ export const companies = pgTable('companies', {
     length: 255,
   }),
 
+  /**  Category */
   category: varchar('category', {
     length: 255,
   }),
 
+  /** Subcategory */
   subCategory: varchar('sub_category', {
     length: 255,
   }),
 
+  /**  NoE (number of employees) */
   noe: varchar('noe', {
     length: 255,
   }),
 
+  /**  Market Cap / market */
   market: varchar('market', {
     length: 255,
   }),
 
+  /**  Revenue */
   revenue: decimal('revenue', {
     precision: 15,
     scale: 2,
   }),
 
- 
-   establishedDate: date('established_date'),
+  /**  Start Date / Establish */
+  establishedDate: date('established_date'),
+
   region: varchar('region', {
     length: 255,
   }),
@@ -83,8 +88,10 @@ export const companies = pgTable('companies', {
     length: 100,
   }),
 
+  /** : About */
   about: text('about'),
 
+  /**  logo (URL) */
   logoUrl: varchar('logo_url', {
     length: 500,
   }),

@@ -1,9 +1,10 @@
 import {
+  jsonb,
   pgTable,
-  uuid,
-  varchar,
   text,
   timestamp,
+  uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
@@ -27,6 +28,7 @@ export const leads = pgTable('leads', {
       onUpdate: 'cascade',
     }),
 
+  /**  userid */
   userId: uuid('user_id').references(() => users.id, {
     onDelete: 'set null',
     onUpdate: 'cascade',
@@ -48,10 +50,12 @@ export const leads = pgTable('leads', {
     length: 50,
   }),
 
+  // ** whatsapp */
   whatsapp: varchar('whatsapp', {
     length: 50,
   }),
 
+  /**  LinkedIn */
   linkedin: varchar('linkedin', {
     length: 500,
   }),
@@ -60,13 +64,11 @@ export const leads = pgTable('leads', {
     length: 255,
   }),
 
-  experience: varchar('experience', {
-    length: 100,
-  }),
+  /**  experience (json) */
+  experience: jsonb('experience'),
 
-  education: varchar('education', {
-    length: 255,
-  }),
+  /**  Education (json) */
+  education: jsonb('education'),
 
   source: varchar('source', {
     length: 100,

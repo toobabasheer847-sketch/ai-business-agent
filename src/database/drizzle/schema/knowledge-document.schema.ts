@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
@@ -37,13 +38,32 @@ export const knowledgeDocuments = pgTable(
 
     content: text('content'),
 
+    /** S3 object URL/key or external source */
     source: varchar('source', {
       length: 2048,
+    }),
+
+    /**  Source type */
+    sourceType: varchar('source_type', {
+      length: 100,
+    }),
+
+    /** : Doc type */
+    docType: varchar('doc_type', {
+      length: 100,
     }),
 
     mimeType: varchar('mime_type', {
       length: 100,
     }),
+
+    /**  category */
+    category: varchar('category', {
+      length: 255,
+    }),
+
+    /**  Meta Data */
+    metadata: jsonb('metadata'),
 
     createdAt: timestamp('created_at', {
       withTimezone: true,

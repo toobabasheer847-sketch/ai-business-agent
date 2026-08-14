@@ -1,21 +1,25 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
-import { phoneNumbers, twilioApps } from '../../database/drizzle/schema';
+import { phoneNumbers } from '../../database/drizzle/schema';
 
+/**
+ * Twilio "app" rows are now the same as phone_numbers rows that have
+ * Twilio credentials (twilio_sid / auth_token) filled in.
+ */
 const RETURNING_COLUMNS = {
-  id: twilioApps.id,
-  tenantId: twilioApps.tenantId,
-  phoneNumberId: twilioApps.phoneNumberId,
-  accountSid: twilioApps.accountSid,
-  authToken: twilioApps.authToken,
-  appSid: twilioApps.appSid,
-  webhookUrl: twilioApps.webhookUrl,
-  status: twilioApps.status,
-  createdAt: twilioApps.createdAt,
-  updatedAt: twilioApps.updatedAt,
+  id: phoneNumbers.id,
+  tenantId: phoneNumbers.tenantId,
+  phoneNumberId: phoneNumbers.id,
+  accountSid: phoneNumbers.twilioSid,
+  authToken: phoneNumbers.authToken,
+  appSid: phoneNumbers.appSid,
+  webhookUrl: phoneNumbers.webhookUrl,
+  status: phoneNumbers.status,
+  createdAt: phoneNumbers.createdAt,
+  updatedAt: phoneNumbers.updatedAt,
 } as const;
 
 export interface ListTwilioAppsOptions {
@@ -30,9 +34,6 @@ export class TwilioAppRepository {
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
   ) {}
 
-  /**
-   * Verify a phone number belongs to the tenant before creating/relating a Twilio App.
-   */
   async findPhoneNumberByIdAndTenant(phoneNumberId: string, tenantId: string) {
     const rows = await this.db
       .select({ id: phoneNumbers.id })
@@ -48,44 +49,52 @@ export class TwilioAppRepository {
     return rows[0] ?? null;
   }
 
+  private hasTwilioCredentials() {
+    return sql`(${phoneNumbers.twilioSid} is not null or ${phoneNumbers.authToken} is not null)`;
+  }
+
   async findAllByTenant(tenantId: string, options: ListTwilioAppsOptions = {}) {
     const { phoneNumberId, status, search } = options;
 
-    const conditions = [eq(twilioApps.tenantId, tenantId)];
+    const conditions = [
+      eq(phoneNumbers.tenantId, tenantId),
+      this.hasTwilioCredentials(),
+    ];
 
     if (phoneNumberId) {
-      conditions.push(eq(twilioApps.phoneNumberId, phoneNumberId));
+      conditions.push(eq(phoneNumbers.id, phoneNumberId));
     }
 
     if (status) {
-      conditions.push(eq(twilioApps.status, status));
+      conditions.push(eq(phoneNumbers.status, status));
     }
 
     if (search && search.trim()) {
       conditions.push(
         or(
-          ilike(twilioApps.accountSid, `%${search.trim()}%`),
-          ilike(twilioApps.appSid, `%${search.trim()}%`),
-          ilike(twilioApps.webhookUrl, `%${search.trim()}%`),
+          ilike(phoneNumbers.twilioSid, `%${search.trim()}%`),
+          ilike(phoneNumbers.appSid, `%${search.trim()}%`),
+          ilike(phoneNumbers.webhookUrl, `%${search.trim()}%`),
         )!,
       );
     }
 
     return this.db
       .select(RETURNING_COLUMNS)
-      .from(twilioApps)
+      .from(phoneNumbers)
       .where(and(...conditions))
-      .orderBy(desc(twilioApps.createdAt));
+      .orderBy(desc(phoneNumbers.createdAt));
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
     const rows = await this.db
       .select(RETURNING_COLUMNS)
-      .from(twilioApps)
+      .from(phoneNumbers)
       .where(
         and(
-          eq(twilioApps.id, id),
-          eq(twilioApps.tenantId, tenantId),
+          eq(phoneNumbers.id, id),
+          eq(phoneNumbers.tenantId, tenantId),
+          this.hasTwilioCredentials(),
         ),
       )
       .limit(1);
@@ -93,6 +102,9 @@ export class TwilioAppRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Attaches Twilio credentials onto an existing phone_numbers row.
+   */
   async create(input: {
     tenantId: string;
     phoneNumberId: string;
@@ -103,16 +115,22 @@ export class TwilioAppRepository {
     status?: string;
   }) {
     const [row] = await this.db
-      .insert(twilioApps)
-      .values({
-        tenantId: input.tenantId,
-        phoneNumberId: input.phoneNumberId,
-        accountSid: input.accountSid,
+      .update(phoneNumbers)
+      .set({
+        twilioSid: input.accountSid,
         authToken: input.authToken,
         appSid: input.appSid ?? null,
         webhookUrl: input.webhookUrl ?? null,
         status: input.status ?? 'active',
+        provider: 'twilio',
+        updatedAt: new Date(),
       })
+      .where(
+        and(
+          eq(phoneNumbers.id, input.phoneNumberId),
+          eq(phoneNumbers.tenantId, input.tenantId),
+        ),
+      )
       .returning(RETURNING_COLUMNS);
 
     return row;
@@ -130,26 +148,25 @@ export class TwilioAppRepository {
       status?: string;
     },
   ) {
-    const values: Partial<typeof twilioApps.$inferInsert> = {};
+    const values: Partial<typeof phoneNumbers.$inferInsert> = {
+      updatedAt: new Date(),
+    };
 
-    if (input.phoneNumberId !== undefined) values.phoneNumberId = input.phoneNumberId;
-    if (input.accountSid !== undefined) values.accountSid = input.accountSid;
+    if (input.accountSid !== undefined) values.twilioSid = input.accountSid;
     if (input.authToken !== undefined) values.authToken = input.authToken;
     if (input.appSid !== undefined) values.appSid = input.appSid;
     if (input.webhookUrl !== undefined) values.webhookUrl = input.webhookUrl;
     if (input.status !== undefined) values.status = input.status;
 
-    if (Object.keys(values).length === 0) {
-      return this.findByIdAndTenant(id, tenantId);
-    }
+    const targetId = input.phoneNumberId ?? id;
 
     const [row] = await this.db
-      .update(twilioApps)
+      .update(phoneNumbers)
       .set(values)
       .where(
         and(
-          eq(twilioApps.id, id),
-          eq(twilioApps.tenantId, tenantId),
+          eq(phoneNumbers.id, targetId),
+          eq(phoneNumbers.tenantId, tenantId),
         ),
       )
       .returning(RETURNING_COLUMNS);
@@ -157,13 +174,24 @@ export class TwilioAppRepository {
     return row ?? null;
   }
 
+  /**
+   * Clears Twilio credentials from the phone row (does not delete the number).
+   */
   async delete(id: string, tenantId: string): Promise<boolean> {
     const result = await this.db
-      .delete(twilioApps)
+      .update(phoneNumbers)
+      .set({
+        twilioSid: null,
+        authToken: null,
+        appSid: null,
+        webhookUrl: null,
+        phoneSid: null,
+        updatedAt: new Date(),
+      })
       .where(
         and(
-          eq(twilioApps.id, id),
-          eq(twilioApps.tenantId, tenantId),
+          eq(phoneNumbers.id, id),
+          eq(phoneNumbers.tenantId, tenantId),
         ),
       );
 

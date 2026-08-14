@@ -16,7 +16,7 @@ import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
-import { masterSettings } from '../schema/master-settings.schema';
+import { masterSettings, masterSettingEntries } from '../schema/master-settings.schema';
 
 /**
  * Tenant relations
@@ -27,6 +27,7 @@ export const tenantRelations = relations(
     users: many(users),
     brand: one(brands),
     masterSettings: one(masterSettings),
+    masterSettingEntries: many(masterSettingEntries),
     knowledgebases: many(knowledgebases),
     knowledgeDocuments: many(knowledgeDocuments),
     knowledgeChunks: many(knowledgeChunks),
@@ -89,11 +90,12 @@ export const brandRelations = relations(
  */
 export const knowledgebaseRelations = relations(
   knowledgebases,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [knowledgebases.tenantId],
       references: [tenants.id],
     }),
+    documents: many(knowledgeDocuments),
   }),
 );
 
@@ -102,11 +104,16 @@ export const knowledgebaseRelations = relations(
  */
 export const knowledgeDocumentRelations = relations(
   knowledgeDocuments,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [knowledgeDocuments.tenantId],
       references: [tenants.id],
     }),
+    knowledgeBase: one(knowledgebases, {
+      fields: [knowledgeDocuments.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
+    chunks: many(knowledgeChunks),
   }),
 );
 
@@ -120,6 +127,14 @@ export const knowledgeChunkRelations = relations(
       fields: [knowledgeChunks.tenantId],
       references: [tenants.id],
     }),
+    user: one(users, {
+      fields: [knowledgeChunks.userId],
+      references: [users.id],
+    }),
+    document: one(knowledgeDocuments, {
+      fields: [knowledgeChunks.documentId],
+      references: [knowledgeDocuments.id],
+    }),
   }),
 );
 /**
@@ -132,7 +147,10 @@ export const companyRelations = relations(
       fields: [companies.tenantId],
       references: [tenants.id],
     }),
-
+    user: one(users, {
+      fields: [companies.userId],
+      references: [users.id],
+    }),
     leads: many(leads),
     prospects: many(prospects),
   }),
@@ -152,6 +170,11 @@ export const leadRelations = relations(
     company: one(companies, {
       fields: [leads.companyId],
       references: [companies.id],
+    }),
+
+    user: one(users, {
+      fields: [leads.userId],
+      references: [users.id],
     }),
 
     prospects: many(prospects),
@@ -255,7 +278,7 @@ export const proposalRelations = relations(
   }),
 );
 /**
- * Phone Number relations (table: phone_numbers; export alias: twilioPhoneNumbers)
+ * Phone Number relations (unified phone + Twilio table)
  */
 export const twilioPhoneNumberRelations = relations(
   twilioPhoneNumbers,
@@ -263,6 +286,10 @@ export const twilioPhoneNumberRelations = relations(
     tenant: one(tenants, {
       fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
+    }),
+    user: one(users, {
+      fields: [twilioPhoneNumbers.userId],
+      references: [users.id],
     }),
   }),
 );

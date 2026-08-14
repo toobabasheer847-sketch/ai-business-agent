@@ -34,9 +34,12 @@ export const conversations = pgTable('conversations', {
     length: 255,
   }),
 
+  /**  description */
+  description: text('description'),
+
   slug: varchar('slug', {
     length: 255,
-  }).notNull(),
+  }),
 
   channel: varchar('channel', {
     length: 50,

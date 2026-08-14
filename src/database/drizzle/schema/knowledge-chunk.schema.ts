@@ -5,11 +5,13 @@ import {
   text,
   timestamp,
   index,
-  vector,
+  jsonb,
+  doublePrecision,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
+import { knowledgeDocuments } from './knowledge-document.schema';
 
 export const knowledgeChunks = pgTable(
   'knowledge_chunks',
@@ -28,17 +30,20 @@ export const knowledgeChunks = pgTable(
       onUpdate: 'cascade',
     }),
 
-    // S3 object URL/key
+    /** Document id */
+    documentId: uuid('document_id').references(() => knowledgeDocuments.id, {
+      onDelete: 'cascade',
+      onUpdate: 'cascade',
+    }),
+
     source: varchar('source', {
       length: 2048,
     }),
 
-    // Example: pdf, docx, txt, website, etc.
     sourceType: varchar('source_type', {
       length: 100,
     }),
 
-    // Example: application/pdf, text/plain, etc.
     docType: varchar('doc_type', {
       length: 100,
     }),
@@ -53,18 +58,13 @@ export const knowledgeChunks = pgTable(
       length: 50,
     }),
 
+    metadata: jsonb('metadata'),
+
     /**
-     * Vector embedding generated from chunk content.
-     *
-     * Model:
-     * gemini-embedding-001
-     *
-     * Dimensions:
-     * 3072
+     * : vector embedding.
+     * Stored as float8[] so local Postgres works without pgvector.
      */
-    embedding: vector('embedding', {
-      dimensions: 3072,
-    }),
+    embedding: doublePrecision('embedding').array(),
 
     embeddingModel: varchar('embedding_model', {
       length: 100,
@@ -85,21 +85,10 @@ export const knowledgeChunks = pgTable(
 
   (table) => [
     index('knowledge_chunks_tenant_id_idx').on(table.tenantId),
-
     index('knowledge_chunks_user_id_idx').on(table.userId),
-
+    index('knowledge_chunks_document_id_idx').on(table.documentId),
     index('knowledge_chunks_source_type_idx').on(table.sourceType),
-
     index('knowledge_chunks_doc_type_idx').on(table.docType),
-
     index('knowledge_chunks_category_idx').on(table.category),
-
-    /**
-     * HNSW index for fast cosine similarity search.
-     */
-    index('knowledge_chunks_embedding_hnsw_idx').using(
-      'hnsw',
-      table.embedding.op('vector_cosine_ops'),
-    ),
   ],
 );

@@ -1,18 +1,22 @@
 import {
-  pgTable,
-  uuid,
-  varchar,
   boolean,
   integer,
+  pgTable,
+  text,
   timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 
+/**
+ * Fixed per-tenant defaults (existing table — kept as-is structurally).
+ */
 export const masterSettings = pgTable('master_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
 
-  /** One settings record per tenant — enforced at the application level. */
   tenantId: uuid('tenant_id')
     .notNull()
     .unique()
@@ -21,59 +25,34 @@ export const masterSettings = pgTable('master_settings', {
       onUpdate: 'cascade',
     }),
 
-  /** Default language/locale for the tenant (e.g. 'en', 'en-US'). */
   defaultLanguage: varchar('default_language', { length: 10 })
     .notNull()
     .default('en'),
 
-  /** Default timezone string (IANA format, e.g. 'America/New_York'). */
   defaultTimezone: varchar('default_timezone', { length: 100 })
     .notNull()
     .default('UTC'),
 
-  /** Default currency code (ISO 4217, e.g. 'USD', 'EUR'). */
   defaultCurrency: varchar('default_currency', { length: 3 })
     .notNull()
     .default('USD'),
 
-  /**
-   * AI model override for this tenant.
-   * If null, the system default from environment variables is used.
-   */
   aiModel: varchar('ai_model', { length: 100 }),
 
-  /**
-   * Maximum number of conversation history turns to include in AI context.
-   * Controls token usage and AI memory window.
-   */
   maxConversationHistory: integer('max_conversation_history')
     .notNull()
     .default(20),
 
-  /** Whether email notifications are enabled for this tenant. */
   enableNotifications: boolean('enable_notifications')
     .notNull()
     .default(true),
 
-  /** Email address for receiving tenant-level notifications. */
   notificationEmail: varchar('notification_email', { length: 255 }),
 
-  /**
-   * Business hours start (0-23, local time in defaultTimezone).
-   * Used for AI agent scheduling and communication preferences.
-   */
-  businessHoursStart: integer('business_hours_start')
-    .notNull()
-    .default(9),
+  businessHoursStart: integer('business_hours_start').notNull().default(9),
 
-  /**
-   * Business hours end (0-23, local time in defaultTimezone).
-   */
-  businessHoursEnd: integer('business_hours_end')
-    .notNull()
-    .default(18),
+  businessHoursEnd: integer('business_hours_end').notNull().default(18),
 
-  /** Whether master settings (and by extension the tenant) are active. */
   isActive: boolean('is_active').notNull().default(true),
 
   createdAt: timestamp('created_at', { withTimezone: true })
@@ -84,3 +63,42 @@ export const masterSettings = pgTable('master_settings', {
     .defaultNow()
     .notNull(),
 });
+
+/**
+ *  Master setting: key / value / type-role (e.g. profile, stripe/cc).
+ * Separate from fixed master_settings so existing rows stay untouched.
+ */
+export const masterSettingEntries = pgTable(
+  'master_setting_entries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+
+    key: varchar('key', { length: 255 }).notNull(),
+
+    value: text('value'),
+
+    /** Notebook: type/role — e.g. profile, stripe, cc */
+    typeRole: varchar('type_role', { length: 100 }),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('master_setting_entries_tenant_key_unique').on(
+      table.tenantId,
+      table.key,
+    ),
+  ],
+);
