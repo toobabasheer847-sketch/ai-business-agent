@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Phone, Plus, RefreshCw } from 'lucide-react'
+import { Phone, Plus, RefreshCw, ShoppingCart } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getErrorMessage } from '@/lib/api'
+import { BuyNumberDialog } from '@/features/phone-numbers/components/buy-number-dialog'
 import { PhoneNumberForm } from '@/features/phone-numbers/components/phone-number-form'
 import {
   PhoneNumbersFilters,
@@ -49,6 +50,7 @@ export function PhoneNumbersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [buyOpen, setBuyOpen] = useState(false)
   const [editing, setEditing] = useState<PhoneNumber | null>(null)
   const [deleting, setDeleting] = useState<PhoneNumber | null>(null)
 
@@ -135,6 +137,10 @@ export function PhoneNumbersPage() {
               <RefreshCw className={`size-4 ${listQuery.isFetching ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            <Button type="button" variant="outline" onClick={() => setBuyOpen(true)}>
+              <ShoppingCart className="size-4" />
+              Buy a Number
+            </Button>
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="size-4" />
               Add number
@@ -202,6 +208,8 @@ export function PhoneNumbersPage() {
       ) : (
         <PhoneNumbersTable items={items} onEdit={setEditing} onDelete={setDeleting} />
       )}
+
+      <BuyNumberDialog open={buyOpen} onOpenChange={setBuyOpen} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">

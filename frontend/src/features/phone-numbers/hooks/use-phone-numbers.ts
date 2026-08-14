@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { phoneNumbersApi } from '@/features/phone-numbers/api/phone-numbers.api'
 import type {
+  AvailablePhoneNumbersQuery,
+  BuyPhoneNumberPayload,
   CreatePhoneNumberPayload,
   PhoneNumberQuery,
   UpdatePhoneNumberPayload,
@@ -13,6 +15,8 @@ export const phoneNumberKeys = {
   list: (query?: PhoneNumberQuery) => [...phoneNumberKeys.lists(), query ?? {}] as const,
   details: () => [...phoneNumberKeys.all, 'detail'] as const,
   detail: (id: string) => [...phoneNumberKeys.details(), id] as const,
+  available: (query?: AvailablePhoneNumbersQuery) =>
+    [...phoneNumberKeys.all, 'available', query ?? {}] as const,
 }
 
 export function usePhoneNumbers(query?: PhoneNumberQuery) {
@@ -62,6 +66,29 @@ export function useDeletePhoneNumber() {
     onSuccess: async (_data, id) => {
       await queryClient.invalidateQueries({ queryKey: phoneNumberKeys.lists() })
       queryClient.removeQueries({ queryKey: phoneNumberKeys.detail(id) })
+    },
+  })
+}
+
+export function useAvailablePhoneNumbers(
+  query: AvailablePhoneNumbersQuery | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: phoneNumberKeys.available(query ?? undefined),
+    queryFn: () => phoneNumbersApi.searchAvailable(query!),
+    enabled: Boolean(query) && enabled,
+    retry: false,
+  })
+}
+
+export function useBuyPhoneNumber() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: BuyPhoneNumberPayload) => phoneNumbersApi.buy(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: phoneNumberKeys.lists() })
     },
   })
 }

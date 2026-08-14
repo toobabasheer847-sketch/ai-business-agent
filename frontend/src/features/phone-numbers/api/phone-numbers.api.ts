@@ -1,5 +1,9 @@
 import { apiClient } from '@/lib/api'
 import type {
+  AvailablePhoneNumber,
+  AvailablePhoneNumbersQuery,
+  BoughtPhoneNumber,
+  BuyPhoneNumberPayload,
   CreatePhoneNumberPayload,
   DeletePhoneNumberResponse,
   PhoneNumber,
@@ -15,6 +19,17 @@ function toQueryParams(query?: PhoneNumberQuery) {
   if (query.status) params.status = query.status
   if (query.search?.trim()) params.search = query.search.trim()
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+function toAvailableQueryParams(query: AvailablePhoneNumbersQuery) {
+  const params: Record<string, string | number> = {}
+  if (query.countryCode) params.countryCode = query.countryCode
+  if (query.locality?.trim()) params.locality = query.locality.trim()
+  if (query.areaCode !== undefined) params.areaCode = query.areaCode
+  if (query.contains?.trim()) params.contains = query.contains.trim()
+  if (query.type) params.type = query.type
+  if (query.limit !== undefined) params.limit = query.limit
+  return params
 }
 
 export const phoneNumbersApi = {
@@ -41,6 +56,20 @@ export const phoneNumbersApi = {
   remove(id: string) {
     return apiClient
       .delete<DeletePhoneNumberResponse>(`/phone-numbers/${id}`)
+      .then((r) => r.data)
+  },
+
+  searchAvailable(query: AvailablePhoneNumbersQuery) {
+    return apiClient
+      .get<AvailablePhoneNumber[]>('/phone-numbers/available', {
+        params: toAvailableQueryParams(query),
+      })
+      .then((r) => r.data)
+  },
+
+  buy(payload: BuyPhoneNumberPayload) {
+    return apiClient
+      .post<BoughtPhoneNumber>('/phone-numbers/buy', payload)
       .then((r) => r.data)
   },
 }

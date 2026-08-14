@@ -6,6 +6,7 @@ import { DatabaseModule } from '../../database/database.module';
 import { TwilioAppRepository } from './twilio-app.repository';
 import { TwilioAppConfigurationService } from './twilio-app-configuration';
 import { PhoneNumberManagementService } from './phone-number-management';
+import { AvailablePhoneNumbersService } from './available-phone-numbers';
 import { CallManagementService } from './call-management';
 import { SmsManagementService } from './sms-management';
 import { TwilioWebhookService } from './twilio-webhooks';
@@ -17,6 +18,7 @@ import { TwilioWebhookService } from './twilio-webhooks';
     TwilioAppRepository,
     TwilioAppConfigurationService,
     PhoneNumberManagementService,
+    AvailablePhoneNumbersService,
     CallManagementService,
     SmsManagementService,
     TwilioWebhookService,
@@ -26,6 +28,7 @@ import { TwilioWebhookService } from './twilio-webhooks';
     TwilioAppRepository,
     TwilioAppConfigurationService,
     PhoneNumberManagementService,
+    AvailablePhoneNumbersService,
     CallManagementService,
     SmsManagementService,
     TwilioWebhookService,
