@@ -1,53 +1,57 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
-import { twilioApps } from '../../database/drizzle/schema/twilio-app.schema';
+import { phoneNumbers } from '../../database/drizzle/schema/phone-number.schema';
 import type { TenantTwilioAppConfig } from './twilio-app-configuration';
 
 /**
- * Repository for reading Twilio app credentials from the twilio_apps table.
- * All queries are scoped to tenantId to enforce multi-tenant isolation.
+ * Reads Twilio credentials from the unified phone_numbers table.
  */
 @Injectable()
 export class TwilioAppRepository {
   constructor(@Inject(DRIZZLE_DB) private readonly db: DrizzleDb) {}
 
-  /**
-   * Returns the first active Twilio app configuration for the given tenant.
-   * Returns null when no record exists or the tenant has no active app.
-   */
   async findActiveForTenant(tenantId: string): Promise<TenantTwilioAppConfig | null> {
     if (!tenantId) return null;
 
     const result = await this.db
       .select({
-        id: twilioApps.id,
-        tenantId: twilioApps.tenantId,
-        phoneNumberId: twilioApps.phoneNumberId,
-        accountSid: twilioApps.accountSid,
-        authToken: twilioApps.authToken,
-        appSid: twilioApps.appSid,
-        webhookUrl: twilioApps.webhookUrl,
-        status: twilioApps.status,
+        id: phoneNumbers.id,
+        tenantId: phoneNumbers.tenantId,
+        phoneNumberId: phoneNumbers.id,
+        accountSid: phoneNumbers.twilioSid,
+        authToken: phoneNumbers.authToken,
+        appSid: phoneNumbers.appSid,
+        webhookUrl: phoneNumbers.webhookUrl,
+        status: phoneNumbers.status,
       })
-      .from(twilioApps)
+      .from(phoneNumbers)
       .where(
         and(
-          eq(twilioApps.tenantId, tenantId),
-          eq(twilioApps.status, 'active'),
+          eq(phoneNumbers.tenantId, tenantId),
+          eq(phoneNumbers.status, 'active'),
+          sql`(${phoneNumbers.twilioSid} is not null and ${phoneNumbers.authToken} is not null)`,
         ),
       )
       .limit(1);
 
-    return result[0] ?? null;
+    const row = result[0];
+    if (!row?.accountSid || !row?.authToken) return null;
+
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      phoneNumberId: row.phoneNumberId,
+      accountSid: row.accountSid,
+      authToken: row.authToken,
+      appSid: row.appSid,
+      webhookUrl: row.webhookUrl,
+      status: row.status,
+    };
   }
 
-  /**
-   * Returns a specific Twilio app configuration by its ID, ensuring it belongs
-   * to the requested tenant (tenant-scoped lookup).
-   */
   async findByIdForTenant(
     id: string,
     tenantId: string,
@@ -56,24 +60,36 @@ export class TwilioAppRepository {
 
     const result = await this.db
       .select({
-        id: twilioApps.id,
-        tenantId: twilioApps.tenantId,
-        phoneNumberId: twilioApps.phoneNumberId,
-        accountSid: twilioApps.accountSid,
-        authToken: twilioApps.authToken,
-        appSid: twilioApps.appSid,
-        webhookUrl: twilioApps.webhookUrl,
-        status: twilioApps.status,
+        id: phoneNumbers.id,
+        tenantId: phoneNumbers.tenantId,
+        phoneNumberId: phoneNumbers.id,
+        accountSid: phoneNumbers.twilioSid,
+        authToken: phoneNumbers.authToken,
+        appSid: phoneNumbers.appSid,
+        webhookUrl: phoneNumbers.webhookUrl,
+        status: phoneNumbers.status,
       })
-      .from(twilioApps)
+      .from(phoneNumbers)
       .where(
         and(
-          eq(twilioApps.id, id),
-          eq(twilioApps.tenantId, tenantId),
+          eq(phoneNumbers.id, id),
+          eq(phoneNumbers.tenantId, tenantId),
         ),
       )
       .limit(1);
 
-    return result[0] ?? null;
+    const row = result[0];
+    if (!row?.accountSid || !row?.authToken) return null;
+
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      phoneNumberId: row.phoneNumberId,
+      accountSid: row.accountSid,
+      authToken: row.authToken,
+      appSid: row.appSid,
+      webhookUrl: row.webhookUrl,
+      status: row.status,
+    };
   }
 }

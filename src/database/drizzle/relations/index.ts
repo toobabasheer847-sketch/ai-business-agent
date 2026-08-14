@@ -255,7 +255,7 @@ export const proposalRelations = relations(
   }),
 );
 /**
- * Phone Number relations (table: phone_numbers; export alias: twilioPhoneNumbers)
+ * Phone Number relations (unified phone + Twilio table)
  */
 export const twilioPhoneNumberRelations = relations(
   twilioPhoneNumbers,
@@ -263,6 +263,10 @@ export const twilioPhoneNumberRelations = relations(
     tenant: one(tenants, {
       fields: [twilioPhoneNumbers.tenantId],
       references: [tenants.id],
+    }),
+    user: one(users, {
+      fields: [twilioPhoneNumbers.userId],
+      references: [users.id],
     }),
   }),
 );
