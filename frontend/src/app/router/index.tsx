@@ -8,6 +8,7 @@ import { RegisterPage } from '@/features/auth/pages/register-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
 import { PhoneNumbersPage } from '@/features/phone-numbers/pages/phone-numbers-page'
+import { TwilioAppsPage } from '@/features/twilio-apps/pages/twilio-apps-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -183,23 +184,7 @@ export function AppRouter() {
             }
           />
           <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
-          <Route
-            path="/twilio-apps"
-            element={
-              <ModulePlaceholderPage
-                title="Twilio Apps"
-                module="twilio-app"
-                availableInAppModule
-                endpoints={[
-                  'POST /api/twilio-apps',
-                  'GET /api/twilio-apps',
-                  'GET /api/twilio-apps/:id',
-                  'PATCH /api/twilio-apps/:id',
-                  'DELETE /api/twilio-apps/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/twilio-apps" element={<TwilioAppsPage />} />
           <Route
             path="/users"
             element={
