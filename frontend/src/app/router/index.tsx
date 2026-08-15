@@ -15,6 +15,7 @@ import { MasterSettingsPage } from '@/features/master-settings/pages/master-sett
 import { CompaniesPage } from '@/features/companies/pages/companies-page'
 import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
+import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -37,25 +38,7 @@ export function AppRouter() {
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/prospects" element={<ProspectsPage />} />
-          <Route
-            path="/conversations"
-            element={
-              <ModulePlaceholderPage
-                title="Conversations"
-                module="conversation"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/conversations',
-                  'GET /api/conversations',
-                  'GET /api/conversations/:id',
-                  'PATCH /api/conversations/:id',
-                  'DELETE /api/conversations/:id',
-                  'GET /api/conversations/:id/messages',
-                  'POST /api/conversations/:id/messages',
-                ]}
-              />
-            }
-          />
+          <Route path="/conversations" element={<ConversationsPage />} />
           <Route
             path="/communication-hub"
             element={

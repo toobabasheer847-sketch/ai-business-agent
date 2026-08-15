@@ -81,7 +81,7 @@ export const mainNav: NavItem[] = [
     href: '/conversations',
     icon: MessagesSquare,
     module: 'conversation',
-    available: false,
+    available: true,
   },
   {
     title: 'Communication Hub',
