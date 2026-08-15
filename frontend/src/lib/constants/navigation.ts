@@ -3,6 +3,7 @@ import {
   Building2,
   CircleHelp,
   LayoutDashboard,
+  Landmark,
   Mail,
   MessageSquare,
   Phone,
@@ -41,11 +42,18 @@ export const mainNav: NavItem[] = [
     available: true,
   },
   {
+    title: 'Tenant',
+    href: '/tenant',
+    icon: Landmark,
+    module: 'tenant',
+    available: true,
+  },
+  {
     title: 'Brand',
     href: '/brands',
     icon: Sparkles,
     module: 'brand',
-    available: false,
+    available: true,
   },
   {
     title: 'Companies',
@@ -129,7 +137,7 @@ export const mainNav: NavItem[] = [
     href: '/master-settings',
     icon: Settings,
     module: 'master-settings',
-    available: false,
+    available: true,
   },
   {
     title: 'System Status',

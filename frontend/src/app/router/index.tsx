@@ -9,6 +9,9 @@ import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
 import { PhoneNumbersPage } from '@/features/phone-numbers/pages/phone-numbers-page'
 import { TwilioAppsPage } from '@/features/twilio-apps/pages/twilio-apps-page'
+import { TenantPage } from '@/features/tenant/pages/tenant-page'
+import { BrandsPage } from '@/features/brands/pages/brands-page'
+import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -25,25 +28,9 @@ export function AppRouter() {
         <Route element={<AppShellLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/system" element={<SystemStatusPage />} />
+          <Route path="/tenant" element={<TenantPage />} />
 
-          <Route
-            path="/brands"
-            element={
-              <ModulePlaceholderPage
-                title="Brand"
-                module="brand"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/brands',
-                  'GET /api/brands',
-                  'GET /api/brands/:id',
-                  'PATCH /api/brands/:id',
-                  'DELETE /api/brands/:id',
-                ]}
-                notes="One brand per tenant (tenantId unique)."
-              />
-            }
-          />
+          <Route path="/brands" element={<BrandsPage />} />
           <Route
             path="/companies"
             element={
@@ -202,17 +189,7 @@ export function AppRouter() {
               />
             }
           />
-          <Route
-            path="/master-settings"
-            element={
-              <ModulePlaceholderPage
-                title="Master Settings"
-                module="master-settings"
-                availableInAppModule={false}
-                endpoints={['GET /api/master-settings', 'PATCH /api/master-settings']}
-              />
-            }
-          />
+          <Route path="/master-settings" element={<MasterSettingsPage />} />
         </Route>
       </Route>
 
