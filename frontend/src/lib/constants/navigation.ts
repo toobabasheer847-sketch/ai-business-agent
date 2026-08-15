@@ -60,7 +60,7 @@ export const mainNav: NavItem[] = [
     href: '/companies',
     icon: Building2,
     module: 'company',
-    available: false,
+    available: true,
   },
   {
     title: 'Leads',

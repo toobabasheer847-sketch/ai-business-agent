@@ -12,6 +12,7 @@ import { TwilioAppsPage } from '@/features/twilio-apps/pages/twilio-apps-page'
 import { TenantPage } from '@/features/tenant/pages/tenant-page'
 import { BrandsPage } from '@/features/brands/pages/brands-page'
 import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
+import { CompaniesPage } from '@/features/companies/pages/companies-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -31,23 +32,7 @@ export function AppRouter() {
           <Route path="/tenant" element={<TenantPage />} />
 
           <Route path="/brands" element={<BrandsPage />} />
-          <Route
-            path="/companies"
-            element={
-              <ModulePlaceholderPage
-                title="Companies"
-                module="company"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/companies',
-                  'GET /api/companies?search=',
-                  'GET /api/companies/:id',
-                  'PATCH /api/companies/:id',
-                  'DELETE /api/companies/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/companies" element={<CompaniesPage />} />
           <Route
             path="/leads"
             element={

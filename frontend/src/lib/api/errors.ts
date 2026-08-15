@@ -31,6 +31,18 @@ export function getErrorMessage(error: unknown): string {
   return 'Something went wrong'
 }
 
+function flattenErrorMessage(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (Array.isArray(raw)) return raw.map(String).join(', ')
+  if (raw && typeof raw === 'object' && 'message' in raw) {
+    const inner = (raw as { message: unknown }).message
+    if (typeof inner === 'string') return inner
+    if (Array.isArray(inner)) return inner.map(String).join(', ')
+  }
+  if (raw == null) return ''
+  return String(raw)
+}
+
 export function normalizeApiError(data: unknown, status: number, path?: string): ApiError {
   const body = data as ApiErrorBody | undefined
 
@@ -43,7 +55,13 @@ export function normalizeApiError(data: unknown, status: number, path?: string):
         ? 'Forbidden'
         : `Request failed (${status})`)
 
-  const message = Array.isArray(raw) ? raw.join(', ') : String(raw)
+  const message =
+    flattenErrorMessage(raw) ||
+    (status === 401
+      ? 'Unauthorized'
+      : status === 403
+        ? 'Forbidden'
+        : `Request failed (${status})`)
 
   return new ApiError(status, message, path ?? body?.path, body?.error?.details ?? body)
 }
