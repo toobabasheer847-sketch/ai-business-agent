@@ -67,7 +67,7 @@ export const mainNav: NavItem[] = [
     href: '/leads',
     icon: Users,
     module: 'lead',
-    available: false,
+    available: true,
   },
   {
     title: 'Prospects',

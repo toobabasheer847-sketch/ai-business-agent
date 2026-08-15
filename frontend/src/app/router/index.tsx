@@ -13,6 +13,7 @@ import { TenantPage } from '@/features/tenant/pages/tenant-page'
 import { BrandsPage } from '@/features/brands/pages/brands-page'
 import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
 import { CompaniesPage } from '@/features/companies/pages/companies-page'
+import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -33,23 +34,7 @@ export function AppRouter() {
 
           <Route path="/brands" element={<BrandsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
-          <Route
-            path="/leads"
-            element={
-              <ModulePlaceholderPage
-                title="Leads"
-                module="lead"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/leads',
-                  'GET /api/leads?search=&status=&companyId=&source=',
-                  'GET /api/leads/:id',
-                  'PATCH /api/leads/:id',
-                  'DELETE /api/leads/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/leads" element={<LeadsPage />} />
           <Route
             path="/prospects"
             element={
