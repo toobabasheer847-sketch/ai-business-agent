@@ -16,6 +16,7 @@ import { CompaniesPage } from '@/features/companies/pages/companies-page'
 import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
 import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
+import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -56,24 +57,7 @@ export function AppRouter() {
               />
             }
           />
-          <Route
-            path="/proposals"
-            element={
-              <ModulePlaceholderPage
-                title="Proposals"
-                module="proposal"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/proposals',
-                  'GET /api/proposals',
-                  'GET /api/proposals/:id',
-                  'PATCH /api/proposals/:id',
-                  'DELETE /api/proposals/:id',
-                ]}
-                notes="Separate AI proposal agent routes also exist under /api/api/ai/proposals (double prefix bug)."
-              />
-            }
-          />
+          <Route path="/proposals" element={<ProposalsPage />} />
           <Route
             path="/knowledgebases"
             element={

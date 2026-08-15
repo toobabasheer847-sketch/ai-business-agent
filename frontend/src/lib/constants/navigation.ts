@@ -95,7 +95,7 @@ export const mainNav: NavItem[] = [
     href: '/proposals',
     icon: FileText,
     module: 'proposal',
-    available: false,
+    available: true,
   },
   {
     title: 'Knowledgebase',
