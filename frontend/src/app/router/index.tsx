@@ -14,6 +14,7 @@ import { BrandsPage } from '@/features/brands/pages/brands-page'
 import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
 import { CompaniesPage } from '@/features/companies/pages/companies-page'
 import { LeadsPage } from '@/features/leads/pages/leads-page'
+import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -35,23 +36,7 @@ export function AppRouter() {
           <Route path="/brands" element={<BrandsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/leads" element={<LeadsPage />} />
-          <Route
-            path="/prospects"
-            element={
-              <ModulePlaceholderPage
-                title="Prospects"
-                module="prospect"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/prospects',
-                  'GET /api/prospects',
-                  'GET /api/prospects/:id',
-                  'PATCH /api/prospects/:id',
-                  'DELETE /api/prospects/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/prospects" element={<ProspectsPage />} />
           <Route
             path="/conversations"
             element={

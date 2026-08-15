@@ -74,7 +74,7 @@ export const mainNav: NavItem[] = [
     href: '/prospects',
     icon: UserRound,
     module: 'prospect',
-    available: false,
+    available: true,
   },
   {
     title: 'Conversations',
