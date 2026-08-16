@@ -16,6 +16,7 @@ import { CompaniesPage } from '@/features/companies/pages/companies-page'
 import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
 import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
+import { CommunicationHubPage } from '@/features/communication-hub/pages/communication-hub-page'
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
 import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
@@ -41,23 +42,7 @@ export function AppRouter() {
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/prospects" element={<ProspectsPage />} />
           <Route path="/conversations" element={<ConversationsPage />} />
-          <Route
-            path="/communication-hub"
-            element={
-              <ModulePlaceholderPage
-                title="Communication Hub"
-                module="communication-hub"
-                availableInAppModule={false}
-                endpoints={[
-                  'GET /api/communication-hub',
-                  'GET /api/communication-hub/stats',
-                  'GET /api/communication-hub/email-threads',
-                  'GET /api/communication-hub/sms-threads',
-                  'GET /api/communication-hub/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/communication-hub" element={<CommunicationHubPage />} />
           <Route path="/proposals" element={<ProposalsPage />} />
           <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
           <Route
