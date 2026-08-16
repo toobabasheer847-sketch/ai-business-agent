@@ -17,6 +17,7 @@ import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
 import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
+import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
 import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
 
 export function AppRouter() {
@@ -58,23 +59,7 @@ export function AppRouter() {
             }
           />
           <Route path="/proposals" element={<ProposalsPage />} />
-          <Route
-            path="/knowledgebases"
-            element={
-              <ModulePlaceholderPage
-                title="Knowledgebase"
-                module="knowledgebase"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/knowledgebases',
-                  'GET /api/knowledgebases?search=',
-                  'GET /api/knowledgebases/:id',
-                  'PATCH /api/knowledgebases/:id',
-                  'DELETE /api/knowledgebases/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
           <Route
             path="/gmail-configuration"
             element={

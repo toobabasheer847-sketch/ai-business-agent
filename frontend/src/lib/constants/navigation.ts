@@ -102,7 +102,7 @@ export const mainNav: NavItem[] = [
     href: '/knowledgebases',
     icon: BookOpen,
     module: 'knowledgebase',
-    available: false,
+    available: true,
   },
   {
     title: 'Gmail',
