@@ -109,7 +109,7 @@ export const mainNav: NavItem[] = [
     href: '/gmail-configuration',
     icon: Mail,
     module: 'gmail-configuration',
-    available: false,
+    available: true,
   },
   {
     title: 'Phone Numbers',
@@ -130,7 +130,7 @@ export const mainNav: NavItem[] = [
     href: '/users',
     icon: BriefcaseBusiness,
     module: 'user',
-    available: false,
+    available: true,
   },
   {
     title: 'Master Settings',

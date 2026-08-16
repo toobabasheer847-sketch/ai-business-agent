@@ -17,9 +17,10 @@ import { LeadsPage } from '@/features/leads/pages/leads-page'
 import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
 import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
 import { CommunicationHubPage } from '@/features/communication-hub/pages/communication-hub-page'
+import { GmailConfigurationPage } from '@/features/gmail-configuration/pages/gmail-configuration-page'
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
 import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
-import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
+import { UsersPage } from '@/features/users/pages/users-page'
 
 export function AppRouter() {
   return (
@@ -45,42 +46,10 @@ export function AppRouter() {
           <Route path="/communication-hub" element={<CommunicationHubPage />} />
           <Route path="/proposals" element={<ProposalsPage />} />
           <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
-          <Route
-            path="/gmail-configuration"
-            element={
-              <ModulePlaceholderPage
-                title="Gmail Configuration"
-                module="gmail-configuration"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/gmail-configuration',
-                  'GET /api/gmail-configuration',
-                  'PATCH /api/gmail-configuration',
-                  'PATCH /api/gmail-configuration/deactivate',
-                  'DELETE /api/gmail-configuration',
-                ]}
-              />
-            }
-          />
+          <Route path="/gmail-configuration" element={<GmailConfigurationPage />} />
           <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
           <Route path="/twilio-apps" element={<TwilioAppsPage />} />
-          <Route
-            path="/users"
-            element={
-              <ModulePlaceholderPage
-                title="Users"
-                module="user"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/users',
-                  'GET /api/users',
-                  'GET /api/users/:id',
-                  'PATCH /api/users/:id',
-                  'DELETE /api/users/:id',
-                ]}
-              />
-            }
-          />
+          <Route path="/users" element={<UsersPage />} />
           <Route path="/master-settings" element={<MasterSettingsPage />} />
         </Route>
       </Route>
