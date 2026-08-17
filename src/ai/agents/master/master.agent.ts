@@ -48,7 +48,7 @@ function extractUserText(context: any): string {
   return '';
 }
 
-function buildMasterRouter() {
+export function buildMasterRouter() {
   return async (agents: Record<string, any>, context: any) => {
     const userText = extractUserText(context).toLowerCase();
 

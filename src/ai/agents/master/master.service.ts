@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InMemoryRunner } from '@google/adk';
 
 import { createMasterAgent } from './master.agent.js';
@@ -6,6 +12,14 @@ import { CommunicationAgentService } from '../communication/communication.servic
 import { RagAgent } from '../rag/rag.agent.js';
 import { TaskAgent } from '../task/task.agent.js';
 import { ProposalAgent } from '../proposal/proposal-agent.js';
+
+const AGENT_DELEGATION_LABELS: Record<string, string> = {
+  proposal_agent: 'proposal',
+  task_agent: 'task',
+  communication_agent: 'communication',
+  rag_agent: 'rag',
+  master_status_agent: 'status',
+};
 
 @Injectable()
 export class MasterAgentService {
@@ -47,13 +61,21 @@ export class MasterAgentService {
     return this.masterAgent;
   }
 
-  async invoke(agent: any, tenantId: string, message: string) {
+  async invoke(tenantId: string, message: string) {
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    const trimmedMessage = message?.trim();
+    if (!trimmedMessage) {
+      throw new BadRequestException('Message is required');
+    }
+
     const runner = new InMemoryRunner({
       appName: 'master-agent',
-      agent,
+      agent: this.masterAgent,
     });
 
-    const events: any[] = [];
     let finalText = '';
     const branches = new Set<string>();
     const authors = new Set<string>();
@@ -62,11 +84,9 @@ export class MasterAgentService {
       for await (const event of runner.runEphemeral({
         userId: tenantId,
         newMessage: {
-          parts: [{ text: message }],
+          parts: [{ text: trimmedMessage }],
         },
       })) {
-        events.push(event);
-
         if (event.branch) {
           branches.add(event.branch);
         }
@@ -88,18 +108,30 @@ export class MasterAgentService {
       }
     } catch (error) {
       this.logger.error('MasterAgent invoke error', error as Error);
-      finalText = `Master Agent failed to process the request: ${
-        error instanceof Error ? error.message : 'unknown error'
-      }`;
+      throw new InternalServerErrorException(
+        'Master Agent failed to process the request',
+      );
     }
 
     return {
       response: finalText,
-      delegation: {
-        branches: [...branches],
-        authors: [...authors],
-      },
-      events,
+      delegation: this.resolveDelegation([...authors], [...branches]),
     };
+  }
+
+  private resolveDelegation(
+    authors: string[],
+    branches: string[],
+  ): string | null {
+    const candidates = [...authors, ...branches];
+
+    for (const candidate of candidates) {
+      const mapped = AGENT_DELEGATION_LABELS[candidate];
+      if (mapped) {
+        return mapped;
+      }
+    }
+
+    return null;
   }
 }
