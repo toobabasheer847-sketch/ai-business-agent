@@ -25,11 +25,7 @@ export class RagService {
       throw new BadRequestException('Query is required');
     }
 
-    // Tenant can come from the authenticated user
-    // or from the request DTO for development/testing.
-    const resolvedTenantId = dto?.tenantId ?? tenantId;
-
-    if (!resolvedTenantId) {
+    if (!tenantId) {
       throw new BadRequestException(
         'Tenant context is required',
       );
@@ -37,7 +33,7 @@ export class RagService {
 
     try {
       return await this.ragAgent.answerQuery(
-        resolvedTenantId,
+        tenantId,
         queryText,
       );
     } catch (error) {

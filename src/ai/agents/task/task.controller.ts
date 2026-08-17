@@ -33,6 +33,15 @@ export class TaskController {
     return this.taskService.listTasks(dto, context);
   }
 
+  @Post('natural-language')
+  async handleNaturalLanguage(
+    @Body('message') message: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.processNaturalLanguage(message, context);
+  }
+
   @Get(':taskId')
   async get(@Param('taskId') taskId: string, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
@@ -59,15 +68,6 @@ export class TaskController {
   async cancel(@Param('taskId') taskId: string, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.taskService.cancelTask(taskId, context);
-  }
-
-  @Post('natural-language')
-  async handleNaturalLanguage(
-    @Body('message') message: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    const context = this.buildContext(req);
-    return this.taskService.processNaturalLanguage(message, context);
   }
 
   private buildContext(req: AuthenticatedRequest) {
