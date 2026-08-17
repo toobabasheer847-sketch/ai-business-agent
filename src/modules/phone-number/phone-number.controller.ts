@@ -51,8 +51,8 @@ export class PhoneNumberController {
 
   /**
    * POST /api/phone-numbers/buy
-   * Purchase a Twilio number, configure inbound webhooks, then save it for
-   * the authenticated tenant. Declared before parameterized routes for clarity.
+   * Purchase a Twilio number and save it for the authenticated tenant.
+   * Does not configure Twilio webhooks. Declared before parameterized routes.
    */
   @Post('buy')
   @HttpCode(HttpStatus.CREATED)

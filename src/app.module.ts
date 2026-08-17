@@ -20,7 +20,6 @@ import { PhoneNumberModule } from './modules/phone-number/phone-number.module';
 import { ProposalModule } from './modules/proposal/proposal.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
 import { TenantModule } from './modules/tenant/tenant.module';
-import { TwilioAppModule } from './modules/twilio-app/twilio-app.module';
 import { UserModule } from './modules/user/user.module';
 import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
 
@@ -47,7 +46,6 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     ProposalModule,
     MasterSettingsModule,
     PhoneNumberModule,
-    TwilioAppModule,
     TwilioWebhooksModule,
     AiModule,
   ],

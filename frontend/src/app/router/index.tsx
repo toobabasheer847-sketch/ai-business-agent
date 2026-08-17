@@ -8,7 +8,6 @@ import { RegisterPage } from '@/features/auth/pages/register-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
 import { PhoneNumbersPage } from '@/features/phone-numbers/pages/phone-numbers-page'
-import { TwilioAppsPage } from '@/features/twilio-apps/pages/twilio-apps-page'
 import { TenantPage } from '@/features/tenant/pages/tenant-page'
 import { BrandsPage } from '@/features/brands/pages/brands-page'
 import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
@@ -48,7 +47,6 @@ export function AppRouter() {
           <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
           <Route path="/gmail-configuration" element={<GmailConfigurationPage />} />
           <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
-          <Route path="/twilio-apps" element={<TwilioAppsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/master-settings" element={<MasterSettingsPage />} />
         </Route>

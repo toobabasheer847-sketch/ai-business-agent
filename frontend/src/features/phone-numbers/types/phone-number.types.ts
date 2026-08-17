@@ -102,10 +102,5 @@ export type BoughtPhoneNumber = PhoneNumber & {
     sid: string
     status: string | null
     friendlyName: string | null
-    webhooks?: {
-      voiceUrl: string
-      smsUrl: string
-      statusCallback: string
-    }
   }
 }

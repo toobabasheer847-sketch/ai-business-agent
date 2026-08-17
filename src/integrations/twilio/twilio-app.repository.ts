@@ -7,7 +7,9 @@ import { phoneNumbers } from '../../database/drizzle/schema/phone-number.schema'
 import type { TenantTwilioAppConfig } from './twilio-app-configuration';
 
 /**
- * Reads Twilio credentials from the unified phone_numbers table.
+ * Credential lookup for Twilio operations (calls, SMS, buy, webhooks).
+ * Reads from phone_numbers — not a Twilio Apps CRUD overlay.
+ * The retired /api/twilio-apps module lived in src/modules/twilio-app/.
  */
 @Injectable()
 export class TwilioAppRepository {

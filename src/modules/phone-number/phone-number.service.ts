@@ -196,14 +196,14 @@ export class PhoneNumberService {
   }
 
   /**
-   * Purchase a Twilio number, configure inbound webhooks on Twilio, then
-   * persist it for the authenticated tenant.
+   * Purchase a Twilio number, then persist it for the authenticated tenant.
    * tenantId always comes from JWT (caller), never from the body.
-   * Local DB write happens only after purchase + webhook configuration succeed.
+   * Does not configure Twilio voice/SMS/status webhooks — those are set
+   * manually on the Phone Number record when needed.
    *
-   * Persists only values that the purchase actually produced or used:
-   * phoneSid, webhookUrl (voice URL configured on Twilio), and the Account SID /
-   * Auth Token that were used to call Twilio (if resolved).
+   * Persists only values the purchase actually produced or used:
+   * phoneSid, and the Account SID / Auth Token used to call Twilio (if resolved).
+   * Does not invent appSid or webhookUrl.
    */
   async buy(tenantId: string, dto: BuyPhoneNumberDto) {
     const existing = await this.phoneNumberRepository.findByPhoneNumberAndTenant(
@@ -240,7 +240,6 @@ export class PhoneNumberService {
       provider: PhoneNumberProvider.TWILIO,
       status: PhoneNumberStatus.ACTIVE,
       phoneSid: purchased.sid,
-      webhookUrl: purchased.webhooks.voiceUrl,
       twilioSid: credentials?.accountSid ?? null,
       authToken: credentials?.authToken ?? null,
     });
@@ -251,7 +250,6 @@ export class PhoneNumberService {
         sid: purchased.sid,
         status: purchased.status,
         friendlyName: purchased.friendlyName,
-        webhooks: purchased.webhooks,
       },
     };
   }

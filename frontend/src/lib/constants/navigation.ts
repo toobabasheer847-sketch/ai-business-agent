@@ -15,7 +15,6 @@ import {
   MessagesSquare,
   FileText,
   UserRound,
-  Plug,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -116,13 +115,6 @@ export const mainNav: NavItem[] = [
     href: '/phone-numbers',
     icon: Phone,
     module: 'phone-number',
-    available: true,
-  },
-  {
-    title: 'Twilio Apps',
-    href: '/twilio-apps',
-    icon: Plug,
-    module: 'twilio-app',
     available: true,
   },
   {

@@ -5,7 +5,7 @@ import { TwilioAppConfigurationService } from '../../integrations/twilio/twilio-
 import { PhoneNumberProvider, PhoneNumberStatus } from './dto/create-phone-number.dto';
 import { PhoneNumberService } from './phone-number.service';
 
-describe('PhoneNumberService.buy webhook persistence gate', () => {
+describe('PhoneNumberService.buy persistence', () => {
   const tenantId = 'tenant-abc';
 
   let service: PhoneNumberService;
@@ -39,7 +39,7 @@ describe('PhoneNumberService.buy webhook persistence gate', () => {
         twilioSid: 'ACxxxxxxxx',
         authToken: 'secret-token',
         appSid: null,
-        webhookUrl: 'https://tunnel.example/api/webhooks/twilio/call/inbound',
+        webhookUrl: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
@@ -66,17 +66,12 @@ describe('PhoneNumberService.buy webhook persistence gate', () => {
     );
   });
 
-  it('saves locally only after purchaseNumber resolves (webhooks configured)', async () => {
+  it('saves locally after purchase without webhook configuration', async () => {
     available.purchaseNumber.mockResolvedValue({
       phoneNumber: '+15551234567',
       sid: 'PN111',
       friendlyName: 'Austin, TX',
       status: 'in-use',
-      webhooks: {
-        voiceUrl: 'https://tunnel.example/api/webhooks/twilio/call/inbound',
-        smsUrl: 'https://tunnel.example/api/webhooks/twilio/sms/inbound',
-        statusCallback: 'https://tunnel.example/api/webhooks/twilio/call/status',
-      },
     });
 
     const result = await service.buy(tenantId, {
@@ -98,26 +93,30 @@ describe('PhoneNumberService.buy webhook persistence gate', () => {
       provider: PhoneNumberProvider.TWILIO,
       status: PhoneNumberStatus.ACTIVE,
       phoneSid: 'PN111',
-      webhookUrl: 'https://tunnel.example/api/webhooks/twilio/call/inbound',
       twilioSid: 'ACxxxxxxxx',
       authToken: 'secret-token',
     });
-    expect(result.purchase.webhooks.voiceUrl).toContain(
-      '/api/webhooks/twilio/call/inbound',
-    );
+    expect(repository.create.mock.calls[0][0]).not.toHaveProperty('webhookUrl');
+    expect(repository.create.mock.calls[0][0]).not.toHaveProperty('appSid');
+    expect(result.purchase).toEqual({
+      sid: 'PN111',
+      status: 'in-use',
+      friendlyName: 'Austin, TX',
+    });
+    expect(result.purchase).not.toHaveProperty('webhooks');
     expect(result.phoneSid).toBe('PN111');
     expect(result.hasAuthToken).toBe(true);
     expect(result).not.toHaveProperty('authToken');
   });
 
-  it('does not save when purchase/webhook step throws', async () => {
+  it('does not save when purchase throws', async () => {
     available.purchaseNumber.mockRejectedValue(
-      new Error('webhook configuration failed'),
+      new Error('Twilio purchase failed'),
     );
 
     await expect(
       service.buy(tenantId, { phoneNumber: '+15551234567' }),
-    ).rejects.toThrow('webhook configuration failed');
+    ).rejects.toThrow('Twilio purchase failed');
 
     expect(repository.create).not.toHaveBeenCalled();
   });
@@ -142,11 +141,6 @@ describe('PhoneNumberService.buy webhook persistence gate', () => {
       sid: 'PN111',
       friendlyName: null,
       status: 'in-use',
-      webhooks: {
-        voiceUrl: 'https://tunnel.example/api/webhooks/twilio/call/inbound',
-        smsUrl: 'https://tunnel.example/api/webhooks/twilio/sms/inbound',
-        statusCallback: 'https://tunnel.example/api/webhooks/twilio/call/status',
-      },
     });
     twilioConfig.resolveCredentialsForTenant.mockResolvedValue(null);
 

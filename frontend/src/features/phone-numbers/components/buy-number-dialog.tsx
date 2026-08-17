@@ -161,7 +161,7 @@ export function BuyNumberDialog({ open, onOpenChange }: BuyNumberDialogProps) {
             </DialogTitle>
             <DialogDescription>
               Search Twilio inventory by city or area code, select a number, then confirm purchase.
-              Tenant billing credentials come from your Twilio App / environment config.
+              Tenant billing credentials come from Phone Numbers Twilio configuration or environment variables.
             </DialogDescription>
           </DialogHeader>
 
