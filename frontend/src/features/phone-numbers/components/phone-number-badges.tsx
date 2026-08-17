@@ -26,3 +26,18 @@ export function PhoneNumberProviderBadge({ provider }: { provider: string }) {
     </Badge>
   )
 }
+
+export function TwilioConnectedBadge({ connected }: { connected: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={
+        connected
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : 'border-slate-200 bg-slate-50 text-slate-700'
+      }
+    >
+      {connected ? 'Twilio connected' : 'Twilio not set'}
+    </Badge>
+  )
+}

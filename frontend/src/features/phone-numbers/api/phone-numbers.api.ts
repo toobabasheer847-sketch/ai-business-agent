@@ -59,6 +59,12 @@ export const phoneNumbersApi = {
       .then((r) => r.data)
   },
 
+  disconnectTwilio(id: string) {
+    return apiClient
+      .post<PhoneNumber>(`/phone-numbers/${id}/disconnect-twilio`)
+      .then((r) => r.data)
+  },
+
   searchAvailable(query: AvailablePhoneNumbersQuery) {
     return apiClient
       .get<AvailablePhoneNumber[]>('/phone-numbers/available', {

@@ -103,7 +103,8 @@ export class PhoneNumberController {
 
   /**
    * PATCH /api/phone-numbers/:id
-   * Update a phone number (tenant-scoped). All fields optional.
+   * Update a phone number and optional Twilio configuration (tenant-scoped).
+   * All fields optional. Empty authToken keeps the stored token.
    */
   @Patch(':id')
   async update(
@@ -115,8 +116,21 @@ export class PhoneNumberController {
   }
 
   /**
+   * POST /api/phone-numbers/:id/disconnect-twilio
+   * Clears Twilio configuration fields on the row. Does not delete the number.
+   */
+  @Post(':id/disconnect-twilio')
+  @HttpCode(HttpStatus.OK)
+  async disconnectTwilio(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.phoneNumberService.disconnectTwilio(this.getTenantId(req), id);
+  }
+
+  /**
    * DELETE /api/phone-numbers/:id
-   * Delete a phone number. Cascades to linked Twilio Apps.
+   * Permanently deletes the phone number row.
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

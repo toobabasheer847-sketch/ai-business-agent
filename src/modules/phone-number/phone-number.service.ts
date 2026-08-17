@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { AvailablePhoneNumbersService } from '../../integrations/twilio/available-phone-numbers';
+import { TwilioAppConfigurationService } from '../../integrations/twilio/twilio-app-configuration';
 import { PhoneNumberRepository } from './phone-number.repository';
 import { CreatePhoneNumberDto } from './dto/create-phone-number.dto';
 import { UpdatePhoneNumberDto } from './dto/update-phone-number.dto';
@@ -12,19 +13,57 @@ import { PhoneNumberQueryDto } from './dto/phone-number-query.dto';
 import { AvailablePhoneNumbersQueryDto } from './dto/available-phone-numbers-query.dto';
 import { BuyPhoneNumberDto } from './dto/buy-phone-number.dto';
 import { PhoneNumberProvider, PhoneNumberStatus } from './dto/create-phone-number.dto';
+import type { PhoneNumber, PhoneNumberRow } from './entities/phone-number.entity';
 
 @Injectable()
 export class PhoneNumberService {
   constructor(
     private readonly phoneNumberRepository: PhoneNumberRepository,
     private readonly availablePhoneNumbersService: AvailablePhoneNumbersService,
+    private readonly twilioConfigService: TwilioAppConfigurationService,
   ) {}
+
+  /**
+   * Strips authToken from every API response. Never log the token.
+   */
+  toPublic(row: PhoneNumberRow): PhoneNumber {
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      phoneNumber: row.phoneNumber,
+      label: row.label,
+      provider: row.provider,
+      status: row.status,
+      phoneSid: row.phoneSid,
+      twilioSid: row.twilioSid,
+      appSid: row.appSid,
+      webhookUrl: row.webhookUrl,
+      hasAuthToken: Boolean(row.authToken),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
 
   private normalizeOptional(value: string | null | undefined): string | null | undefined {
     if (value === undefined) return undefined;
     if (value === null) return null;
     const trimmed = value.trim();
     return trimmed.length === 0 ? null : trimmed;
+  }
+
+  /**
+   * Empty authToken on update means "keep current". Create treats empty as unset.
+   */
+  private normalizeAuthToken(
+    value: string | undefined,
+    mode: 'create' | 'update',
+  ): string | null | undefined {
+    if (value === undefined) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return mode === 'update' ? undefined : null;
+    }
+    return trimmed;
   }
 
   async create(tenantId: string, dto: CreatePhoneNumberDto) {
@@ -39,21 +78,30 @@ export class PhoneNumberService {
       );
     }
 
-    return this.phoneNumberRepository.create({
+    const row = await this.phoneNumberRepository.create({
       tenantId,
       phoneNumber: dto.phoneNumber,
       label: dto.label?.trim(),
       provider: dto.provider,
       status: dto.status,
+      phoneSid: this.normalizeOptional(dto.phoneSid),
+      twilioSid: this.normalizeOptional(dto.twilioSid),
+      authToken: this.normalizeAuthToken(dto.authToken, 'create'),
+      appSid: this.normalizeOptional(dto.appSid),
+      webhookUrl: this.normalizeOptional(dto.webhookUrl),
     });
+
+    return this.toPublic(row);
   }
 
   async findAll(tenantId: string, query: PhoneNumberQueryDto) {
-    return this.phoneNumberRepository.findAllByTenant(tenantId, {
+    const rows = await this.phoneNumberRepository.findAllByTenant(tenantId, {
       provider: query.provider,
       status: query.status,
       search: query.search,
     });
+
+    return rows.map((row) => this.toPublic(row));
   }
 
   async findOne(tenantId: string, id: string) {
@@ -63,7 +111,7 @@ export class PhoneNumberService {
       throw new NotFoundException('Phone number not found.');
     }
 
-    return row;
+    return this.toPublic(row);
   }
 
   async update(tenantId: string, id: string, dto: UpdatePhoneNumberDto) {
@@ -86,12 +134,34 @@ export class PhoneNumberService {
       }
     }
 
-    return this.phoneNumberRepository.update(id, tenantId, {
+    const row = await this.phoneNumberRepository.update(id, tenantId, {
       phoneNumber: dto.phoneNumber,
       label: this.normalizeOptional(dto.label),
       provider: dto.provider,
       status: dto.status,
+      phoneSid: this.normalizeOptional(dto.phoneSid),
+      twilioSid: this.normalizeOptional(dto.twilioSid),
+      authToken: this.normalizeAuthToken(dto.authToken, 'update'),
+      appSid: this.normalizeOptional(dto.appSid),
+      webhookUrl: this.normalizeOptional(dto.webhookUrl),
     });
+
+    return this.toPublic(row!);
+  }
+
+  /**
+   * Clears Twilio configuration on the row. Does not delete the phone number.
+   */
+  async disconnectTwilio(tenantId: string, id: string) {
+    const existing = await this.phoneNumberRepository.findByIdAndTenant(id, tenantId);
+
+    if (!existing) {
+      throw new NotFoundException('Phone number not found.');
+    }
+
+    const row = await this.phoneNumberRepository.disconnectTwilio(id, tenantId);
+
+    return this.toPublic(row!);
   }
 
   async remove(tenantId: string, id: string) {
@@ -130,6 +200,10 @@ export class PhoneNumberService {
    * persist it for the authenticated tenant.
    * tenantId always comes from JWT (caller), never from the body.
    * Local DB write happens only after purchase + webhook configuration succeed.
+   *
+   * Persists only values that the purchase actually produced or used:
+   * phoneSid, webhookUrl (voice URL configured on Twilio), and the Account SID /
+   * Auth Token that were used to call Twilio (if resolved).
    */
   async buy(tenantId: string, dto: BuyPhoneNumberDto) {
     const existing = await this.phoneNumberRepository.findByPhoneNumberAndTenant(
@@ -156,16 +230,23 @@ export class PhoneNumberService {
       friendlyName,
     });
 
-    const saved = await this.phoneNumberRepository.create({
+    const credentials =
+      await this.twilioConfigService.resolveCredentialsForTenant(tenantId);
+
+    const row = await this.phoneNumberRepository.create({
       tenantId,
       phoneNumber: purchased.phoneNumber,
       label: friendlyName,
       provider: PhoneNumberProvider.TWILIO,
       status: PhoneNumberStatus.ACTIVE,
+      phoneSid: purchased.sid,
+      webhookUrl: purchased.webhooks.voiceUrl,
+      twilioSid: credentials?.accountSid ?? null,
+      authToken: credentials?.authToken ?? null,
     });
 
     return {
-      ...saved,
+      ...this.toPublic(row),
       purchase: {
         sid: purchased.sid,
         status: purchased.status,

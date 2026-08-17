@@ -82,6 +82,20 @@ export function useAvailablePhoneNumbers(
   })
 }
 
+export function useDisconnectTwilio() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => phoneNumbersApi.disconnectTwilio(id),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: phoneNumberKeys.lists() })
+      await queryClient.invalidateQueries({
+        queryKey: phoneNumberKeys.detail(data.id),
+      })
+    },
+  })
+}
+
 export function useBuyPhoneNumber() {
   const queryClient = useQueryClient()
 

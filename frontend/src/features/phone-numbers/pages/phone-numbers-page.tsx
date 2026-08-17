@@ -26,11 +26,16 @@ import { PhoneNumbersTable } from '@/features/phone-numbers/components/phone-num
 import {
   useCreatePhoneNumber,
   useDeletePhoneNumber,
+  useDisconnectTwilio,
   usePhoneNumbers,
   useUpdatePhoneNumber,
 } from '@/features/phone-numbers/hooks/use-phone-numbers'
 import type { PhoneNumberFormValues } from '@/features/phone-numbers/schemas/phone-number.schemas'
-import type { PhoneNumber } from '@/features/phone-numbers/types/phone-number.types'
+import type {
+  CreatePhoneNumberPayload,
+  PhoneNumber,
+  UpdatePhoneNumberPayload,
+} from '@/features/phone-numbers/types/phone-number.types'
 
 function TableSkeleton() {
   return (
@@ -53,6 +58,7 @@ export function PhoneNumbersPage() {
   const [buyOpen, setBuyOpen] = useState(false)
   const [editing, setEditing] = useState<PhoneNumber | null>(null)
   const [deleting, setDeleting] = useState<PhoneNumber | null>(null)
+  const [disconnecting, setDisconnecting] = useState<PhoneNumber | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300)
@@ -73,17 +79,35 @@ export function PhoneNumbersPage() {
   const createMutation = useCreatePhoneNumber()
   const updateMutation = useUpdatePhoneNumber()
   const deleteMutation = useDeletePhoneNumber()
+  const disconnectMutation = useDisconnectTwilio()
 
   const items = listQuery.data ?? []
 
+  function toTwilioPayload(values: PhoneNumberFormValues, mode: 'create' | 'update') {
+    const payload: CreatePhoneNumberPayload | UpdatePhoneNumberPayload = {
+      phoneNumber: values.phoneNumber,
+      label: values.label || undefined,
+      provider: values.provider,
+      status: values.status,
+      twilioSid: values.twilioSid?.trim() ?? '',
+      appSid: values.appSid?.trim() ?? '',
+      webhookUrl: values.webhookUrl?.trim() ?? '',
+    }
+
+    if (values.authToken?.trim()) {
+      payload.authToken = values.authToken.trim()
+    } else if (mode === 'create') {
+      payload.authToken = undefined
+    }
+
+    return payload
+  }
+
   async function handleCreate(values: PhoneNumberFormValues) {
     try {
-      await createMutation.mutateAsync({
-        phoneNumber: values.phoneNumber,
-        label: values.label || undefined,
-        provider: values.provider,
-        status: values.status,
-      })
+      await createMutation.mutateAsync(
+        toTwilioPayload(values, 'create') as CreatePhoneNumberPayload,
+      )
       toast.success('Phone number created')
       setCreateOpen(false)
     } catch (error) {
@@ -96,14 +120,21 @@ export function PhoneNumbersPage() {
     try {
       await updateMutation.mutateAsync({
         id: editing.id,
-        payload: {
-          phoneNumber: values.phoneNumber,
-          label: values.label || undefined,
-          provider: values.provider,
-          status: values.status,
-        },
+        payload: toTwilioPayload(values, 'update') as UpdatePhoneNumberPayload,
       })
       toast.success('Phone number updated')
+      setEditing(null)
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!disconnecting) return
+    try {
+      await disconnectMutation.mutateAsync(disconnecting.id)
+      toast.success('Twilio configuration disconnected')
+      setDisconnecting(null)
       setEditing(null)
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -212,11 +243,12 @@ export function PhoneNumbersPage() {
       <BuyNumberDialog open={buyOpen} onOpenChange={setBuyOpen} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add phone number</DialogTitle>
             <DialogDescription>
               Creates a tenant-scoped number via <code>POST /api/phone-numbers</code>.
+              Optional Twilio credentials are stored on the same row.
             </DialogDescription>
           </DialogHeader>
           <PhoneNumberForm
@@ -229,23 +261,60 @@ export function PhoneNumbersPage() {
       </Dialog>
 
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit phone number</DialogTitle>
             <DialogDescription>
               Updates via <code>PATCH /api/phone-numbers/:id</code>. Tenant is enforced by the API.
+              Leave Auth Token blank to keep the stored token.
             </DialogDescription>
           </DialogHeader>
           {editing && (
             <PhoneNumberForm
               key={editing.id}
               initial={editing}
-              submitLabel="Save changes"
+              submitLabel="Save configuration"
               submitting={updateMutation.isPending}
+              disconnecting={disconnectMutation.isPending}
               onCancel={() => setEditing(null)}
               onSubmit={handleUpdate}
+              onDisconnectTwilio={() => setDisconnecting(editing)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(disconnecting)}
+        onOpenChange={(open) => !open && setDisconnecting(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Disconnect Twilio</DialogTitle>
+            <DialogDescription>
+              This clears Account SID, Auth Token, App SID, webhook URL, and Phone SID
+              for <strong>{disconnecting?.phoneNumber}</strong>. The phone number itself is
+              not deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDisconnecting(null)}
+              disabled={disconnectMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDisconnect()}
+              disabled={disconnectMutation.isPending}
+            >
+              {disconnectMutation.isPending ? 'Disconnecting…' : 'Disconnect Twilio'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -254,9 +323,9 @@ export function PhoneNumbersPage() {
           <DialogHeader>
             <DialogTitle>Delete phone number</DialogTitle>
             <DialogDescription>
-              This removes <strong>{deleting?.phoneNumber}</strong>
-              {deleting?.label ? ` (${deleting.label})` : ''}. Linked Twilio apps may also be
-              removed by the backend cascade.
+              This permanently removes <strong>{deleting?.phoneNumber}</strong>
+              {deleting?.label ? ` (${deleting.label})` : ''}. To keep the number and only
+              clear credentials, use Disconnect Twilio instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

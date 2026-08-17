@@ -20,6 +20,30 @@ export const phoneNumberFormSchema = z.object({
     .or(z.literal('')),
   provider: z.enum(PHONE_NUMBER_PROVIDERS),
   status: z.enum(PHONE_NUMBER_STATUSES),
+  twilioSid: z
+    .string()
+    .max(255, 'Account SID must be at most 255 characters')
+    .optional()
+    .or(z.literal('')),
+  authToken: z
+    .string()
+    .max(255, 'Auth Token must be at most 255 characters')
+    .optional()
+    .or(z.literal('')),
+  appSid: z
+    .string()
+    .max(255, 'App SID must be at most 255 characters')
+    .optional()
+    .or(z.literal('')),
+  webhookUrl: z
+    .string()
+    .max(2048, 'Webhook URL is too long')
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (value) => !value || /^https?:\/\//i.test(value),
+      'Webhook URL must start with http:// or https://',
+    ),
 })
 
 export type PhoneNumberFormValues = z.infer<typeof phoneNumberFormSchema>

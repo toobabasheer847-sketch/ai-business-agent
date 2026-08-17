@@ -3,8 +3,10 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export enum PhoneNumberProvider {
@@ -54,4 +56,32 @@ export class CreatePhoneNumberDto {
   @IsOptional()
   @IsEnum(PhoneNumberStatus)
   status?: PhoneNumberStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  phoneSid?: string;
+
+  /** Twilio Account SID */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  twilioSid?: string;
+
+  /** Twilio Auth Token — stored, never returned in API responses. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  authToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  appSid?: string;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsString()
+  @IsUrl({ require_tld: false })
+  webhookUrl?: string;
 }
