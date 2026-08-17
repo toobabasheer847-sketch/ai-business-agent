@@ -13,7 +13,7 @@ export {
   conversationRelations,
   messageRelations,
   proposalRelations,
-  twilioPhoneNumberRelations,
+  phoneNumberRelations,
   gmailConfigRelations,
   auditLogRelations,
   taskRelations,

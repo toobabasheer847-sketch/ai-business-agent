@@ -12,8 +12,6 @@ export * from './proposal.schema';
 export * from './prospect.schema';
 export * from './task.schema';
 export * from './tenant.schema';
-export * from './twilio-app.schema';
-export * from './twilio-phone-number.schema';
 export * from './user.schema';
 export * from './knowledge-document.schema';
 export * from './knowledge-chunk.schema';

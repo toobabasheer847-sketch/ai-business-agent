@@ -12,7 +12,7 @@ import { prospects } from '../schema/prospect.schema';
 import { conversations } from '../schema/conversation.schema';
 import { messages } from '../schema/message.schema';
 import { proposals } from '../schema/proposal.schema';
-import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
+import { phoneNumbers } from '../schema/phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
@@ -37,7 +37,7 @@ export const tenantRelations = relations(
     conversations: many(conversations),
     messages: many(messages),
     proposals: many(proposals),
-    twilioPhoneNumbers: many(twilioPhoneNumbers),
+    phoneNumbers: many(phoneNumbers),
     gmailConfigs: many(gmailConfigs),
 
     auditLogs: many(auditLogs),
@@ -257,15 +257,15 @@ export const proposalRelations = relations(
 /**
  * Phone Number relations (unified phone + Twilio table)
  */
-export const twilioPhoneNumberRelations = relations(
-  twilioPhoneNumbers,
+export const phoneNumberRelations = relations(
+  phoneNumbers,
   ({ one }) => ({
     tenant: one(tenants, {
-      fields: [twilioPhoneNumbers.tenantId],
+      fields: [phoneNumbers.tenantId],
       references: [tenants.id],
     }),
     user: one(users, {
-      fields: [twilioPhoneNumbers.userId],
+      fields: [phoneNumbers.userId],
       references: [users.id],
     }),
   }),
