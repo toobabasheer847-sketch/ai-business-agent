@@ -6,6 +6,7 @@ import { AppShellLayout } from '@/layouts/app-shell-layout'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { RegisterPage } from '@/features/auth/pages/register-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
+import { AssistantPage } from '@/features/assistant/pages/assistant-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
 import { PhoneNumbersPage } from '@/features/phone-numbers/pages/phone-numbers-page'
 import { TenantPage } from '@/features/tenant/pages/tenant-page'
@@ -34,6 +35,7 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShellLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/system" element={<SystemStatusPage />} />
           <Route path="/tenant" element={<TenantPage />} />
 

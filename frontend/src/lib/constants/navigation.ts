@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  Bot,
   Building2,
   CircleHelp,
   LayoutDashboard,
@@ -39,6 +40,14 @@ export const mainNav: NavItem[] = [
     icon: LayoutDashboard,
     module: 'app',
     available: true,
+  },
+  {
+    title: 'AI Assistant',
+    href: '/assistant',
+    icon: Bot,
+    module: 'ai-master',
+    available: true,
+    description: 'Chat with the Master Agent',
   },
   {
     title: 'Tenant',
