@@ -89,11 +89,12 @@ export const brandRelations = relations(
  */
 export const knowledgebaseRelations = relations(
   knowledgebases,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [knowledgebases.tenantId],
       references: [tenants.id],
     }),
+    documents: many(knowledgeDocuments),
   }),
 );
 
@@ -102,11 +103,16 @@ export const knowledgebaseRelations = relations(
  */
 export const knowledgeDocumentRelations = relations(
   knowledgeDocuments,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [knowledgeDocuments.tenantId],
       references: [tenants.id],
     }),
+    knowledgebase: one(knowledgebases, {
+      fields: [knowledgeDocuments.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
+    chunks: many(knowledgeChunks),
   }),
 );
 
@@ -119,6 +125,14 @@ export const knowledgeChunkRelations = relations(
     tenant: one(tenants, {
       fields: [knowledgeChunks.tenantId],
       references: [tenants.id],
+    }),
+    knowledgebase: one(knowledgebases, {
+      fields: [knowledgeChunks.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
+    document: one(knowledgeDocuments, {
+      fields: [knowledgeChunks.documentId],
+      references: [knowledgeDocuments.id],
     }),
   }),
 );

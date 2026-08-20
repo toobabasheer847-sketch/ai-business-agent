@@ -7,11 +7,13 @@ import {
 import { KnowledgebaseRepository } from './knowledgebase.repository';
 import { CreateKnowledgebaseDto } from './dto/create-knowledgebase.dto';
 import { UpdateKnowledgebaseDto } from './dto/update-knowledgebase.dto';
+import { KnowledgeFileStorage } from './knowledge-file.storage';
 
 @Injectable()
 export class KnowledgebaseService {
   constructor(
     private readonly knowledgebaseRepository: KnowledgebaseRepository,
+    private readonly knowledgeFileStorage: KnowledgeFileStorage,
   ) {}
 
   async create(tenantId: string, dto: CreateKnowledgebaseDto) {
@@ -103,6 +105,7 @@ export class KnowledgebaseService {
     }
 
     await this.knowledgebaseRepository.delete(id, tenantId);
+    await this.knowledgeFileStorage.removeKnowledgeBaseDir(tenantId, id);
 
     return {
       message: 'Knowledgebase deleted successfully.',

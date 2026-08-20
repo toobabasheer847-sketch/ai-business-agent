@@ -18,6 +18,7 @@ import { ApiError, getErrorMessage } from '@/lib/api'
 import { KnowledgebasesFilters } from '@/features/knowledgebases/components/knowledgebases-filters'
 import { KnowledgebasesTable } from '@/features/knowledgebases/components/knowledgebases-table'
 import { KnowledgebaseDeleteDialog } from '@/features/knowledgebases/components/knowledgebase-delete-dialog'
+import { KnowledgebaseDocumentsSheet } from '@/features/knowledgebases/components/knowledgebase-documents-sheet'
 import { KnowledgebaseForm } from '@/features/knowledgebases/components/knowledgebase-form'
 import {
   useKnowledgebases,
@@ -71,6 +72,7 @@ export function KnowledgebasesPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Knowledgebase | null>(null)
   const [deleting, setDeleting] = useState<Knowledgebase | null>(null)
+  const [documentsFor, setDocumentsFor] = useState<Knowledgebase | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300)
@@ -216,10 +218,17 @@ export function KnowledgebasesPage() {
       ) : (
         <KnowledgebasesTable
           items={items}
+          onOpenDocuments={setDocumentsFor}
           onEdit={setEditing}
           onDelete={setDeleting}
         />
       )}
+
+      <KnowledgebaseDocumentsSheet
+        knowledgebase={documentsFor}
+        open={Boolean(documentsFor)}
+        onOpenChange={(open) => !open && setDocumentsFor(null)}
+      />
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

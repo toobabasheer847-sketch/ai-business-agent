@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { FileText, Pencil, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import type { Knowledgebase } from '@/features/knowledgebases/types/knowledgebase.types'
@@ -14,6 +14,7 @@ import {
 
 type KnowledgebasesTableProps = {
   items: Knowledgebase[]
+  onOpenDocuments: (item: Knowledgebase) => void
   onEdit: (item: Knowledgebase) => void
   onDelete: (item: Knowledgebase) => void
 }
@@ -37,6 +38,7 @@ function truncate(value: string | null, max = 80) {
 
 export function KnowledgebasesTable({
   items,
+  onOpenDocuments,
   onEdit,
   onDelete,
 }: KnowledgebasesTableProps) {
@@ -61,10 +63,16 @@ export function KnowledgebasesTable({
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell>
-                <div className="font-medium">{item.name}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
-                  {truncate(item.description, 60)}
-                </div>
+                <button
+                  type="button"
+                  className="text-left"
+                  onClick={() => onOpenDocuments(item)}
+                >
+                  <div className="font-medium">{item.name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
+                    {truncate(item.description, 60)}
+                  </div>
+                </button>
               </TableCell>
               <TableCell
                 className="hidden max-w-[300px] text-muted-foreground md:table-cell"
@@ -80,6 +88,15 @@ export function KnowledgebasesTable({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => onOpenDocuments(item)}
+                    aria-label={`Open documents for ${item.name}`}
+                  >
+                    <FileText className="size-4" />
+                  </Button>
                   <Button
                     type="button"
                     size="icon-sm"

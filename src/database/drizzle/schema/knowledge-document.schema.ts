@@ -3,6 +3,7 @@ import {
   uuid,
   varchar,
   text,
+  integer,
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
@@ -35,6 +36,10 @@ export const knowledgeDocuments = pgTable(
       length: 500,
     }).notNull(),
 
+    originalFilename: varchar('original_filename', {
+      length: 500,
+    }).notNull(),
+
     content: text('content'),
 
     source: varchar('source', {
@@ -44,6 +49,16 @@ export const knowledgeDocuments = pgTable(
     mimeType: varchar('mime_type', {
       length: 100,
     }),
+
+    byteSize: integer('byte_size'),
+
+    status: varchar('status', {
+      length: 32,
+    })
+      .notNull()
+      .default('pending'),
+
+    failureReason: text('failure_reason'),
 
     createdAt: timestamp('created_at', {
       withTimezone: true,
@@ -72,5 +87,7 @@ export const knowledgeDocuments = pgTable(
       table.tenantId,
       table.knowledgeBaseId,
     ),
+
+    statusIdx: index('knowledge_documents_status_idx').on(table.status),
   }),
 );

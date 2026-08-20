@@ -5,11 +5,13 @@ import {
   text,
   timestamp,
   index,
-  vector,
+  doublePrecision,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
+import { knowledgebases } from './knowledgebase.schema';
+import { knowledgeDocuments } from './knowledge-document.schema';
 
 export const knowledgeChunks = pgTable(
   'knowledge_chunks',
@@ -25,6 +27,19 @@ export const knowledgeChunks = pgTable(
 
     userId: uuid('user_id').references(() => users.id, {
       onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    knowledgeBaseId: uuid('knowledge_base_id').references(
+      () => knowledgebases.id,
+      {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      },
+    ),
+
+    documentId: uuid('document_id').references(() => knowledgeDocuments.id, {
+      onDelete: 'cascade',
       onUpdate: 'cascade',
     }),
 
@@ -61,10 +76,11 @@ export const knowledgeChunks = pgTable(
      *
      * Dimensions:
      * 3072
+     *
+     * Live PostgreSQL stores this as double precision[] (float8[]).
+     * Do not use pgvector here — the extension is not installed.
      */
-    embedding: vector('embedding', {
-      dimensions: 3072,
-    }),
+    embedding: doublePrecision('embedding').array(),
 
     embeddingModel: varchar('embedding_model', {
       length: 100,
@@ -88,18 +104,14 @@ export const knowledgeChunks = pgTable(
 
     index('knowledge_chunks_user_id_idx').on(table.userId),
 
+    index('knowledge_chunks_knowledge_base_id_idx').on(table.knowledgeBaseId),
+
+    index('knowledge_chunks_document_id_idx').on(table.documentId),
+
     index('knowledge_chunks_source_type_idx').on(table.sourceType),
 
     index('knowledge_chunks_doc_type_idx').on(table.docType),
 
     index('knowledge_chunks_category_idx').on(table.category),
-
-    /**
-     * HNSW index for fast cosine similarity search.
-     */
-    index('knowledge_chunks_embedding_hnsw_idx').using(
-      'hnsw',
-      table.embedding.op('vector_cosine_ops'),
-    ),
   ],
 );
