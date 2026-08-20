@@ -4,6 +4,7 @@ import { Bot } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AssistantMarkdown } from '@/features/assistant/components/assistant-markdown'
+import { AssistantSourcesList } from '@/features/assistant/components/assistant-sources-list'
 import { cn } from '@/lib/utils'
 import {
   DELEGATION_LABELS,
@@ -89,6 +90,14 @@ function MessageBubble({ message }: { message: AssistantMessage }) {
             <AssistantMarkdown content={message.content} />
           )}
         </div>
+
+        {!isUser && !message.pending && !message.error && (
+          <AssistantSourcesList
+            sources={message.sources ?? []}
+            usedKnowledge={message.usedKnowledge}
+            message={message.message}
+          />
+        )}
       </div>
     </div>
   )

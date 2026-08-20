@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Post,
   Req,
   UseGuards,
@@ -19,6 +21,7 @@ export class RagController {
   ) {}
 
   @Post('query')
+  @HttpCode(HttpStatus.OK)
   async query(
     @Body() dto: RagQueryDto,
     @Req() req: AuthenticatedRequest,

@@ -1,5 +1,6 @@
 export const ASSISTANT_DELEGATIONS = [
   'rag',
+  'chat',
   'task',
   'communication',
   'proposal',
@@ -15,6 +16,18 @@ export type ChatMessageRequest = {
 export type ChatMessageResponse = {
   response: string
   delegation: AssistantDelegation | null
+  sources?: AssistantSource[]
+  usedKnowledge?: boolean
+  message?: string
+}
+
+export type AssistantSource = {
+  chunkId: string
+  chunkIndex?: string | number | null
+  documentId?: string | null
+  documentName?: string | null
+  source?: string | null
+  sourceType?: string | null
 }
 
 export type AssistantRole = 'user' | 'assistant'
@@ -25,6 +38,9 @@ export type AssistantMessage = {
   content: string
   createdAt: number
   delegation?: AssistantDelegation | null
+  sources?: AssistantSource[]
+  usedKnowledge?: boolean
+  message?: string
   pending?: boolean
   error?: boolean
 }
@@ -40,6 +56,7 @@ export function normalizeDelegation(value: unknown): AssistantDelegation | null 
 
 export const DELEGATION_LABELS: Record<AssistantDelegation, string> = {
   rag: 'Knowledge',
+  chat: 'Assistant',
   task: 'Task',
   communication: 'Communication',
   proposal: 'Proposal',

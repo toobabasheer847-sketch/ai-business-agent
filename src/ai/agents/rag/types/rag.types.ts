@@ -1,7 +1,13 @@
+export interface RagQueryOptions {
+  topK?: number;
+  knowledgeBaseId?: string;
+}
+
 export interface RagQuery {
   query: string;
   tenantId?: string;
   topK?: number;
+  knowledgeBaseId?: string;
 }
 
 export interface RetrievedChunk {
@@ -9,10 +15,12 @@ export interface RetrievedChunk {
   content: string;
   similarity: number;
   tenantId: string;
-  // Using updated schema fields:
-  source?: string | null; // S3 key or URL
-  sourceType?: string | null; // e.g., 'pdf', 'website'
-  docType?: string | null; // MIME type
+  documentId?: string | null;
+  documentName?: string | null;
+  knowledgeBaseId?: string | null;
+  source?: string | null;
+  sourceType?: string | null;
+  docType?: string | null;
   chunkIndex?: string | number | null;
   embeddingModel?: string | null;
 }
@@ -20,6 +28,8 @@ export interface RetrievedChunk {
 export interface RagSourceMetadata {
   chunkId: string;
   chunkIndex?: string | number | null;
+  documentId?: string | null;
+  documentName?: string | null;
   source?: string | null;
   sourceType?: string | null;
 }

@@ -80,7 +80,7 @@ describe('RagController', () => {
       .post('/ai/rag/query')
       .set('Authorization', `Bearer ${token}`)
       .send({ query: 'What is our refund policy?' })
-      .expect(201);
+      .expect(200);
 
     expect(ragService.query).toHaveBeenCalledTimes(1);
   });
@@ -96,7 +96,7 @@ describe('RagController', () => {
         query: 'What is our refund policy?',
         tenantId: attackerTenantId,
       })
-      .expect(201);
+      .expect(200);
 
     expect(ragService.query).toHaveBeenCalledTimes(1);
     expect(ragService.query).toHaveBeenCalledWith(

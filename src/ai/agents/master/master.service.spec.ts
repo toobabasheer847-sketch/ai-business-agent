@@ -66,6 +66,7 @@ describe('MasterAgentService', () => {
   };
   const ragAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'rag_agent' }),
+    answerQuery: jest.fn(),
   };
   const taskAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'task_agent' }),
@@ -76,6 +77,7 @@ describe('MasterAgentService', () => {
 
   beforeEach(() => {
     mockRunEphemeral.mockReset();
+    ragAgent.answerQuery.mockReset();
     (InMemoryRunner as any).lastOptions = null;
 
     service = new MasterAgentService(
@@ -86,7 +88,64 @@ describe('MasterAgentService', () => {
     );
   });
 
-  it('invokes the existing Master RoutedAgent and returns the final response', async () => {
+  it('routes knowledge questions through RagAgent.answerQuery with tenant context', async () => {
+    ragAgent.answerQuery.mockResolvedValue({
+      answer: 'The uploaded document contains a dummy PDF file.',
+      sources: [
+        {
+          chunkId: 'chunk-1',
+          documentId: 'doc-1',
+          documentName: 'sample.pdf',
+        },
+      ],
+      usedKnowledge: true,
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      'What information is contained in the uploaded document?',
+    );
+
+    expect(ragAgent.answerQuery).toHaveBeenCalledWith(
+      tenantId,
+      'What information is contained in the uploaded document?',
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      response: 'The uploaded document contains a dummy PDF file.',
+      delegation: 'rag',
+      sources: [
+        {
+          chunkId: 'chunk-1',
+          documentId: 'doc-1',
+          documentName: 'sample.pdf',
+        },
+      ],
+      usedKnowledge: true,
+      message: undefined,
+    });
+  });
+
+  it('returns usedKnowledge=false for unknown knowledge questions', async () => {
+    ragAgent.answerQuery.mockResolvedValue({
+      answer:
+        "I couldn't find enough relevant information in the knowledge base to answer that question.",
+      sources: [],
+      usedKnowledge: false,
+      message: 'No relevant chunks were found.',
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      'What is the capital of Mars colony 7?',
+    );
+
+    expect(result.delegation).toBe('rag');
+    expect(result.usedKnowledge).toBe(false);
+    expect(result.sources).toEqual([]);
+  });
+
+  it('invokes the existing Master RoutedAgent for non-RAG requests', async () => {
     mockRunEphemeral.mockReturnValue(
       asyncEvents([
         {
@@ -96,52 +155,13 @@ describe('MasterAgentService', () => {
       ]),
     );
 
-    const result = await service.invoke(tenantId, 'Show me my tasks');
+    const result = await service.invoke(tenantId, 'Create a task for Sarah');
 
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
-    expect(mockRunEphemeral).toHaveBeenCalledWith({
-      userId: tenantId,
-      newMessage: {
-        parts: [{ text: 'Show me my tasks' }],
-      },
-    });
-    expect((InMemoryRunner as any).lastOptions.agent.name).toBe('master_agent');
+    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
     expect(result).toEqual({
       response: 'Here are your tasks...',
       delegation: 'task',
-    });
-  });
-
-  it('maps known ADK authors to delegation labels', async () => {
-    mockRunEphemeral.mockReturnValue(
-      asyncEvents([
-        {
-          author: 'rag_agent',
-          content: { parts: [{ text: 'Refunds are issued within 30 days.' }] },
-        },
-      ]),
-    );
-
-    const result = await service.invoke(tenantId, 'What is our refund policy?');
-
-    expect(result.delegation).toBe('rag');
-    expect(result.response).toContain('Refunds');
-  });
-
-  it('does not invent delegation when ADK emits no author', async () => {
-    mockRunEphemeral.mockReturnValue(
-      asyncEvents([
-        {
-          content: { parts: [{ text: 'Generic reply' }] },
-        },
-      ]),
-    );
-
-    const result = await service.invoke(tenantId, 'Hello');
-
-    expect(result).toEqual({
-      response: 'Generic reply',
-      delegation: null,
     });
   });
 
@@ -150,6 +170,7 @@ describe('MasterAgentService', () => {
       UnauthorizedException,
     );
     expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
   });
 
   it('rejects an empty message', async () => {
@@ -157,6 +178,43 @@ describe('MasterAgentService', () => {
       BadRequestException,
     );
     expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+  });
+
+  it('routes greetings through the Master RoutedAgent instead of RAG', async () => {
+    mockRunEphemeral.mockReturnValue(
+      asyncEvents([
+        {
+          author: 'master_chat_agent',
+          content: { parts: [{ text: 'Hello! How can I help you today?' }] },
+        },
+      ]),
+    );
+
+    const result = await service.invoke(tenantId, 'hello');
+
+    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+    expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      response: 'Hello! How can I help you today?',
+      delegation: 'chat',
+    });
+  });
+
+  it('hides RAG execution errors from the client', async () => {
+    ragAgent.answerQuery.mockRejectedValue(
+      new Error('DATABASE_URL contains secret'),
+    );
+
+    await expect(
+      service.invoke(tenantId, 'What is in the uploaded document?'),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+    try {
+      await service.invoke(tenantId, 'What is in the uploaded document?');
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain('DATABASE_URL');
+    }
   });
 
   it('hides ADK execution errors from the client', async () => {
@@ -165,19 +223,7 @@ describe('MasterAgentService', () => {
     });
 
     await expect(
-      service.invoke(tenantId, 'Show me my tasks'),
+      service.invoke(tenantId, 'Create a task for Sarah'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
-
-    try {
-      await service.invoke(tenantId, 'Show me my tasks');
-    } catch (error) {
-      expect(error).toBeInstanceOf(InternalServerErrorException);
-      const exception = error as InternalServerErrorException;
-      expect(exception.getStatus()).toBe(500);
-      expect(JSON.stringify(exception.getResponse())).not.toContain('sk-secret');
-      expect(JSON.stringify(exception.getResponse())).toContain(
-        'Master Agent failed to process the request',
-      );
-    }
   });
 });

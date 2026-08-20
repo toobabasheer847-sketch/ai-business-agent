@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class RagQueryDto {
   @IsString()
@@ -12,8 +19,8 @@ export class RagQueryDto {
   tenantId?: string;
 
   @IsOptional()
-  @IsString()
-  // knowledgeBaseId removed: tenant-scoped search only
+  @IsUUID()
+  knowledgeBaseId?: string;
 
   @IsOptional()
   @IsString()

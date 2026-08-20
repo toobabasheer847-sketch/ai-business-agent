@@ -66,6 +66,9 @@ export function AssistantPage() {
                 content,
                 pending: false,
                 delegation: result.delegation,
+                sources: result.sources,
+                usedKnowledge: result.usedKnowledge,
+                message: result.message,
               }
             : item,
         ),

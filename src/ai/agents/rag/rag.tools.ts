@@ -5,10 +5,11 @@ import { sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module';
 import type { DrizzleDb } from '../../../database/database.service';
-import { knowledgeChunks } from '../../../database/drizzle/schema';
+import { knowledgeChunks, knowledgeDocuments } from '../../../database/drizzle/schema';
 import { RetrievedChunk } from './types/rag.types';
 
 const EMBEDDING_DIMENSIONS = 3072;
+const DEFAULT_MIN_SIMILARITY = 0.2;
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (!a.length || a.length !== b.length) {
@@ -96,10 +97,23 @@ export class RagTools {
     topK = 5,
     knowledgeBaseId?: string,
   ): Promise<RetrievedChunk[]> {
+    if (!tenantId?.trim()) {
+      throw new Error('Tenant context is required for knowledge search');
+    }
+
+    let embedding: number[];
+
     try {
-      const embedding = await this.embedText(query);
+      embedding = await this.embedText(query);
+    } catch (error) {
+      console.error('RAG embedding generation failed:', error);
+      return [];
+    }
+
+    try {
       const queryEmbeddingSql = sql`${toFloat8ArrayLiteral(embedding)}::float8[]`;
       const limit = Math.max(1, Math.min(Math.trunc(topK) || 5, 50));
+      const minSimilarity = this.getMinSimilarityThreshold();
 
       const whereClauses = [
         sql`kc.tenant_id = ${tenantId}`,
@@ -116,6 +130,8 @@ export class RagTools {
           kc.id,
           kc.content,
           kc.tenant_id AS "tenantId",
+          kc.document_id AS "documentId",
+          kc.knowledge_base_id AS "knowledgeBaseId",
           kc.source AS "source",
           kc.source_type AS "sourceType",
           kc.doc_type AS "docType",
@@ -123,6 +139,7 @@ export class RagTools {
           kc.chunk_index AS "chunkIndex",
           kc.embedding_model AS "embeddingModel",
           kc.created_at AS "createdAt",
+          COALESCE(kd.original_filename, kd.title) AS "documentName",
           (
             SELECT COALESCE(SUM(a * b), 0)
             FROM unnest(kc.embedding, ${queryEmbeddingSql}) AS t(a, b)
@@ -132,6 +149,7 @@ export class RagTools {
             0
           ) AS similarity
         FROM ${knowledgeChunks} kc
+        LEFT JOIN ${knowledgeDocuments} kd ON kd.id = kc.document_id
         WHERE ${sql.join(whereClauses, sql` AND `)}
         ORDER BY similarity DESC NULLS LAST
         LIMIT ${limit}
@@ -142,6 +160,9 @@ export class RagTools {
           id: row.id,
           content: row.content,
           tenantId: row.tenantId,
+          documentId: row.documentId,
+          documentName: row.documentName,
+          knowledgeBaseId: row.knowledgeBaseId,
           source: row.source,
           sourceType: row.sourceType,
           docType: row.docType,
@@ -151,10 +172,25 @@ export class RagTools {
           createdAt: row.createdAt,
           similarity: Number(row.similarity),
         }))
-        .filter((row) => Number.isFinite(row.similarity));
+        .filter(
+          (row) =>
+            Number.isFinite(row.similarity) && row.similarity >= minSimilarity,
+        );
     } catch (error) {
       console.error('RAG knowledge search failed:', error);
-      return [];
+      throw new Error('Knowledge search failed');
     }
+  }
+
+  private getMinSimilarityThreshold(): number {
+    const configured = Number(
+      this.configService.get<string>('RAG_MIN_SIMILARITY'),
+    );
+
+    if (Number.isFinite(configured) && configured >= 0 && configured <= 1) {
+      return configured;
+    }
+
+    return DEFAULT_MIN_SIMILARITY;
   }
 }

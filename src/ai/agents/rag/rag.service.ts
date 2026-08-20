@@ -32,20 +32,17 @@ export class RagService {
     }
 
     try {
-      return await this.ragAgent.answerQuery(
-        tenantId,
-        queryText,
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unknown RAG error';
+      const topK = dto?.topK ? Number.parseInt(dto.topK, 10) : undefined;
 
+      return await this.ragAgent.answerQuery(tenantId, queryText, {
+        topK: Number.isFinite(topK) ? topK : undefined,
+        knowledgeBaseId: dto?.knowledgeBaseId,
+      });
+    } catch (error) {
       console.error('RagService.query failed:', error);
 
       throw new InternalServerErrorException(
-        `RAG query failed: ${message}`,
+        'RAG query failed to process the request',
       );
     }
   }

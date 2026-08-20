@@ -7,9 +7,10 @@ import {
 } from '@nestjs/common';
 import { InMemoryRunner } from '@google/adk';
 
-import { createMasterAgent } from './master.agent.js';
+import { createMasterAgent, resolveMasterRoute } from './master.agent.js';
 import { CommunicationAgentService } from '../communication/communication.service.js';
 import { RagAgent } from '../rag/rag.agent.js';
+import { RagSourceMetadata } from '../rag/types/rag.types.js';
 import { TaskAgent } from '../task/task.agent.js';
 import { ProposalAgent } from '../proposal/proposal-agent.js';
 
@@ -19,12 +20,22 @@ const AGENT_DELEGATION_LABELS: Record<string, string> = {
   communication_agent: 'communication',
   rag_agent: 'rag',
   master_status_agent: 'status',
+  master_chat_agent: 'chat',
+};
+
+export type MasterChatResponse = {
+  response: string;
+  delegation: string | null;
+  sources?: RagSourceMetadata[];
+  usedKnowledge?: boolean;
+  message?: string;
 };
 
 @Injectable()
 export class MasterAgentService {
   private readonly logger = new Logger(MasterAgentService.name);
   private readonly masterAgent: any;
+  private readonly routeAgents: Record<string, unknown>;
 
   constructor(
     private readonly communicationAgentService: CommunicationAgentService,
@@ -49,6 +60,15 @@ export class MasterAgentService {
       );
     }
 
+    this.routeAgents = {
+      master_status_agent: {},
+      master_chat_agent: {},
+      communication_agent: communicationAgent ?? undefined,
+      rag_agent: ragAgentInstance ?? undefined,
+      task_agent: taskAgentInstance ?? undefined,
+      proposal_agent: proposalAgentInstance ?? undefined,
+    };
+
     this.masterAgent = createMasterAgent({
       communicationAgent,
       ragAgent: ragAgentInstance,
@@ -61,7 +81,7 @@ export class MasterAgentService {
     return this.masterAgent;
   }
 
-  async invoke(tenantId: string, message: string) {
+  async invoke(tenantId: string, message: string): Promise<MasterChatResponse> {
     if (!tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
@@ -69,6 +89,33 @@ export class MasterAgentService {
     const trimmedMessage = message?.trim();
     if (!trimmedMessage) {
       throw new BadRequestException('Message is required');
+    }
+
+    const routeTarget = await resolveMasterRoute(
+      trimmedMessage,
+      this.routeAgents,
+    );
+
+    if (routeTarget === 'rag_agent' && this.routeAgents.rag_agent) {
+      try {
+        const ragResult = await this.ragAgent.answerQuery(
+          tenantId,
+          trimmedMessage,
+        );
+
+        return {
+          response: ragResult.answer,
+          delegation: 'rag',
+          sources: ragResult.sources,
+          usedKnowledge: ragResult.usedKnowledge,
+          message: ragResult.message,
+        };
+      } catch (error) {
+        this.logger.error('RAG delegation failed', error as Error);
+        throw new InternalServerErrorException(
+          'Knowledge retrieval failed to process the request',
+        );
+      }
     }
 
     const runner = new InMemoryRunner({

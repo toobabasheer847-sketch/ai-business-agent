@@ -8,12 +8,6 @@ jest.mock('@google/genai', () => ({
   })),
 }));
 
-jest.mock('../../../database/drizzle', () => ({
-  db: {
-    execute: jest.fn(),
-  },
-}));
-
 describe('RagTools', () => {
   it('returns an empty knowledge result when embedding generation fails', async () => {
     const configService = {
@@ -25,8 +19,10 @@ describe('RagTools', () => {
       }),
     } as any;
 
-    const tools = new RagTools(configService);
+    const tools = new RagTools(configService, { execute: jest.fn() } as any);
 
-    await expect(tools.searchKnowledge('tenant-1', 'What is the company overview?')).resolves.toEqual([]);
+    await expect(
+      tools.searchKnowledge('tenant-1', 'What is the company overview?'),
+    ).resolves.toEqual([]);
   });
 });

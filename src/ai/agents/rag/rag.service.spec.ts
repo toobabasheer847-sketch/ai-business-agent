@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 
 jest.mock('@google/adk', () => {
   class MockFunctionTool {
@@ -64,6 +64,7 @@ describe('RagService', () => {
     expect(ragAgent.answerQuery).toHaveBeenCalledWith(
       jwtTenantId,
       'What is our pricing?',
+      expect.objectContaining({ topK: undefined, knowledgeBaseId: undefined }),
     );
     expect(ragAgent.answerQuery).not.toHaveBeenCalledWith(
       bodyTenantId,
@@ -85,5 +86,21 @@ describe('RagService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+  });
+
+  it('hides internal execution errors from the client', async () => {
+    ragAgent.answerQuery.mockRejectedValue(
+      new Error('DATABASE_URL contains secret'),
+    );
+
+    await expect(
+      service.query({ query: 'What is our pricing?' }, jwtTenantId),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+    try {
+      await service.query({ query: 'What is our pricing?' }, jwtTenantId);
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain('DATABASE_URL');
+    }
   });
 });

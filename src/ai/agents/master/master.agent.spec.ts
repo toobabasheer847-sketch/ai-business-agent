@@ -23,6 +23,7 @@ import { buildMasterRouter } from './master.agent';
 
 const ALL_AGENTS = {
   master_status_agent: {},
+  master_chat_agent: {},
   proposal_agent: {},
   task_agent: {},
   communication_agent: {},
@@ -46,15 +47,44 @@ describe('Master Agent regex router', () => {
     ).resolves.toBe('task_agent');
   });
 
-  it('falls back away from task_agent for plural "tasks" (current regex limitation)', async () => {
+  it('routes plural task requests to task_agent', async () => {
     await expect(
       router(ALL_AGENTS, messageContext('Show me my tasks')),
-    ).resolves.toBe('communication_agent');
+    ).resolves.toBe('task_agent');
+  });
+
+  it('routes greetings to master_chat_agent instead of rag_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('hello')),
+    ).resolves.toBe('master_chat_agent');
+  });
+
+  it('routes casual check-ins to master_chat_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('How are you?')),
+    ).resolves.toBe('master_chat_agent');
+  });
+
+  it('routes unmatched general messages to master_chat_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('Hello there')),
+    ).resolves.toBe('master_chat_agent');
   });
 
   it('routes knowledge questions to rag_agent', async () => {
     await expect(
       router(ALL_AGENTS, messageContext('What is our refund policy?')),
+    ).resolves.toBe('rag_agent');
+  });
+
+  it('routes uploaded document questions to rag_agent', async () => {
+    await expect(
+      router(
+        ALL_AGENTS,
+        messageContext(
+          'What information is contained in the uploaded document?',
+        ),
+      ),
     ).resolves.toBe('rag_agent');
   });
 
