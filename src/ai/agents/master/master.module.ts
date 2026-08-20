@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ConversationModule } from '../../../modules/conversation/conversation.module';
 import { CommunicationAgentModule } from '../communication/communication.module.js';
 import { ProposalModule } from '../proposal/proposal.module.js';
 import { RagModule } from '../rag/rag.module.js';
@@ -10,6 +11,7 @@ import { MasterAgentService } from './master.service';
 @Module({
   imports: [
     CommunicationAgentModule,
+    ConversationModule,
     ProposalModule,
     RagModule,
     TaskModule,

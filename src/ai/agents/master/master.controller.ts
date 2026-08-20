@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -18,9 +21,7 @@ import { MasterAgentService } from './master.service';
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
 export class MasterAgentController {
-  constructor(
-    private readonly masterAgentService: MasterAgentService,
-  ) {}
+  constructor(private readonly masterAgentService: MasterAgentService) {}
 
   @Get('master/status')
   getStatus() {
@@ -32,18 +33,60 @@ export class MasterAgentController {
     };
   }
 
-  @Post('chat')
-  @HttpCode(HttpStatus.OK)
-  async chat(
-    @Body() dto: ChatMessageDto,
+  @Get('conversations')
+  async listConversations(@Req() req: AuthenticatedRequest) {
+    const { tenantId, userId } = this.requireAuthContext(req);
+    return this.masterAgentService.listAssistantConversations(tenantId, userId);
+  }
+
+  @Get('conversations/:id/messages')
+  async listConversationMessages(
+    @Param('id', ParseUUIDPipe) conversationId: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    const tenantId = req.user?.tenantId;
+    const { tenantId, userId } = this.requireAuthContext(req);
+    return this.masterAgentService.getAssistantConversationMessages(
+      tenantId,
+      userId,
+      conversationId,
+    );
+  }
 
-    if (!tenantId) {
+  @Delete('conversations/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteConversation(
+    @Param('id', ParseUUIDPipe) conversationId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const { tenantId, userId } = this.requireAuthContext(req);
+    await this.masterAgentService.deleteAssistantConversation(
+      tenantId,
+      userId,
+      conversationId,
+    );
+  }
+
+  @Post('chat')
+  @HttpCode(HttpStatus.OK)
+  async chat(@Body() dto: ChatMessageDto, @Req() req: AuthenticatedRequest) {
+    const { tenantId, userId } = this.requireAuthContext(req);
+
+    return this.masterAgentService.invoke(
+      tenantId,
+      userId,
+      dto.message,
+      dto.conversationId,
+    );
+  }
+
+  private requireAuthContext(req: AuthenticatedRequest) {
+    const tenantId = req.user?.tenantId;
+    const userId = req.user?.userId;
+
+    if (!tenantId || !userId) {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.masterAgentService.invoke(tenantId, dto.message);
+    return { tenantId, userId };
   }
 }
