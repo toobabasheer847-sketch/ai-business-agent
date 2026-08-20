@@ -15,3 +15,4 @@ export * from './tenant.schema';
 export * from './user.schema';
 export * from './knowledge-document.schema';
 export * from './knowledge-chunk.schema';
+export * from './oauth-state.schema';

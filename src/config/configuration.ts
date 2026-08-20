@@ -6,7 +6,7 @@ import stripeConfig from './stripe.config';
 import twilioConfig from './twilio.config';
 
 function getRequiredEnv(key: string): string {
-  const value = process.env[key];
+  const value = process.env[key]?.trim();
 
   if (!value) {
     throw new Error(`${key} is not configured`);

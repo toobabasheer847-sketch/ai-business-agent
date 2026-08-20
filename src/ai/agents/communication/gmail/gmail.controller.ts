@@ -10,49 +10,31 @@ import {
 import { JwtAuthGuard } from '../../../../modules/auth/guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../../../../modules/auth/types/auth.types';
 
+import { GmailOauthStateService } from './gmail-oauth-state.service';
 import { GmailService } from './gmail.service';
 import { GmailRepository } from './gmail.repository';
 import { AppLogger } from '../../../../infrastructure/logging/logger.service';
-
-interface OAuthState {
-  tenantId: string;
-  userId: string;
-}
 
 @Controller('google')
 export class GmailController {
   constructor(
     private readonly gmailService: GmailService,
     private readonly gmailRepository: GmailRepository,
+    private readonly oauthStateService: GmailOauthStateService,
     private readonly logger: AppLogger,
   ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('auth')
-  authorize(
-    @Req() req: AuthenticatedRequest,
-    @Query('state') state?: string,
-  ) {
+  async authorize(@Req() req: AuthenticatedRequest) {
     const tenantId = req.user.tenantId;
     const userId = req.user.userId;
-    const statePayload = state ?? `tenant:${tenantId}:user:${userId}`;
+    const state = await this.oauthStateService.create(tenantId, userId);
 
     return {
-      authorizationUrl: this.gmailService.getAuthorizationUrl(statePayload),
+      authorizationUrl: this.gmailService.getAuthorizationUrl(state),
       tenantId,
       userId,
-    };
-  }
-
-  private parseState(state: string): OAuthState | null {
-    const match = /^tenant:([^:]+):user:([^:]+)$/.exec(state);
-    if (!match) {
-      return null;
-    }
-
-    return {
-      tenantId: match[1],
-      userId: match[2],
     };
   }
 
@@ -65,18 +47,7 @@ export class GmailController {
       throw new BadRequestException('Google authorization code is required');
     }
 
-    if (!state) {
-      throw new BadRequestException('OAuth state is required');
-    }
-
-    const parsedState = this.parseState(state);
-    if (!parsedState) {
-      throw new BadRequestException(
-        'Invalid OAuth state format. Expected tenant:<tenantId>:user:<userId>',
-      );
-    }
-
-    const { tenantId, userId } = parsedState;
+    const { tenantId, userId } = await this.oauthStateService.consume(state);
 
     const tokens = await this.gmailService.exchangeCode(code);
     const hasRefresh = Boolean(tokens.refresh_token);
@@ -88,7 +59,7 @@ export class GmailController {
     if (tokens.access_token) {
       try {
         email = await this.gmailService.getAuthenticatedEmail(tokens);
-      } catch (err) {
+      } catch {
         this.logger.warn(
           'Could not determine authenticated Gmail address during callback',
           GmailController.name,

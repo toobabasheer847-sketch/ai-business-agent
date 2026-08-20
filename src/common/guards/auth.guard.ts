@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 
+import { resolveJwtSecret } from '../../modules/auth/jwt-secret.util';
 import type { JwtPayload } from '../../modules/auth/types/auth.types';
 import type { AuthenticatedUser } from '../../modules/auth/types/auth.types';
 
@@ -32,7 +33,10 @@ export class AuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_SECRET', 'development-secret'),
+        secret: resolveJwtSecret(
+          this.configService.get<string>('JWT_SECRET'),
+          this.configService.get<string>('NODE_ENV'),
+        ),
       });
 
       request.user = {

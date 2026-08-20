@@ -4,7 +4,7 @@ There is no Playwright or frontend test runner configured. Use this checklist af
 
 ## Prerequisites
 
-- Backend: `npm run build && node dist/src/main.js` (port 3000)
+- Backend: `npm run build && npm run start:prod` (port 3000)
 - Frontend: `cd frontend && npm run dev` (port 5173)
 - PostgreSQL migrated (`npm run db:migrate`)
 - Redis running if async document ingestion is required
