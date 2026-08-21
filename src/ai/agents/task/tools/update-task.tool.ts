@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { UserRepository } from '../../../../modules/user/user.repository';
 import { resolveAssignedToForTenant } from '../resolve-assigned-to.js';
+import { TaskCrmResolver } from '../resolve-crm-entities.js';
 import { getTrustedTaskContext } from '../task-request-context.js';
 import { TaskRepository } from '../task.repository.js';
 
@@ -12,6 +13,7 @@ export class UpdateTaskTool extends FunctionTool<any> {
   constructor(
     private readonly taskRepository: TaskRepository,
     private readonly userRepository: UserRepository,
+    private readonly crmResolver: TaskCrmResolver,
   ) {
     super({
       name: 'update_task',
@@ -26,6 +28,9 @@ export class UpdateTaskTool extends FunctionTool<any> {
           .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
       execute: async (input: any) => {
@@ -37,6 +42,20 @@ export class UpdateTaskTool extends FunctionTool<any> {
             patch.assignedTo,
             context.tenantId,
           );
+        }
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: patch.companyId,
+          prospectId: patch.prospectId,
+          leadId: patch.leadId,
+        });
+        if (patch.companyId !== undefined) {
+          patch.companyId = crmIds.companyId ?? null;
+        }
+        if (patch.prospectId !== undefined) {
+          patch.prospectId = crmIds.prospectId ?? null;
+        }
+        if (patch.leadId !== undefined) {
+          patch.leadId = crmIds.leadId ?? null;
         }
         return this.taskRepository.updateTask(
           taskId,

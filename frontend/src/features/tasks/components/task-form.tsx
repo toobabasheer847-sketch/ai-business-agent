@@ -23,6 +23,9 @@ import {
   type Task,
 } from '@/features/tasks/types/task.types'
 import type { User } from '@/features/users/types/user.types'
+import type { Company } from '@/features/companies/types/company.types'
+import type { Lead } from '@/features/leads/types/lead.types'
+import type { Prospect } from '@/features/prospects/types/prospect.types'
 
 type TaskFormValues = CreateTaskFormValues | UpdateTaskFormValues
 
@@ -30,6 +33,9 @@ type TaskFormProps = {
   mode: 'create' | 'edit'
   initial?: Task | null
   users: User[]
+  companies: Company[]
+  leads: Lead[]
+  prospects: Prospect[]
   submitting?: boolean
   submitLabel: string
   onSubmit: (values: TaskFormValues) => Promise<void> | void
@@ -37,6 +43,7 @@ type TaskFormProps = {
 }
 
 const UNASSIGNED = 'none'
+const UNLINKED = 'none'
 
 function toDatetimeLocalValue(value?: string | null) {
   if (!value) return ''
@@ -52,6 +59,9 @@ function emptyValues(): CreateTaskFormValues {
     description: '',
     priority: 'medium',
     assignedTo: '',
+    companyId: '',
+    prospectId: '',
+    leadId: '',
     dueAt: '',
   }
 }
@@ -63,6 +73,9 @@ function fromTask(task: Task): UpdateTaskFormValues {
     status: task.status,
     priority: task.priority,
     assignedTo: task.assignedTo ?? '',
+    companyId: task.companyId ?? '',
+    prospectId: task.prospectId ?? '',
+    leadId: task.leadId ?? '',
     dueAt: toDatetimeLocalValue(task.dueAt),
   }
 }
@@ -71,10 +84,18 @@ function userLabel(user: User) {
   return user.name || user.email
 }
 
+function personLabel(person: { firstName: string; lastName: string | null; email?: string | null }) {
+  const name = [person.firstName, person.lastName].filter(Boolean).join(' ').trim()
+  return person.email ? `${name} (${person.email})` : name
+}
+
 export function TaskForm({
   mode,
   initial,
   users,
+  companies,
+  leads,
+  prospects,
   submitting,
   submitLabel,
   onSubmit,
@@ -96,6 +117,20 @@ export function TaskForm({
     initial?.assignedTo && !users.some((user) => user.id === initial.assignedTo)
       ? initial.assignedTo
       : null
+  const missingCompany =
+    initial?.companyId &&
+    !companies.some((company) => company.id === initial.companyId)
+      ? initial.company
+      : null
+  const missingLead =
+    initial?.leadId && !leads.some((lead) => lead.id === initial.leadId)
+      ? initial.lead
+      : null
+  const missingProspect =
+    initial?.prospectId &&
+    !prospects.some((prospect) => prospect.id === initial.prospectId)
+      ? initial.prospect
+      : null
 
   return (
     <form
@@ -106,6 +141,9 @@ export function TaskForm({
           title: formValues.title.trim(),
           description: formValues.description?.trim() ?? '',
           assignedTo: formValues.assignedTo?.trim() ?? '',
+          companyId: formValues.companyId?.trim() ?? '',
+          prospectId: formValues.prospectId?.trim() ?? '',
+          leadId: formValues.leadId?.trim() ?? '',
         })
       })}
     >
@@ -261,6 +299,110 @@ export function TaskForm({
               {errors.assignedTo.message}
             </p>
           )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor="task-company">Company</Label>
+          <Controller
+            name="companyId"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value || UNLINKED}
+                onValueChange={(value) =>
+                  field.onChange(value === UNLINKED ? '' : value)
+                }
+                disabled={submitting}
+              >
+                <SelectTrigger id="task-company" className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNLINKED}>None</SelectItem>
+                  {missingCompany ? (
+                    <SelectItem value={missingCompany.id}>
+                      {missingCompany.name}
+                    </SelectItem>
+                  ) : null}
+                  {companies.map((company) => (
+                    <SelectItem key={company.id} value={company.id}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="task-prospect">Prospect</Label>
+          <Controller
+            name="prospectId"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value || UNLINKED}
+                onValueChange={(value) =>
+                  field.onChange(value === UNLINKED ? '' : value)
+                }
+                disabled={submitting}
+              >
+                <SelectTrigger id="task-prospect" className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNLINKED}>None</SelectItem>
+                  {missingProspect ? (
+                    <SelectItem value={missingProspect.id}>
+                      {missingProspect.name}
+                    </SelectItem>
+                  ) : null}
+                  {prospects.map((prospect) => (
+                    <SelectItem key={prospect.id} value={prospect.id}>
+                      {personLabel(prospect)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="task-lead">Lead</Label>
+          <Controller
+            name="leadId"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value || UNLINKED}
+                onValueChange={(value) =>
+                  field.onChange(value === UNLINKED ? '' : value)
+                }
+                disabled={submitting}
+              >
+                <SelectTrigger id="task-lead" className="w-full">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNLINKED}>None</SelectItem>
+                  {missingLead ? (
+                    <SelectItem value={missingLead.id}>
+                      {missingLead.name}
+                    </SelectItem>
+                  ) : null}
+                  {leads.map((lead) => (
+                    <SelectItem key={lead.id} value={lead.id}>
+                      {personLabel(lead)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
       </div>
 

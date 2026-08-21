@@ -3,8 +3,17 @@ import { and, desc, eq, ilike, or, SQL } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
+import { companies } from '../../../database/drizzle/schema/company.schema.js';
+import { leads } from '../../../database/drizzle/schema/lead.schema.js';
+import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { tasks } from '../../../database/drizzle/schema/task.schema.js';
 import { TaskRecord, TaskPriority, TaskStatus } from './types/task.types.js';
+
+type TaskCrmWrite = {
+  companyId?: string | null;
+  prospectId?: string | null;
+  leadId?: string | null;
+};
 
 @Injectable()
 export class TaskRepository {
@@ -16,6 +25,9 @@ export class TaskRepository {
     tenantId: string;
     createdBy: string;
     assignedTo?: string | null;
+    companyId?: string | null;
+    prospectId?: string | null;
+    leadId?: string | null;
     title: string;
     description?: string | null;
     status?: TaskStatus;
@@ -28,15 +40,22 @@ export class TaskRepository {
         tenantId: input.tenantId,
         createdBy: input.createdBy,
         assignedTo: input.assignedTo ?? null,
+        companyId: input.companyId ?? null,
+        prospectId: input.prospectId ?? null,
+        leadId: input.leadId ?? null,
         title: input.title,
         description: input.description ?? null,
         status: input.status ?? 'pending',
         priority: input.priority ?? 'medium',
         dueAt: input.dueAt ? new Date(input.dueAt) : null,
       })
-      .returning();
+      .returning({ id: tasks.id });
 
-    return this.mapRow(row);
+    return (await this.findByIdAndTenantAndUser(
+      row.id,
+      input.tenantId,
+      input.createdBy,
+    ))!;
   }
 
   async findByIdAndTenantAndUser(
@@ -44,9 +63,7 @@ export class TaskRepository {
     tenantId: string,
     userId: string,
   ): Promise<TaskRecord | null> {
-    const [row] = await this.db
-      .select()
-      .from(tasks)
+    const [row] = await this.crmQuery()
       .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
       .limit(1);
 
@@ -77,18 +94,10 @@ export class TaskRepository {
     }
 
     if (filters?.search) {
-      const pattern = `%${filters.search}%`;
-      clauses.push(
-        or(
-          ilike(tasks.title, pattern),
-          ilike(tasks.description, pattern),
-        )!,
-      );
+      clauses.push(this.searchFilter(filters.search));
     }
 
-    const rows = await this.db
-      .select()
-      .from(tasks)
+    const rows = await this.crmQuery()
       .where(and(...clauses))
       .orderBy(desc(tasks.createdAt));
 
@@ -116,13 +125,11 @@ export class TaskRepository {
     tenantId: string,
     userId: string,
   ): Promise<TaskRecord[]> {
-    const rows = await this.db
-      .select()
-      .from(tasks)
+    const rows = await this.crmQuery()
       .where(
         and(
           this.accessFilter(tenantId, userId),
-          ilike(tasks.title, `%${title}%`),
+          this.searchFilter(title),
         ),
       )
       .orderBy(desc(tasks.updatedAt));
@@ -144,7 +151,8 @@ export class TaskRepository {
         | 'assignedTo'
         | 'dueAt'
         | 'completedAt'
-      >
+      > &
+        TaskCrmWrite
     >,
   ): Promise<TaskRecord | null> {
     const [row] = await this.db
@@ -164,9 +172,13 @@ export class TaskRepository {
         updatedAt: new Date(),
       })
       .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
-      .returning();
+      .returning({ id: tasks.id });
 
-    return row ? this.mapRow(row) : null;
+    if (!row) {
+      return null;
+    }
+
+    return this.findByIdAndTenantAndUser(row.id, tenantId, userId);
   }
 
   async deleteTask(
@@ -179,6 +191,51 @@ export class TaskRepository {
       .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)));
 
     return (result.rowCount ?? 0) > 0;
+  }
+
+  private crmQuery() {
+    return this.db
+      .select({
+        id: tasks.id,
+        tenantId: tasks.tenantId,
+        createdBy: tasks.createdBy,
+        assignedTo: tasks.assignedTo,
+        companyId: tasks.companyId,
+        prospectId: tasks.prospectId,
+        leadId: tasks.leadId,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueAt: tasks.dueAt,
+        completedAt: tasks.completedAt,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        companyName: companies.name,
+        leadFirstName: leads.firstName,
+        leadLastName: leads.lastName,
+        prospectFirstName: prospects.firstName,
+        prospectLastName: prospects.lastName,
+      })
+      .from(tasks)
+      .leftJoin(companies, eq(tasks.companyId, companies.id))
+      .leftJoin(leads, eq(tasks.leadId, leads.id))
+      .leftJoin(prospects, eq(tasks.prospectId, prospects.id));
+  }
+
+  private searchFilter(search: string) {
+    const pattern = `%${search}%`;
+    return or(
+      ilike(tasks.title, pattern),
+      ilike(tasks.description, pattern),
+      ilike(companies.name, pattern),
+      ilike(leads.firstName, pattern),
+      ilike(leads.lastName, pattern),
+      ilike(leads.email, pattern),
+      ilike(prospects.firstName, pattern),
+      ilike(prospects.lastName, pattern),
+      ilike(prospects.email, pattern),
+    )!;
   }
 
   private accessFilter(tenantId: string, userId: string) {
@@ -194,6 +251,9 @@ export class TaskRepository {
       tenantId: row.tenantId,
       createdBy: row.createdBy,
       assignedTo: row.assignedTo,
+      companyId: row.companyId ?? null,
+      prospectId: row.prospectId ?? null,
+      leadId: row.leadId ?? null,
       title: row.title,
       description: row.description,
       status: row.status,
@@ -202,6 +262,30 @@ export class TaskRepository {
       completedAt: row.completedAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      company:
+        row.companyId && row.companyName
+          ? { id: row.companyId, name: row.companyName }
+          : null,
+      prospect:
+        row.prospectId
+          ? {
+              id: row.prospectId,
+              name: formatPersonName(row.prospectFirstName, row.prospectLastName),
+            }
+          : null,
+      lead: row.leadId
+        ? {
+            id: row.leadId,
+            name: formatPersonName(row.leadFirstName, row.leadLastName),
+          }
+        : null,
     };
   }
+}
+
+function formatPersonName(
+  firstName?: string | null,
+  lastName?: string | null,
+): string {
+  return [firstName, lastName].filter(Boolean).join(' ').trim();
 }

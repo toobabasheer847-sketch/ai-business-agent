@@ -10,11 +10,19 @@ export const TASK_STATUSES = [
 
 export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 
+export interface TaskCrmEntity {
+  id: string;
+  name: string;
+}
+
 export interface TaskRecord {
   id: string;
   tenantId: string;
   createdBy: string;
   assignedTo?: string | null;
+  companyId?: string | null;
+  prospectId?: string | null;
+  leadId?: string | null;
   title: string;
   description?: string | null;
   status: TaskStatus;
@@ -23,6 +31,9 @@ export interface TaskRecord {
   completedAt?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
+  company?: TaskCrmEntity | null;
+  prospect?: TaskCrmEntity | null;
+  lead?: TaskCrmEntity | null;
 }
 
 export interface TaskContext {

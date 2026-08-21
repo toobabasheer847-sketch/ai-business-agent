@@ -149,6 +149,7 @@ export const companyRelations = relations(
 
     leads: many(leads),
     prospects: many(prospects),
+    tasks: many(tasks),
   }),
 );
 
@@ -169,6 +170,7 @@ export const leadRelations = relations(
     }),
 
     prospects: many(prospects),
+    tasks: many(tasks),
   }),
 );
 
@@ -195,6 +197,7 @@ export const prospectRelations = relations(
 
     conversations: many(conversations),
     proposals: many(proposals),
+    tasks: many(tasks),
   }),
 );
 
@@ -337,6 +340,21 @@ export const taskRelations = relations(
       fields: [tasks.assignedTo],
       references: [users.id],
       relationName: 'assignedTasks',
+    }),
+
+    company: one(companies, {
+      fields: [tasks.companyId],
+      references: [companies.id],
+    }),
+
+    prospect: one(prospects, {
+      fields: [tasks.prospectId],
+      references: [prospects.id],
+    }),
+
+    lead: one(leads, {
+      fields: [tasks.leadId],
+      references: [leads.id],
     }),
   }),
 );

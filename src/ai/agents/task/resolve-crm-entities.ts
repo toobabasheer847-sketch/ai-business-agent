@@ -4,6 +4,11 @@ import { CompanyRepository } from '../../../modules/company/company.repository';
 import { LeadRepository } from '../../../modules/lead/lead.repository';
 import { ProspectRepository } from '../../../modules/prospect/prospect.repository';
 import type { CrmReferences } from './parse-crm-references.js';
+import {
+  normalizeCrmIds,
+  rejectMissingTenantCrm,
+  type TaskCrmIds,
+} from './resolve-crm-ids.js';
 
 export type ResolvedCrmPersonKind = 'prospect' | 'lead';
 
@@ -43,6 +48,46 @@ export class TaskCrmResolver {
     private readonly prospectRepository: ProspectRepository,
     private readonly leadRepository: LeadRepository,
   ) {}
+
+  async assertIds(tenantId: string, ids: TaskCrmIds): Promise<TaskCrmIds> {
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    const normalized = normalizeCrmIds(ids);
+
+    if (normalized.companyId) {
+      const company = await this.companyRepository.findByIdAndTenant(
+        normalized.companyId,
+        tenantId,
+      );
+      if (!company || company.tenantId !== tenantId) {
+        rejectMissingTenantCrm('Company');
+      }
+    }
+
+    if (normalized.prospectId) {
+      const prospect = await this.prospectRepository.findByIdAndTenant(
+        normalized.prospectId,
+        tenantId,
+      );
+      if (!prospect || prospect.tenantId !== tenantId) {
+        rejectMissingTenantCrm('Prospect');
+      }
+    }
+
+    if (normalized.leadId) {
+      const lead = await this.leadRepository.findByIdAndTenant(
+        normalized.leadId,
+        tenantId,
+      );
+      if (!lead || lead.tenantId !== tenantId) {
+        rejectMissingTenantCrm('Lead');
+      }
+    }
+
+    return normalized;
+  }
 
   async resolve(
     refs: CrmReferences,
@@ -99,10 +144,35 @@ export class TaskCrmResolver {
       };
     }
 
+    if (people.length === 1) {
+      return {
+        status: 'resolved',
+        company,
+        person: people[0],
+      };
+    }
+
+    if (!refs.emailQuery && refs.personQuery && !company) {
+      const companies = await this.searchCompanies(refs.personQuery, tenantId);
+
+      if (companies.length > 1) {
+        return {
+          status: 'ambiguous',
+          kind: 'company',
+          query: refs.personQuery,
+          matches: companies.map((row) => row.name),
+        };
+      }
+
+      if (companies.length === 1) {
+        return { status: 'resolved', company: companies[0] };
+      }
+    }
+
     return {
       status: 'resolved',
       company,
-      person: people[0],
+      person: undefined,
     };
   }
 
@@ -162,10 +232,35 @@ export class TaskCrmResolver {
           email: row.email,
           companyId: row.companyId,
         })),
-    ].filter((row) => row.name);
+    ].filter((row) => personLooksLikeQuery(row, query));
 
     return people;
   }
+}
+
+function personLooksLikeQuery(
+  person: { name: string; email?: string | null },
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !person.name) {
+    return false;
+  }
+
+  const name = person.name.trim().toLowerCase();
+  if (name === needle || name.startsWith(`${needle} `) || name.endsWith(` ${needle}`)) {
+    return true;
+  }
+  if (name.split(/\s+/).some((part) => part === needle || part.startsWith(needle))) {
+    return true;
+  }
+
+  const email = person.email?.trim().toLowerCase();
+  if (!email) {
+    return false;
+  }
+
+  return email === needle || email.startsWith(`${needle}@`);
 }
 
 function formatPersonName(

@@ -725,6 +725,8 @@ describe('MasterAgentService', () => {
       message: 'Task created: Follow up with ABC Technologies — due 2026-08-21.',
       data: {
         title: 'Follow up with ABC Technologies',
+        companyId: 'company-1',
+        company: { id: 'company-1', name: 'ABC Technologies' },
         priority: 'medium',
         status: 'pending',
       },

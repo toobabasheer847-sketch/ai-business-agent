@@ -183,6 +183,25 @@ describe('TaskController', () => {
     );
   });
 
+  it('accepts optional CRM ids on create without tenantId or createdBy', async () => {
+    const token = signTestJwt(app);
+    const companyId = '22222222-2222-4222-8222-222222222222';
+
+    await request(app.getHttpServer())
+      .post('/ai/task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Follow up with ABC', companyId })
+      .expect(201);
+
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Follow up with ABC', companyId }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
   it('rejects an invalid taskId UUID', async () => {
     const token = signTestJwt(app);
 

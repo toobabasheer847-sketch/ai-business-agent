@@ -22,6 +22,12 @@ const optionalDueAt = z
     'Enter a valid due date',
   )
 
+const optionalCrmId = z
+  .string()
+  .uuid('Select a valid CRM record')
+  .optional()
+  .or(z.literal(''))
+
 const titleSchema = z
   .string()
   .trim()
@@ -33,6 +39,9 @@ export const createTaskSchema = z.object({
   description: optionalDescription,
   priority: z.enum(TASK_PRIORITIES).optional(),
   assignedTo: optionalAssignedTo,
+  companyId: optionalCrmId,
+  prospectId: optionalCrmId,
+  leadId: optionalCrmId,
   dueAt: optionalDueAt,
 })
 
@@ -44,6 +53,9 @@ export const updateTaskSchema = z.object({
   status: z.enum(TASK_STATUSES).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   assignedTo: optionalAssignedTo,
+  companyId: optionalCrmId,
+  prospectId: optionalCrmId,
+  leadId: optionalCrmId,
   dueAt: optionalDueAt,
 })
 

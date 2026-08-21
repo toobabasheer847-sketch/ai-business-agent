@@ -41,6 +41,9 @@ import type {
   TaskStatus,
   UpdateTaskRequest,
 } from '@/features/tasks/types/task.types'
+import { useCompanies } from '@/features/companies/hooks/use-companies'
+import { useLeads } from '@/features/leads/hooks/use-leads'
+import { useProspects } from '@/features/prospects/hooks/use-prospects'
 import { useUsers } from '@/features/users/hooks/use-users'
 
 function TableSkeleton() {
@@ -71,6 +74,9 @@ function toCreatePayload(values: CreateTaskFormValues): CreateTaskRequest {
   if (description) payload.description = description
   if (values.priority) payload.priority = values.priority
   if (values.assignedTo) payload.assignedTo = values.assignedTo
+  if (values.companyId) payload.companyId = values.companyId
+  if (values.prospectId) payload.prospectId = values.prospectId
+  if (values.leadId) payload.leadId = values.leadId
 
   const dueAt = toIsoDateString(values.dueAt)
   if (dueAt) payload.dueAt = dueAt
@@ -87,6 +93,9 @@ function toUpdatePayload(values: UpdateTaskFormValues): UpdateTaskRequest {
   if (values.status) payload.status = values.status
   if (values.priority) payload.priority = values.priority
   if (values.assignedTo) payload.assignedTo = values.assignedTo
+  payload.companyId = values.companyId?.trim() ? values.companyId : null
+  payload.prospectId = values.prospectId?.trim() ? values.prospectId : null
+  payload.leadId = values.leadId?.trim() ? values.leadId : null
 
   const dueAt = toIsoDateString(values.dueAt)
   if (dueAt) payload.dueAt = dueAt
@@ -142,6 +151,9 @@ export function TasksPage() {
   }, [debouncedSearch, status, priority])
 
   const usersQuery = useUsers()
+  const companiesQuery = useCompanies()
+  const leadsQuery = useLeads()
+  const prospectsQuery = useProspects()
   const listQuery = useTasks(listQueryInput)
   const createMutation = useCreateTask()
   const updateMutation = useUpdateTask()
@@ -150,6 +162,9 @@ export function TasksPage() {
   const deleteMutation = useDeleteTask()
 
   const users = usersQuery.data ?? []
+  const companies = companiesQuery.data ?? []
+  const leads = leadsQuery.data ?? []
+  const prospects = prospectsQuery.data ?? []
   const items = listQuery.data ?? []
 
   const userNameById = useMemo(() => {
@@ -334,6 +349,9 @@ export function TasksPage() {
           <TaskForm
             mode="create"
             users={users}
+            companies={companies}
+            leads={leads}
+            prospects={prospects}
             submitLabel="Create"
             submitting={createMutation.isPending}
             onCancel={() => setCreateOpen(false)}
@@ -359,6 +377,9 @@ export function TasksPage() {
               mode="edit"
               initial={editing}
               users={users}
+              companies={companies}
+              leads={leads}
+              prospects={prospects}
               submitLabel="Save changes"
               submitting={updateMutation.isPending}
               onCancel={() => setEditing(null)}

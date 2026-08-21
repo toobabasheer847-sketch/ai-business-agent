@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import { UserRepository } from '../../../modules/user/user.repository';
 import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
+import { TaskCrmResolver } from './resolve-crm-entities.js';
 import { getTrustedTaskContext } from './task-request-context.js';
 import { TaskRepository } from './task.repository.js';
 
@@ -14,6 +15,7 @@ export class TaskAgent {
     private readonly taskRepository: TaskRepository,
     private readonly configService: ConfigService,
     private readonly userRepository: UserRepository,
+    private readonly crmResolver: TaskCrmResolver,
   ) {
     const modelName = this.configService.get<string>(
       'GEMINI_MODEL',
@@ -37,6 +39,9 @@ export class TaskAgent {
         description: z.string().optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
       execute: async (input: any) => {
@@ -46,6 +51,11 @@ export class TaskAgent {
           input.assignedTo,
           context.tenantId,
         );
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: input.companyId,
+          prospectId: input.prospectId,
+          leadId: input.leadId,
+        });
         return this.taskRepository.createTask({
           tenantId: context.tenantId,
           createdBy: context.userId,
@@ -54,6 +64,9 @@ export class TaskAgent {
           priority: input.priority,
           assignedTo,
           dueAt: input.dueAt,
+          companyId: crmIds.companyId ?? null,
+          prospectId: crmIds.prospectId ?? null,
+          leadId: crmIds.leadId ?? null,
         });
       },
     });
@@ -108,6 +121,9 @@ export class TaskAgent {
           .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
       execute: async (input: any) => {
@@ -119,6 +135,20 @@ export class TaskAgent {
             assignedTo,
             context.tenantId,
           );
+        }
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: patch.companyId,
+          prospectId: patch.prospectId,
+          leadId: patch.leadId,
+        });
+        if (patch.companyId !== undefined) {
+          patch.companyId = crmIds.companyId ?? null;
+        }
+        if (patch.prospectId !== undefined) {
+          patch.prospectId = crmIds.prospectId ?? null;
+        }
+        if (patch.leadId !== undefined) {
+          patch.leadId = crmIds.leadId ?? null;
         }
         return this.taskRepository.updateTask(
           taskId,

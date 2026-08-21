@@ -19,6 +19,7 @@ import {
 import { isSameUtcDay } from './parse-task-datetime.js';
 import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
 import { TaskCrmResolver } from './resolve-crm-entities.js';
+import { normalizeCrmIds } from './resolve-crm-ids.js';
 import { TaskRepository } from './task.repository.js';
 import {
   TaskAgentResponse,
@@ -46,6 +47,11 @@ export class TaskService {
       dto.assignedTo,
       context.tenantId,
     );
+    const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+      companyId: dto.companyId,
+      prospectId: dto.prospectId,
+      leadId: dto.leadId,
+    });
 
     try {
       return await this.taskRepository.createTask({
@@ -56,6 +62,9 @@ export class TaskService {
         priority: dto.priority as TaskPriority | undefined,
         assignedTo,
         dueAt: this.parseOptionalDueAt(dto.dueAt),
+        companyId: crmIds.companyId ?? null,
+        prospectId: crmIds.prospectId ?? null,
+        leadId: crmIds.leadId ?? null,
       });
     } catch (error) {
       this.handleError(error, 'create task');
@@ -111,6 +120,11 @@ export class TaskService {
             dto.assignedTo,
             context.tenantId,
           );
+    const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+      companyId: dto.companyId,
+      prospectId: dto.prospectId,
+      leadId: dto.leadId,
+    });
 
     const updated = await this.taskRepository.updateTask(
       taskId,
@@ -123,6 +137,7 @@ export class TaskService {
         priority: dto.priority as TaskPriority | undefined,
         assignedTo,
         dueAt: this.parseOptionalDueAt(dto.dueAt),
+        ...crmPatch(crmIds, dto),
       },
     );
 
@@ -239,6 +254,9 @@ export class TaskService {
           description: crm.description,
           priority: command.priority,
           dueAt: command.dueAt,
+          companyId: crm.companyId,
+          prospectId: crm.prospectId,
+          leadId: crm.leadId,
         },
         context,
       );
@@ -383,7 +401,7 @@ export class TaskService {
         context.tenantId,
         context.userId,
       )
-    ).filter((task) => titleMatchesSearch(task.title, searchTerm));
+    ).filter((task) => taskMatchesSearch(task, searchTerm));
 
     if (matches.length === 0) {
       return {
@@ -414,7 +432,15 @@ export class TaskService {
     command: TaskNlCommand,
     context: TaskContext,
   ): Promise<
-    | { kind: 'ok'; title: string; description?: string; message: string }
+    | {
+        kind: 'ok';
+        title: string;
+        description?: string;
+        message: string;
+        companyId?: string | null;
+        prospectId?: string | null;
+        leadId?: string | null;
+      }
     | { kind: 'clarify'; message: string }
   > {
     const resolution = await this.crmResolver.resolve(
@@ -439,22 +465,19 @@ export class TaskService {
     }
 
     let title = command.title!;
-    let description = command.description;
+    const description = command.description;
+    const crmIds = {
+      companyId: undefined as string | null | undefined,
+      prospectId: undefined as string | null | undefined,
+      leadId: undefined as string | null | undefined,
+    };
 
     if (resolution.status === 'resolved') {
       title = applyResolvedCrmNames(title, command, resolution);
-      const contextParts: string[] = [];
-      if (resolution.company) {
-        contextParts.push(`company ${resolution.company.name}`);
-      }
-      if (resolution.person) {
-        contextParts.push(
-          `${resolution.person.kind} ${resolution.person.name}`,
-        );
-      }
-      if (contextParts.length) {
-        description = `Resolved CRM context: ${contextParts.join('; ')}.`;
-      }
+      const linked = linksFromResolution(resolution);
+      crmIds.companyId = linked.companyId;
+      crmIds.prospectId = linked.prospectId;
+      crmIds.leadId = linked.leadId;
     }
 
     return {
@@ -462,6 +485,7 @@ export class TaskService {
       title,
       description,
       message: this.formatCreateMessage(title, command.dueAt, resolution),
+      ...crmIds,
     };
   }
 
@@ -548,6 +572,51 @@ export class TaskService {
   }
 }
 
+function crmPatch(
+  crmIds: ReturnType<typeof normalizeCrmIds>,
+  dto: { companyId?: string | null; prospectId?: string | null; leadId?: string | null },
+) {
+  const patch: {
+    companyId?: string | null;
+    prospectId?: string | null;
+    leadId?: string | null;
+  } = {};
+
+  if (dto.companyId !== undefined) {
+    patch.companyId = crmIds.companyId ?? null;
+  }
+  if (dto.prospectId !== undefined) {
+    patch.prospectId = crmIds.prospectId ?? null;
+  }
+  if (dto.leadId !== undefined) {
+    patch.leadId = crmIds.leadId ?? null;
+  }
+
+  return patch;
+}
+
+function linksFromResolution(resolution: {
+  company?: { id: string };
+  person?: { kind: 'prospect' | 'lead'; id: string; companyId?: string | null };
+}) {
+  const companyId = resolution.company?.id ?? resolution.person?.companyId ?? null;
+  return {
+    companyId: companyId || undefined,
+    prospectId:
+      resolution.person?.kind === 'prospect' ? resolution.person.id : undefined,
+    leadId: resolution.person?.kind === 'lead' ? resolution.person.id : undefined,
+  };
+}
+
+function taskMatchesSearch(task: TaskRecord, searchTerm: string) {
+  return (
+    titleMatchesSearch(task.title, searchTerm) ||
+    titleMatchesSearch(task.company?.name ?? '', searchTerm) ||
+    titleMatchesSearch(task.prospect?.name ?? '', searchTerm) ||
+    titleMatchesSearch(task.lead?.name ?? '', searchTerm)
+  );
+}
+
 function applyResolvedCrmNames(
   title: string,
   command: TaskNlCommand,
@@ -561,6 +630,13 @@ function applyResolvedCrmNames(
       command.companyQuery,
       resolution.company.name,
       true,
+    );
+  } else if (resolution.company && command.personQuery && !resolution.person) {
+    next = replaceWholeQuery(
+      next,
+      command.personQuery,
+      resolution.company.name,
+      false,
     );
   }
 

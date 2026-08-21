@@ -555,6 +555,16 @@ export class MasterAgentService {
       parts.push(`status ${task.status}`);
     }
 
+    if (task.company?.name) {
+      parts.push(`company ${task.company.name}`);
+    }
+    if (task.prospect?.name) {
+      parts.push(`prospect ${task.prospect.name}`);
+    }
+    if (task.lead?.name) {
+      parts.push(`lead ${task.lead.name}`);
+    }
+
     const due = this.formatDueAt(task.dueAt);
     if (due) {
       parts.push(`due ${due}`);

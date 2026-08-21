@@ -13,6 +13,11 @@ export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
+export type TaskCrmEntity = {
+  id: string
+  name: string
+}
+
 /**
  * Matches GET/POST /api/ai/task and related mutation responses.
  * tenantId and createdBy are response-only; never send them from the client.
@@ -22,6 +27,9 @@ export type Task = {
   tenantId: string
   createdBy: string
   assignedTo: string | null
+  companyId: string | null
+  prospectId: string | null
+  leadId: string | null
   title: string
   description: string | null
   status: TaskStatus
@@ -30,6 +38,9 @@ export type Task = {
   completedAt: string | null
   createdAt: string | null
   updatedAt: string | null
+  company?: TaskCrmEntity | null
+  prospect?: TaskCrmEntity | null
+  lead?: TaskCrmEntity | null
 }
 
 /** Matches POST /api/ai/task body — never include tenantId or createdBy */
@@ -38,6 +49,9 @@ export type CreateTaskRequest = {
   description?: string
   priority?: TaskPriority
   assignedTo?: string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
   dueAt?: string
 }
 
@@ -48,6 +62,9 @@ export type UpdateTaskRequest = {
   status?: TaskStatus
   priority?: TaskPriority
   assignedTo?: string
+  companyId?: string | null
+  prospectId?: string | null
+  leadId?: string | null
   dueAt?: string
 }
 

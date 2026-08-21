@@ -91,10 +91,23 @@ async function main() {
       );
     `);
 
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "company_id" uuid`,
+    );
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "prospect_id" uuid`,
+    );
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "lead_id" uuid`,
+    );
+
     const constraints = [
       `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE cascade`,
       `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE cascade`,
       `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_assigned_to_users_id_fk" FOREIGN KEY ("assigned_to") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE cascade`,
+      `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE set null ON UPDATE cascade`,
+      `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_prospect_id_prospects_id_fk" FOREIGN KEY ("prospect_id") REFERENCES "public"."prospects"("id") ON DELETE set null ON UPDATE cascade`,
+      `ALTER TABLE "tasks" ADD CONSTRAINT "tasks_lead_id_leads_id_fk" FOREIGN KEY ("lead_id") REFERENCES "public"."leads"("id") ON DELETE set null ON UPDATE cascade`,
       `ALTER TABLE "oauth_states" ADD CONSTRAINT "oauth_states_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE cascade`,
       `ALTER TABLE "oauth_states" ADD CONSTRAINT "oauth_states_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE cascade`,
     ];
@@ -123,6 +136,15 @@ async function main() {
     );
     await client.query(
       `CREATE INDEX IF NOT EXISTS "tasks_tenant_status_idx" ON "tasks" USING btree ("tenant_id","status")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "tasks_company_id_idx" ON "tasks" USING btree ("company_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "tasks_prospect_id_idx" ON "tasks" USING btree ("prospect_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "tasks_lead_id_idx" ON "tasks" USING btree ("lead_id")`,
     );
     await client.query(
       `CREATE INDEX IF NOT EXISTS "oauth_states_state_idx" ON "oauth_states" USING btree ("state")`,

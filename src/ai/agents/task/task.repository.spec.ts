@@ -19,12 +19,16 @@ describe('TaskRepository', () => {
     const update = jest.fn();
     const insert = jest.fn();
     const values = jest.fn();
+    const leftJoin = jest.fn();
 
     where.mockImplementation(() => ({
       orderBy,
       limit,
       returning,
     }));
+
+    const joined = { leftJoin, where };
+    leftJoin.mockReturnValue(joined);
 
     const db = {
       insert,
@@ -36,7 +40,7 @@ describe('TaskRepository', () => {
     insert.mockReturnValue({
       values: values.mockReturnValue({ returning }),
     });
-    select.mockReturnValue({ from: from.mockReturnValue({ where }) });
+    select.mockReturnValue({ from: from.mockReturnValue(joined) });
     update.mockReturnValue({
       set: set.mockReturnValue({ where }),
     });
@@ -49,6 +53,9 @@ describe('TaskRepository', () => {
       limit,
       orderBy,
       del,
+      set,
+      values,
+      returning,
     };
   }
 
@@ -119,5 +126,169 @@ describe('TaskRepository', () => {
     expect(where).toHaveBeenCalled();
     expect(rows).toHaveLength(1);
     expect(rows[0].assignedTo).toBe(userB);
+  });
+
+  it('creates a task with optional CRM foreign keys', async () => {
+    const { repository, values, returning, limit } = createRepository();
+    returning.mockResolvedValue([{ id: taskId }]);
+    limit.mockResolvedValue([
+      {
+        id: taskId,
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: null,
+        companyId: 'c1',
+        prospectId: null,
+        leadId: null,
+        title: 'Follow up',
+        status: 'pending',
+        priority: 'medium',
+        companyName: 'ABC Technologies',
+      },
+    ]);
+
+    const row = await repository.createTask({
+      tenantId: tenantA,
+      createdBy: userA,
+      title: 'Follow up',
+      companyId: 'c1',
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        companyId: 'c1',
+        prospectId: null,
+        leadId: null,
+      }),
+    );
+    expect(row.companyId).toBe('c1');
+    expect(row.company).toEqual({ id: 'c1', name: 'ABC Technologies' });
+  });
+
+  it('creates a task with a prospect foreign key', async () => {
+    const { repository, values, returning, limit } = createRepository();
+    returning.mockResolvedValue([{ id: taskId }]);
+    limit.mockResolvedValue([
+      {
+        id: taskId,
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: null,
+        companyId: null,
+        prospectId: 'p1',
+        leadId: null,
+        title: 'Follow up',
+        status: 'pending',
+        priority: 'medium',
+        prospectFirstName: 'Ahmed',
+        prospectLastName: 'Khan',
+      },
+    ]);
+
+    const row = await repository.createTask({
+      tenantId: tenantA,
+      createdBy: userA,
+      title: 'Follow up',
+      prospectId: 'p1',
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({ prospectId: 'p1', companyId: null, leadId: null }),
+    );
+    expect(row.prospectId).toBe('p1');
+    expect(row.prospect).toEqual({ id: 'p1', name: 'Ahmed Khan' });
+  });
+
+  it('creates a task with a lead foreign key', async () => {
+    const { repository, values, returning, limit } = createRepository();
+    returning.mockResolvedValue([{ id: taskId }]);
+    limit.mockResolvedValue([
+      {
+        id: taskId,
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: null,
+        companyId: null,
+        prospectId: null,
+        leadId: 'l1',
+        title: 'Follow up',
+        status: 'pending',
+        priority: 'medium',
+        leadFirstName: 'Zainab',
+        leadLastName: 'Ali',
+      },
+    ]);
+
+    const row = await repository.createTask({
+      tenantId: tenantA,
+      createdBy: userA,
+      title: 'Follow up',
+      leadId: 'l1',
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({ leadId: 'l1', companyId: null, prospectId: null }),
+    );
+    expect(row.leadId).toBe('l1');
+    expect(row.lead).toEqual({ id: 'l1', name: 'Zainab Ali' });
+  });
+
+  it('updates and retrieves a CRM relationship', async () => {
+    const { repository, set, returning, limit } = createRepository();
+    returning.mockResolvedValue([{ id: taskId }]);
+    limit.mockResolvedValue([
+      {
+        id: taskId,
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: null,
+        companyId: 'c2',
+        prospectId: null,
+        leadId: null,
+        title: 'Follow up',
+        status: 'pending',
+        priority: 'medium',
+        companyName: 'ABC UniqueCo',
+      },
+    ]);
+
+    const row = await repository.updateTask(taskId, tenantA, userA, {
+      companyId: 'c2',
+    });
+
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 'c2' }),
+    );
+    expect(row?.companyId).toBe('c2');
+    expect(row?.company).toEqual({ id: 'c2', name: 'ABC UniqueCo' });
+  });
+
+  it('lists tasks with joined CRM information', async () => {
+    const { repository, orderBy } = createRepository();
+    orderBy.mockResolvedValue([
+      {
+        id: taskId,
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: null,
+        companyId: 'c1',
+        prospectId: 'p1',
+        leadId: null,
+        title: 'Follow up',
+        status: 'pending',
+        priority: 'medium',
+        companyName: 'ABC Technologies',
+        prospectFirstName: 'Ahmed',
+        prospectLastName: 'Khan',
+      },
+    ]);
+
+    const rows = await repository.findAllByTenantAndUser(tenantA, userA);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].company).toEqual({ id: 'c1', name: 'ABC Technologies' });
+    expect(rows[0].prospect).toEqual({ id: 'p1', name: 'Ahmed Khan' });
   });
 });

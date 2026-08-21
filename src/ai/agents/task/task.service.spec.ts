@@ -51,6 +51,7 @@ describe('TaskService', () => {
     };
     crmResolver = {
       resolve: jest.fn().mockResolvedValue({ status: 'none' }),
+      assertIds: jest.fn(async (_tenantId: string, ids: any) => ids),
     };
 
     service = new TaskService(
@@ -73,6 +74,96 @@ describe('TaskService', () => {
         assignedTo: userB,
         title: 'Call Ahmed',
       }),
+    );
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(tenantA, expect.any(Object));
+  });
+
+  it('creates a task linked to a same-tenant company', async () => {
+    await service.createTask(
+      { title: 'Follow up', companyId: 'company-1' } as any,
+      contextA,
+    );
+
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
+  it('rejects a cross-tenant company on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Company not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', companyId: 'company-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-tenant prospect on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Prospect not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', prospectId: 'prospect-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a cross-tenant lead on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Lead not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', leadId: 'lead-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('updates a CRM relationship after tenant validation', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-2',
+    });
+
+    await service.updateTask(
+      taskId,
+      { companyId: 'company-2' } as any,
+      contextA,
+    );
+
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ companyId: 'company-2' }),
+    );
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-2' }),
     );
   });
 
@@ -338,6 +429,27 @@ describe('TaskService', () => {
     expect(taskRepository.createTask).not.toHaveBeenCalled();
   });
 
+  it('persists companyId for follow-up text that names a unique company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with ABC tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
   it('creates a task with a uniquely resolved company name', async () => {
     crmResolver.resolve.mockResolvedValue({
       status: 'resolved',
@@ -362,8 +474,11 @@ describe('TaskService', () => {
         tenantId: tenantA,
         createdBy: userA,
         title: 'Follow up with ABC Technologies',
-        description: 'Resolved CRM context: company ABC Technologies.',
+        companyId: 'company-1',
       }),
+    );
+    expect(taskRepository.createTask.mock.calls[0][0].description).not.toBe(
+      'Resolved CRM context: company ABC Technologies.',
     );
   });
 
@@ -402,6 +517,31 @@ describe('TaskService', () => {
     expect(taskRepository.createTask).not.toHaveBeenCalled();
   });
 
+  it('creates a task with a uniquely resolved prospect id', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      person: {
+        kind: 'prospect',
+        id: 'prospect-1',
+        name: 'Ahmed Khan',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with Ahmed tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        prospectId: 'prospect-1',
+      }),
+    );
+  });
+
   it('creates a task for a uniquely resolved person', async () => {
     crmResolver.resolve.mockResolvedValue({
       status: 'resolved',
@@ -423,6 +563,35 @@ describe('TaskService', () => {
         tenantId: tenantA,
         createdBy: userA,
         title: 'Follow up with Ahmed Khan',
+        leadId: 'lead-1',
+      }),
+    );
+  });
+
+  it('persists prospect and company ids for a uniquely resolved person', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+      person: {
+        kind: 'prospect',
+        id: 'prospect-1',
+        name: 'Ahmed Khan',
+        companyId: 'company-1',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task for Ahmed from ABC tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        prospectId: 'prospect-1',
+        tenantId: tenantA,
+        createdBy: userA,
       }),
     );
   });
@@ -459,6 +628,32 @@ describe('TaskService', () => {
         title: 'Call Ahmed',
         tenantId: tenantA,
         createdBy: userA,
+      }),
+    );
+  });
+
+  it('persists a lead id for a unique email match', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      person: {
+        kind: 'lead',
+        id: 'lead-1',
+        name: 'John Smith',
+        email: 'john@example.com',
+        companyId: 'c1',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task for john@example.com.',
+      contextA,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: 'lead-1',
+        companyId: 'c1',
+        tenantId: tenantA,
       }),
     );
   });

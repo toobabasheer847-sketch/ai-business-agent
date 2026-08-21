@@ -30,6 +30,14 @@ type TasksTableProps = {
   onDelete: (item: Task) => void
 }
 
+function crmLabel(item: Task) {
+  const parts: string[] = []
+  if (item.company?.name) parts.push(`Company · ${item.company.name}`)
+  if (item.prospect?.name) parts.push(`Prospect · ${item.prospect.name}`)
+  if (item.lead?.name) parts.push(`Lead · ${item.lead.name}`)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 function formatDate(value: string | null) {
   if (!value) return '—'
   const date = new Date(value)
@@ -63,6 +71,7 @@ export function TasksTable({
             <TableHead>Status</TableHead>
             <TableHead className="hidden sm:table-cell">Due</TableHead>
             <TableHead className="hidden md:table-cell">Assigned</TableHead>
+            <TableHead className="hidden lg:table-cell">CRM</TableHead>
             <TableHead className="hidden lg:table-cell">Created</TableHead>
             <TableHead className="w-[72px] text-right">Actions</TableHead>
           </TableRow>
@@ -85,6 +94,11 @@ export function TasksTable({
                       {item.description}
                     </div>
                   ) : null}
+                  {crmLabel(item) ? (
+                    <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground lg:hidden">
+                      {crmLabel(item)}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-xs text-muted-foreground sm:hidden">
                     Due {formatDate(item.dueAt)}
                   </div>
@@ -100,6 +114,9 @@ export function TasksTable({
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   {assignedName || '—'}
+                </TableCell>
+                <TableCell className="hidden text-muted-foreground lg:table-cell">
+                  {crmLabel(item) || '—'}
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground lg:table-cell">
                   {formatDate(item.createdAt)}
