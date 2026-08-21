@@ -47,6 +47,18 @@ describe('Master Agent regex router', () => {
     ).resolves.toBe('task_agent');
   });
 
+  it('routes create/list/complete task phrasing to task_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('Create a task to call Ahmed tomorrow.')),
+    ).resolves.toBe('task_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Show my pending tasks.')),
+    ).resolves.toBe('task_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Mark the follow-up task completed.')),
+    ).resolves.toBe('task_agent');
+  });
+
   it('routes plural task requests to task_agent', async () => {
     await expect(
       router(ALL_AGENTS, messageContext('Show me my tasks')),
@@ -91,6 +103,15 @@ describe('Master Agent regex router', () => {
   it('routes email requests to communication_agent', async () => {
     await expect(
       router(ALL_AGENTS, messageContext('Draft an email to the client')),
+    ).resolves.toBe('communication_agent');
+  });
+
+  it('routes SMS and email sends to communication_agent, not task_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('Send an SMS to Ahmed.')),
+    ).resolves.toBe('communication_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Send an email to Ahmed.')),
     ).resolves.toBe('communication_agent');
   });
 

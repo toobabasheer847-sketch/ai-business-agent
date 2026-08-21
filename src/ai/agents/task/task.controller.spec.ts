@@ -1,14 +1,32 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { TestingModuleBuilder } from '@nestjs/testing';
 import request from 'supertest';
 
 import {
   AUTHENTICATED_TEST_USER,
   createJwtTestModule,
-  initTestApp,
   signTestJwt,
 } from '../http-jwt-test.util';
 import { TaskController } from './task.controller';
 import { TaskService } from './task.service';
+
+const TASK_ID = '11111111-1111-4111-8111-111111111111';
+
+async function initTaskTestApp(
+  builder: TestingModuleBuilder,
+): Promise<INestApplication> {
+  const module = await builder.compile();
+  const app = module.createNestApplication();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  await app.init();
+  return app;
+}
 
 describe('TaskController', () => {
   let app: INestApplication;
@@ -20,6 +38,7 @@ describe('TaskController', () => {
     getTask: jest.Mock;
     completeTask: jest.Mock;
     cancelTask: jest.Mock;
+    deleteTask: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -29,14 +48,18 @@ describe('TaskController', () => {
         action: 'create',
         message: 'Task created successfully.',
       }),
-      createTask: jest.fn(),
-      listTasks: jest.fn(),
-      getTask: jest.fn(),
-      completeTask: jest.fn(),
-      cancelTask: jest.fn(),
+      createTask: jest.fn().mockResolvedValue({ id: TASK_ID }),
+      listTasks: jest.fn().mockResolvedValue([]),
+      getTask: jest.fn().mockResolvedValue({ id: TASK_ID }),
+      completeTask: jest.fn().mockResolvedValue({ id: TASK_ID }),
+      cancelTask: jest.fn().mockResolvedValue({ id: TASK_ID }),
+      deleteTask: jest.fn().mockResolvedValue({
+        message: 'Task deleted successfully',
+        id: TASK_ID,
+      }),
     };
 
-    app = await initTestApp(
+    app = await initTaskTestApp(
       createJwtTestModule({
         controllers: [TaskController],
         providers: [{ provide: TaskService, useValue: taskService }],
@@ -91,23 +114,129 @@ describe('TaskController', () => {
     );
   });
 
-  it('still routes POST /ai/task/:taskId to updateTask', async () => {
+  it('does not trust tenantId from the natural-language body', async () => {
     const token = signTestJwt(app);
-    const taskId = '11111111-1111-1111-1111-111111111111';
 
     await request(app.getHttpServer())
-      .post(`/ai/task/${taskId}`)
+      .post('/ai/task/natural-language')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        message: 'Create a task to follow up tomorrow.',
+        tenantId: 'tenant-attacker',
+      })
+      .expect(400);
+
+    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+  });
+
+  it('still routes POST /ai/task/:taskId to updateTask', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Updated title' })
       .expect(201);
 
     expect(taskService.updateTask).toHaveBeenCalledWith(
-      taskId,
+      TASK_ID,
       expect.objectContaining({ title: 'Updated title' }),
       expect.objectContaining({
         tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
       }),
     );
     expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+  });
+
+  it('rejects body tenantId and createdBy on create', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .post('/ai/task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Call Ahmed',
+        tenantId: 'tenant-attacker',
+        createdBy: 'user-attacker',
+      })
+      .expect(400);
+
+    expect(taskService.createTask).not.toHaveBeenCalled();
+  });
+
+  it('creates a task using JWT tenant and user', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .post('/ai/task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Call Ahmed' })
+      .expect(201);
+
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Call Ahmed' }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
+  it('rejects an invalid taskId UUID', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/not-a-uuid')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(taskService.getTask).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid priority, status, and dueAt', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .post('/ai/task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Call Ahmed', priority: 'critical' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'done' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/ai/task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Call Ahmed', dueAt: 'tomorrow' })
+      .expect(400);
+
+    expect(taskService.createTask).not.toHaveBeenCalled();
+    expect(taskService.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('deletes an authorized task', async () => {
+    const token = signTestJwt(app);
+
+    const response = await request(app.getHttpServer())
+      .delete(`/ai/task/${TASK_ID}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      message: 'Task deleted successfully',
+      id: TASK_ID,
+    });
+    expect(taskService.deleteTask).toHaveBeenCalledWith(
+      TASK_ID,
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
   });
 });

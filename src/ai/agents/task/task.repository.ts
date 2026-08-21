@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, SQL } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
@@ -39,20 +39,34 @@ export class TaskRepository {
     return this.mapRow(row);
   }
 
-  async getTask(taskId: string, tenantId: string): Promise<TaskRecord | null> {
+  async findByIdAndTenantAndUser(
+    taskId: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<TaskRecord | null> {
     const [row] = await this.db
       .select()
       .from(tasks)
-      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
+      .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
       .limit(1);
+
     return row ? this.mapRow(row) : null;
   }
 
-  async listTasks(
+  async getTask(
+    taskId: string,
     tenantId: string,
+    userId: string,
+  ): Promise<TaskRecord | null> {
+    return this.findByIdAndTenantAndUser(taskId, tenantId, userId);
+  }
+
+  async findAllByTenantAndUser(
+    tenantId: string,
+    userId: string,
     filters?: { status?: TaskStatus; priority?: TaskPriority; search?: string },
   ): Promise<TaskRecord[]> {
-    const clauses: SQL[] = [eq(tasks.tenantId, tenantId)];
+    const clauses: SQL[] = [this.accessFilter(tenantId, userId)];
 
     if (filters?.status) {
       clauses.push(eq(tasks.status, filters.status));
@@ -65,7 +79,10 @@ export class TaskRepository {
     if (filters?.search) {
       const pattern = `%${filters.search}%`;
       clauses.push(
-        sql`${tasks.title} ILIKE ${pattern} OR ${tasks.description} ILIKE ${pattern}`,
+        or(
+          ilike(tasks.title, pattern),
+          ilike(tasks.description, pattern),
+        )!,
       );
     }
 
@@ -74,12 +91,49 @@ export class TaskRepository {
       .from(tasks)
       .where(and(...clauses))
       .orderBy(desc(tasks.createdAt));
+
+    return rows.map((row) => this.mapRow(row));
+  }
+
+  async listTasks(
+    tenantId: string,
+    userId: string,
+    filters?: { status?: TaskStatus; priority?: TaskPriority; search?: string },
+  ): Promise<TaskRecord[]> {
+    return this.findAllByTenantAndUser(tenantId, userId, filters);
+  }
+
+  async findAllByTenantAndUserAndStatus(
+    tenantId: string,
+    userId: string,
+    status: TaskStatus,
+  ): Promise<TaskRecord[]> {
+    return this.findAllByTenantAndUser(tenantId, userId, { status });
+  }
+
+  async findByTitleAndTenantAndUser(
+    title: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<TaskRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          this.accessFilter(tenantId, userId),
+          ilike(tasks.title, `%${title}%`),
+        ),
+      )
+      .orderBy(desc(tasks.updatedAt));
+
     return rows.map((row) => this.mapRow(row));
   }
 
   async updateTask(
     taskId: string,
     tenantId: string,
+    userId: string,
     input: Partial<
       Pick<
         TaskRecord,
@@ -109,17 +163,29 @@ export class TaskRepository {
             : undefined,
         updatedAt: new Date(),
       })
-      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)))
+      .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
       .returning();
 
     return row ? this.mapRow(row) : null;
   }
 
-  async deleteTask(taskId: string, tenantId: string): Promise<boolean> {
+  async deleteTask(
+    taskId: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<boolean> {
     const result = await this.db
       .delete(tasks)
-      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId)));
+      .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)));
+
     return (result.rowCount ?? 0) > 0;
+  }
+
+  private accessFilter(tenantId: string, userId: string) {
+    return and(
+      eq(tasks.tenantId, tenantId),
+      or(eq(tasks.createdBy, userId), eq(tasks.assignedTo, userId))!,
+    )!;
   }
 
   private mapRow(row: any): TaskRecord {

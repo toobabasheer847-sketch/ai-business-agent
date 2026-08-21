@@ -24,6 +24,11 @@ import { CommunicationAgentService } from '../communication/communication.servic
 import { RagAgent } from '../rag/rag.agent.js';
 import { RagSourceMetadata } from '../rag/types/rag.types.js';
 import { TaskAgent } from '../task/task.agent.js';
+import { TaskService } from '../task/task.service.js';
+import {
+  TaskAgentResponse,
+  TaskRecord,
+} from '../task/types/task.types.js';
 import { ProposalAgent } from '../proposal/proposal-agent.js';
 
 const AGENT_DELEGATION_LABELS: Record<string, string> = {
@@ -62,6 +67,7 @@ export class MasterAgentService {
     private readonly communicationAgentService: CommunicationAgentService,
     private readonly ragAgent: RagAgent,
     private readonly taskAgent: TaskAgent,
+    private readonly taskService: TaskService,
     private readonly proposalAgent: ProposalAgent,
     private readonly conversationRepository: ConversationRepository,
     private readonly configService: ConfigService,
@@ -88,7 +94,8 @@ export class MasterAgentService {
       master_chat_agent: {},
       communication_agent: communicationAgent ?? undefined,
       rag_agent: ragAgentInstance ?? undefined,
-      task_agent: taskAgentInstance ?? undefined,
+      // Always present so task intents route to TaskService even without Gemini/ADK.
+      task_agent: taskAgentInstance ?? { name: 'task_agent' },
       proposal_agent: proposalAgentInstance ?? undefined,
     };
 
@@ -149,6 +156,7 @@ export class MasterAgentService {
 
     const aiResult = await this.executeExistingAi(
       tenantId,
+      userId,
       trimmedMessage,
       history,
     );
@@ -333,6 +341,7 @@ export class MasterAgentService {
 
   private async executeExistingAi(
     tenantId: string,
+    userId: string,
     trimmedMessage: string,
     history: HistoryMessage[],
   ): Promise<MasterChatResponse> {
@@ -340,6 +349,29 @@ export class MasterAgentService {
       trimmedMessage,
       this.routeAgents,
     );
+
+    if (routeTarget === 'task_agent') {
+      try {
+        const taskResult = await this.taskService.processNaturalLanguage(
+          trimmedMessage,
+          { tenantId, userId },
+        );
+
+        return {
+          response: this.formatTaskAssistantResponse(taskResult),
+          delegation: 'task',
+        };
+      } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
+
+        this.logger.error('Task delegation failed', error as Error);
+        throw new InternalServerErrorException(
+          'Task request failed to process',
+        );
+      }
+    }
 
     if (routeTarget === 'rag_agent' && this.routeAgents.rag_agent) {
       try {
@@ -461,6 +493,92 @@ export class MasterAgentService {
     }
 
     return `${compact.slice(0, 77)}...`;
+  }
+
+  private formatTaskAssistantResponse(result: TaskAgentResponse): string {
+    if (result.action === 'clarify') {
+      const matches = Array.isArray(result.data) ? result.data : [];
+      if (matches.length > 0) {
+        const lines = matches.map((task, index) =>
+          this.formatTaskSummary(task, index + 1),
+        );
+        return `${result.message ?? 'Which task do you mean?'}\n${lines.join('\n')}`;
+      }
+
+      return result.message || 'Which task do you mean?';
+    }
+
+    if (result.action === 'list') {
+      const tasks = Array.isArray(result.data) ? result.data : [];
+      if (tasks.length === 0) {
+        return 'You have no matching tasks.';
+      }
+
+      const lines = tasks.map((task, index) =>
+        this.formatTaskSummary(task, index + 1),
+      );
+      return `${result.message || 'Here are your tasks:'}\n${lines.join('\n')}`;
+    }
+
+    if (!result.data || Array.isArray(result.data)) {
+      return result.message || 'Task not found.';
+    }
+
+    const summary = this.formatTaskSummary(result.data);
+
+    if (result.action === 'create') {
+      return `Task created successfully. ${summary}`;
+    }
+    if (result.action === 'complete') {
+      return `Task completed. ${summary}`;
+    }
+    if (result.action === 'cancel') {
+      return `Task cancelled. ${summary}`;
+    }
+    if (result.action === 'update') {
+      return `Task updated. ${summary}`;
+    }
+    if (result.action === 'get') {
+      return summary;
+    }
+
+    return result.message || summary;
+  }
+
+  private formatTaskSummary(task: TaskRecord, index?: number): string {
+    const parts = [`"${task.title}"`];
+
+    if (task.priority) {
+      parts.push(`priority ${task.priority}`);
+    }
+    if (task.status) {
+      parts.push(`status ${task.status}`);
+    }
+
+    const due = this.formatDueAt(task.dueAt);
+    if (due) {
+      parts.push(`due ${due}`);
+    }
+
+    const body = parts.join(', ');
+    return index != null ? `${index}. ${body}` : body;
+  }
+
+  private formatDueAt(dueAt?: Date | string | null): string | undefined {
+    if (!dueAt) {
+      return undefined;
+    }
+
+    const date = dueAt instanceof Date ? dueAt : new Date(dueAt);
+    if (Number.isNaN(date.getTime())) {
+      return undefined;
+    }
+
+    if (date.getUTCHours() === 0 && date.getUTCMinutes() === 0) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    return date.toISOString();
   }
 
   private resolveDelegation(

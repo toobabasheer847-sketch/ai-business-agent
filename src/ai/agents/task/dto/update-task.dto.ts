@@ -1,11 +1,14 @@
 import {
-  IsEnum,
+  IsDateString,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
+
+import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task.types';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -19,11 +22,11 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsEnum(['pending', 'in_progress', 'completed', 'cancelled'] as const)
+  @IsIn(TASK_STATUSES)
   status?: string;
 
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high', 'urgent'] as const)
+  @IsIn(TASK_PRIORITIES)
   priority?: string;
 
   @IsOptional()
@@ -31,6 +34,6 @@ export class UpdateTaskDto {
   assignedTo?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dueAt?: string;
 }

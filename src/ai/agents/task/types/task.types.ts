@@ -1,6 +1,15 @@
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export const TASK_STATUSES = [
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+] as const;
+
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+
 export interface TaskRecord {
   id: string;
   tenantId: string;
@@ -23,7 +32,7 @@ export interface TaskContext {
 }
 
 export interface TaskAgentResponse {
-  action: 'create' | 'get' | 'list' | 'update' | 'complete' | 'cancel';
+  action: 'create' | 'get' | 'list' | 'update' | 'complete' | 'cancel' | 'clarify';
   data: TaskRecord | TaskRecord[] | null;
   message?: string;
 }

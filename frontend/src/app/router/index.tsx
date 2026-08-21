@@ -21,6 +21,7 @@ import { GmailConfigurationPage } from '@/features/gmail-configuration/pages/gma
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
 import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
 import { UsersPage } from '@/features/users/pages/users-page'
+import { TasksPage } from '@/features/tasks/pages/tasks-page'
 
 export function AppRouter() {
   return (
@@ -36,6 +37,7 @@ export function AppRouter() {
         <Route element={<AppShellLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/assistant" element={<AssistantPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemStatusPage />} />
           <Route path="/tenant" element={<TenantPage />} />
 

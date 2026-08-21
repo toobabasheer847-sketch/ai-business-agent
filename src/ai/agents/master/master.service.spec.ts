@@ -87,6 +87,9 @@ describe('MasterAgentService', () => {
   const taskAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'task_agent' }),
   };
+  const taskService = {
+    processNaturalLanguage: jest.fn(),
+  };
   const proposalAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
   };
@@ -114,6 +117,7 @@ describe('MasterAgentService', () => {
   beforeEach(() => {
     mockRunEphemeral.mockReset();
     ragAgent.answerQuery.mockReset();
+    taskService.processNaturalLanguage.mockReset();
     (InMemoryRunner as any).lastOptions = null;
 
     conversationRepository = {
@@ -133,6 +137,7 @@ describe('MasterAgentService', () => {
       communicationAgentService as any,
       ragAgent as any,
       taskAgent as any,
+      taskService as any,
       proposalAgent as any,
       conversationRepository as any,
       configService as any,
@@ -272,27 +277,33 @@ describe('MasterAgentService', () => {
   });
 
   it('persists the assistant message and returns conversationId', async () => {
-    mockRunEphemeral.mockReturnValue(
-      asyncEvents([
-        {
-          author: 'task_agent',
-          content: { parts: [{ text: 'Here are your tasks...' }] },
-        },
-      ]),
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'create',
+      message: 'Task created successfully.',
+      data: {
+        id: '33333333-3333-4333-8333-333333333333',
+        title: 'Call Ahmed',
+        priority: 'medium',
+        status: 'pending',
+        dueAt: '2026-08-21T00:00:00.000Z',
+      },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Create a task to call Ahmed tomorrow.',
     );
 
-    const result = await service.invoke(tenantId, userId, 'Create a task for Sarah');
-
-    expect(result).toEqual({
-      conversationId,
-      response: 'Here are your tasks...',
-      delegation: 'task',
-    });
+    expect(result.conversationId).toBe(conversationId);
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('Task created successfully');
+    expect(result.response).toContain('Call Ahmed');
     expect(conversationRepository.createMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         role: 'assistant',
-        content: 'Here are your tasks...',
+        content: result.response,
         metadata: expect.objectContaining({
           delegation: 'task',
         }),
@@ -454,12 +465,12 @@ describe('MasterAgentService', () => {
     expect(result.conversationId).toBe(conversationId);
   });
 
-  it('invokes the existing Master RoutedAgent for non-RAG requests', async () => {
+  it('invokes the existing Master RoutedAgent for non-RAG, non-task requests', async () => {
     mockRunEphemeral.mockReturnValue(
       asyncEvents([
         {
-          author: 'task_agent',
-          content: { parts: [{ text: 'Here are your tasks...' }] },
+          author: 'communication_agent',
+          content: { parts: [{ text: 'I can help draft that email.' }] },
         },
       ]),
     );
@@ -467,15 +478,16 @@ describe('MasterAgentService', () => {
     const result = await service.invoke(
       tenantId,
       userId,
-      'Create a task for Sarah',
+      'Send an email to Ahmed.',
     );
 
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
+    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
     expect(ragAgent.answerQuery).not.toHaveBeenCalled();
     expect(result).toEqual({
       conversationId,
-      response: 'Here are your tasks...',
-      delegation: 'task',
+      response: 'I can help draft that email.',
+      delegation: 'communication',
     });
   });
 
@@ -545,7 +557,191 @@ describe('MasterAgentService', () => {
     });
 
     await expect(
-      service.invoke(tenantId, userId, 'Create a task for Sarah'),
+      service.invoke(tenantId, userId, 'hello'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
+    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+  });
+
+  it('routes task create through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'create',
+      message: 'Task created successfully.',
+      data: {
+        title: 'Call Ahmed',
+        priority: 'medium',
+        status: 'pending',
+        dueAt: '2026-08-21T00:00:00.000Z',
+      },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Create a task to call Ahmed tomorrow.',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('Call Ahmed');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('routes task list through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'list',
+      message: 'Tasks retrieved.',
+      data: [
+        {
+          title: 'Call Ahmed',
+          priority: 'medium',
+          status: 'pending',
+        },
+      ],
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Show my pending tasks.',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('Call Ahmed');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Show my pending tasks.',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('routes task complete through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'complete',
+      message: 'Task completed.',
+      data: { title: 'ABC follow-up', status: 'completed', priority: 'medium' },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Mark my ABC follow-up task as completed.',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('completed');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('routes task priority updates through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'update',
+      message: 'Task updated.',
+      data: { title: 'ABC', priority: 'high', status: 'pending' },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Change my ABC task priority to high.',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('high');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('passes JWT tenant and user to TaskService, not identity from the message', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'create',
+      message: 'Task created successfully.',
+      data: { title: 'Call Ahmed', priority: 'medium', status: 'pending' },
+    });
+
+    await service.invoke(
+      tenantId,
+      userId,
+      'Create a task for tenant-B createdBy attacker-user',
+    );
+
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Create a task for tenant-B createdBy attacker-user',
+      { tenantId, userId },
+    );
+    const context = taskService.processNaturalLanguage.mock.calls[0][1];
+    expect(context.tenantId).toBe(tenantId);
+    expect(context.tenantId).not.toBe('tenant-B');
+    expect(context.userId).toBe(userId);
+    expect(context.userId).not.toBe('attacker-user');
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('returns TaskService clarification without guessing or calling ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'clarify',
+      message: 'I found 2 matching tasks. Which one do you mean?',
+      data: [
+        { title: 'Follow up with Ahmed', status: 'pending', priority: 'medium' },
+        { title: 'Follow up with ABC', status: 'pending', priority: 'medium' },
+      ],
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Complete my follow-up task.',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('I found 2 matching tasks');
+    expect(result.response).toContain('Follow up with Ahmed');
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to ADK when TaskService fails', async () => {
+    taskService.processNaturalLanguage.mockRejectedValue(
+      new Error('database unavailable'),
+    );
+
+    await expect(
+      service.invoke(tenantId, userId, 'Show my pending tasks.'),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('still routes greetings through ADK chat, not TaskService', async () => {
+    mockChatEvents();
+
+    await service.invoke(tenantId, userId, 'hello');
+
+    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+    expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes a company follow-up through TaskService with JWT identity', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'create',
+      message: 'Task created: Follow up with ABC Technologies — due 2026-08-21.',
+      data: {
+        title: 'Follow up with ABC Technologies',
+        priority: 'medium',
+        status: 'pending',
+      },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Create a task to follow up with ABC company tomorrow.',
+    );
+
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Create a task to follow up with ABC company tomorrow.',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('ABC Technologies');
   });
 });

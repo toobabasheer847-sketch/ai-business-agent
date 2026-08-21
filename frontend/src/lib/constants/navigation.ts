@@ -5,6 +5,7 @@ import {
   CircleHelp,
   LayoutDashboard,
   Landmark,
+  ListTodo,
   Mail,
   MessageSquare,
   Phone,
@@ -48,6 +49,14 @@ export const mainNav: NavItem[] = [
     module: 'ai-master',
     available: true,
     description: 'Chat with the Master Agent',
+  },
+  {
+    title: 'Tasks',
+    href: '/tasks',
+    icon: ListTodo,
+    module: 'ai-task',
+    available: true,
+    description: 'View and manage your tasks',
   },
   {
     title: 'Tenant',
