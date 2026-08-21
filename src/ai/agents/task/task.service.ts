@@ -93,6 +93,12 @@ export class TaskService {
   ): Promise<TaskRecord[]> {
     this.requireAuthContext(context);
 
+    const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+      companyId: dto.companyId,
+      prospectId: dto.prospectId,
+      leadId: dto.leadId,
+    });
+
     return this.taskRepository.findAllByTenantAndUser(
       context.tenantId,
       context.userId,
@@ -100,6 +106,9 @@ export class TaskService {
         status: dto.status as TaskStatus | undefined,
         priority: dto.priority as TaskPriority | undefined,
         search: dto.search,
+        companyId: crmIds.companyId,
+        prospectId: crmIds.prospectId,
+        leadId: crmIds.leadId,
       },
     );
   }
@@ -269,10 +278,22 @@ export class TaskService {
     }
 
     if (command.action === 'list') {
+      const crm = await this.applyCrmToList(command, context);
+      if (crm.kind === 'clarify') {
+        return {
+          action: 'clarify',
+          data: null,
+          message: crm.message,
+        };
+      }
+
       const rows = await this.listTasks(
         {
           status: command.status,
           priority: command.priority,
+          companyId: crm.companyId,
+          prospectId: crm.prospectId,
+          leadId: crm.leadId,
         },
         context,
       );
@@ -281,10 +302,20 @@ export class TaskService {
           ? rows.filter((row) => isSameUtcDay(row.dueAt, now))
           : rows;
 
+      if (crm.label && data.length === 0) {
+        return {
+          action: 'clarify',
+          data: [],
+          message: `I couldn't find any of your tasks for ${crm.label}.`,
+        };
+      }
+
       return {
         action: 'list',
         data,
-        message: 'Tasks retrieved.',
+        message: crm.label
+          ? `Tasks retrieved for ${crm.label}.`
+          : 'Tasks retrieved.',
       };
     }
 
@@ -373,7 +404,7 @@ export class TaskService {
       context.tenantId,
     );
 
-    if (crm.status === 'ambiguous' && command.explicitCompany) {
+    if (crm.status === 'ambiguous') {
       return {
         kind: 'unresolved',
         response: {
@@ -384,8 +415,31 @@ export class TaskService {
       };
     }
 
+    if (crm.status === 'missing') {
+      return {
+        kind: 'unresolved',
+        response: {
+          action: 'clarify',
+          data: null,
+          message: `I couldn't find a company named ${crm.query}.`,
+        },
+      };
+    }
+
     const searchTerm = command.searchTerm?.trim();
-    if (!searchTerm) {
+    const linked =
+      crm.status === 'resolved'
+        ? linksFromResolution(crm)
+        : {
+            companyId: undefined as string | undefined,
+            prospectId: undefined as string | undefined,
+            leadId: undefined as string | undefined,
+          };
+    const hasCrmLink = Boolean(
+      linked.companyId || linked.prospectId || linked.leadId,
+    );
+
+    if (!searchTerm && !hasCrmLink) {
       return {
         kind: 'unresolved',
         response: {
@@ -400,8 +454,15 @@ export class TaskService {
       await this.taskRepository.findAllByTenantAndUser(
         context.tenantId,
         context.userId,
+        {
+          companyId: linked.companyId,
+          prospectId: linked.prospectId,
+          leadId: linked.leadId,
+        },
       )
-    ).filter((task) => taskMatchesSearch(task, searchTerm));
+    ).filter((task) =>
+      searchTerm ? taskMatchesSearch(task, searchTerm) : true,
+    );
 
     if (matches.length === 0) {
       return {
@@ -443,6 +504,18 @@ export class TaskService {
       }
     | { kind: 'clarify'; message: string }
   > {
+    if (
+      command.explicitCompany &&
+      !command.companyQuery &&
+      !command.personQuery &&
+      !command.emailQuery
+    ) {
+      return {
+        kind: 'clarify',
+        message: 'Which company do you mean?',
+      };
+    }
+
     const resolution = await this.crmResolver.resolve(
       {
         companyQuery: command.companyQuery,
@@ -486,6 +559,82 @@ export class TaskService {
       description,
       message: this.formatCreateMessage(title, command.dueAt, resolution),
       ...crmIds,
+    };
+  }
+
+  private async applyCrmToList(
+    command: TaskNlCommand,
+    context: TaskContext,
+  ): Promise<
+    | {
+        kind: 'ok';
+        companyId?: string;
+        prospectId?: string;
+        leadId?: string;
+        label?: string;
+      }
+    | { kind: 'clarify'; message: string }
+  > {
+    if (
+      command.explicitCompany &&
+      !command.companyQuery &&
+      !command.personQuery &&
+      !command.emailQuery
+    ) {
+      return {
+        kind: 'clarify',
+        message: 'Which company do you mean?',
+      };
+    }
+
+    if (!command.companyQuery && !command.personQuery && !command.emailQuery) {
+      return { kind: 'ok' };
+    }
+
+    const resolution = await this.crmResolver.resolve(
+      {
+        companyQuery: command.companyQuery,
+        personQuery: command.personQuery,
+        emailQuery: command.emailQuery,
+        explicitCompany: command.explicitCompany === true,
+      },
+      context.tenantId,
+    );
+
+    if (resolution.status === 'ambiguous') {
+      return { kind: 'clarify', message: this.formatCrmClarify(resolution) };
+    }
+
+    if (resolution.status === 'missing') {
+      return {
+        kind: 'clarify',
+        message: `I couldn't find a company named ${resolution.query}.`,
+      };
+    }
+
+    if (resolution.status !== 'resolved') {
+      const named =
+        command.companyQuery || command.personQuery || command.emailQuery;
+      return {
+        kind: 'clarify',
+        message: named
+          ? `I couldn't find a company or contact named ${named}.`
+          : 'Which company do you mean?',
+      };
+    }
+
+    const linked = linksFromResolution(resolution);
+    const label =
+      resolution.person?.name ||
+      resolution.company?.name ||
+      command.companyQuery;
+
+    return {
+      kind: 'ok',
+      companyId: linked.companyId,
+      prospectId: linked.prospectId,
+      leadId: linked.leadId,
+      label,
     };
   }
 
@@ -613,7 +762,9 @@ function taskMatchesSearch(task: TaskRecord, searchTerm: string) {
     titleMatchesSearch(task.title, searchTerm) ||
     titleMatchesSearch(task.company?.name ?? '', searchTerm) ||
     titleMatchesSearch(task.prospect?.name ?? '', searchTerm) ||
-    titleMatchesSearch(task.lead?.name ?? '', searchTerm)
+    titleMatchesSearch(task.lead?.name ?? '', searchTerm) ||
+    titleMatchesSearch(task.lead?.email ?? '', searchTerm) ||
+    titleMatchesSearch(task.prospect?.email ?? '', searchTerm)
   );
 }
 

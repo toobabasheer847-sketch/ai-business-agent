@@ -81,7 +81,14 @@ export class TaskRepository {
   async findAllByTenantAndUser(
     tenantId: string,
     userId: string,
-    filters?: { status?: TaskStatus; priority?: TaskPriority; search?: string },
+    filters?: {
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      search?: string;
+      companyId?: string | null;
+      prospectId?: string | null;
+      leadId?: string | null;
+    },
   ): Promise<TaskRecord[]> {
     const clauses: SQL[] = [this.accessFilter(tenantId, userId)];
 
@@ -97,6 +104,18 @@ export class TaskRepository {
       clauses.push(this.searchFilter(filters.search));
     }
 
+    if (filters?.companyId) {
+      clauses.push(eq(tasks.companyId, filters.companyId));
+    }
+
+    if (filters?.prospectId) {
+      clauses.push(eq(tasks.prospectId, filters.prospectId));
+    }
+
+    if (filters?.leadId) {
+      clauses.push(eq(tasks.leadId, filters.leadId));
+    }
+
     const rows = await this.crmQuery()
       .where(and(...clauses))
       .orderBy(desc(tasks.createdAt));
@@ -107,7 +126,14 @@ export class TaskRepository {
   async listTasks(
     tenantId: string,
     userId: string,
-    filters?: { status?: TaskStatus; priority?: TaskPriority; search?: string },
+    filters?: {
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      search?: string;
+      companyId?: string | null;
+      prospectId?: string | null;
+      leadId?: string | null;
+    },
   ): Promise<TaskRecord[]> {
     return this.findAllByTenantAndUser(tenantId, userId, filters);
   }
@@ -214,8 +240,10 @@ export class TaskRepository {
         companyName: companies.name,
         leadFirstName: leads.firstName,
         leadLastName: leads.lastName,
+        leadEmail: leads.email,
         prospectFirstName: prospects.firstName,
         prospectLastName: prospects.lastName,
+        prospectEmail: prospects.email,
       })
       .from(tasks)
       .leftJoin(companies, eq(tasks.companyId, companies.id))
@@ -266,17 +294,18 @@ export class TaskRepository {
         row.companyId && row.companyName
           ? { id: row.companyId, name: row.companyName }
           : null,
-      prospect:
-        row.prospectId
-          ? {
-              id: row.prospectId,
-              name: formatPersonName(row.prospectFirstName, row.prospectLastName),
-            }
-          : null,
+      prospect: row.prospectId
+        ? {
+            id: row.prospectId,
+            name: formatPersonName(row.prospectFirstName, row.prospectLastName),
+            email: row.prospectEmail ?? null,
+          }
+        : null,
       lead: row.leadId
         ? {
             id: row.leadId,
             name: formatPersonName(row.leadFirstName, row.leadLastName),
+            email: row.leadEmail ?? null,
           }
         : null,
     };

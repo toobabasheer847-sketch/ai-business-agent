@@ -614,6 +614,36 @@ describe('MasterAgentService', () => {
     expect(mockRunEphemeral).not.toHaveBeenCalled();
   });
 
+  it('routes CRM-aware task list through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'list',
+      message: 'Tasks retrieved for ABC Technologies.',
+      data: [
+        {
+          title: 'Follow up',
+          companyId: 'company-1',
+          company: { id: 'company-1', name: 'ABC Technologies' },
+          priority: 'medium',
+          status: 'pending',
+        },
+      ],
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Show my tasks for ABC',
+    );
+
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('ABC Technologies');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Show my tasks for ABC',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
   it('routes task complete through TaskService and skips ADK', async () => {
     taskService.processNaturalLanguage.mockResolvedValue({
       action: 'complete',

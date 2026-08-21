@@ -36,7 +36,7 @@ describe('TaskService', () => {
     deleteTask: jest.Mock;
   };
   let userRepository: { findByIdAndTenant: jest.Mock };
-  let crmResolver: { resolve: jest.Mock };
+  let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
 
   beforeEach(() => {
     taskRepository = {
@@ -97,6 +97,24 @@ describe('TaskService', () => {
     );
   });
 
+  it('creates a task linked to a same-tenant prospect or lead', async () => {
+    await service.createTask(
+      { title: 'Follow up', prospectId: 'prospect-1' } as any,
+      contextA,
+    );
+    await service.createTask(
+      { title: 'Follow up', leadId: 'lead-1' } as any,
+      contextA,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ prospectId: 'prospect-1', tenantId: tenantA }),
+    );
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ leadId: 'lead-1', tenantId: tenantA }),
+    );
+  });
+
   it('rejects a cross-tenant company on create', async () => {
     crmResolver.assertIds.mockRejectedValue(
       new BadRequestException(
@@ -154,16 +172,34 @@ describe('TaskService', () => {
       { companyId: 'company-2' } as any,
       contextA,
     );
+    await service.updateTask(
+      taskId,
+      { prospectId: 'prospect-2' } as any,
+      contextA,
+    );
+    await service.updateTask(
+      taskId,
+      { leadId: 'lead-2' } as any,
+      contextA,
+    );
 
-    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
       tenantA,
+      userA,
       expect.objectContaining({ companyId: 'company-2' }),
     );
     expect(taskRepository.updateTask).toHaveBeenCalledWith(
       taskId,
       tenantA,
       userA,
-      expect.objectContaining({ companyId: 'company-2' }),
+      expect.objectContaining({ prospectId: 'prospect-2' }),
+    );
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ leadId: 'lead-2' }),
     );
   });
 
@@ -255,6 +291,64 @@ describe('TaskService', () => {
       tenantA,
       userA,
       expect.any(Object),
+    );
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.any(Object),
+    );
+  });
+
+  it('lists by same-tenant company without weakening ownership', async () => {
+    await service.listTasks({ companyId: 'company-1' } as any, contextA);
+
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+  });
+
+  it('lists by prospect and lead using JWT ownership', async () => {
+    await service.listTasks({ prospectId: 'prospect-1' } as any, contextA);
+    await service.listTasks({ leadId: 'lead-1' } as any, contextA);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ prospectId: 'prospect-1' }),
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ leadId: 'lead-1' }),
+    );
+  });
+
+  it('rejects a cross-tenant company filter', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Company not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.listTasks({ companyId: 'company-b' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(taskRepository.findAllByTenantAndUser).not.toHaveBeenCalled();
+  });
+
+  it('clears a CRM relationship on update', async () => {
+    await service.updateTask(taskId, { companyId: null } as any, contextA);
+
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: null }),
     );
   });
 
@@ -406,6 +500,7 @@ describe('TaskService', () => {
     expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
       tenantA,
       userB,
+      expect.any(Object),
     );
 
     await service.processNaturalLanguage(
@@ -415,6 +510,7 @@ describe('TaskService', () => {
     expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
       tenantB,
       userA,
+      expect.any(Object),
     );
     expect(taskRepository.updateTask).not.toHaveBeenCalled();
   });
@@ -686,9 +782,54 @@ describe('TaskService', () => {
     expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
       tenantA,
       userB,
+      expect.objectContaining({ companyId: 'company-1' }),
     );
     expect(result.message).toBe('Task not found.');
     expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('lists tasks for a uniquely resolved company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([
+      { ...ownedTask, companyId: 'company-1', title: 'Follow up' },
+    ]);
+
+    const result = await service.processNaturalLanguage(
+      'Show my tasks for ABC',
+      contextA,
+    );
+
+    expect(result.action).toBe('list');
+    expect(crmResolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ personQuery: 'ABC' }),
+      tenantA,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+  });
+
+  it('asks for clarification when listing an ambiguous company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'company',
+      query: 'ABC',
+      matches: ['ABC Solutions', 'ABC Technologies'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'Show my tasks related to ABC',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain('2 companies matching ABC');
+    expect(taskRepository.findAllByTenantAndUser).not.toHaveBeenCalled();
   });
 
   it('rejects a missing tenant context', async () => {

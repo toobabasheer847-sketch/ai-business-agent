@@ -198,7 +198,7 @@ describe('TaskRepository', () => {
       expect.objectContaining({ prospectId: 'p1', companyId: null, leadId: null }),
     );
     expect(row.prospectId).toBe('p1');
-    expect(row.prospect).toEqual({ id: 'p1', name: 'Ahmed Khan' });
+    expect(row.prospect).toEqual({ id: 'p1', name: 'Ahmed Khan', email: null });
   });
 
   it('creates a task with a lead foreign key', async () => {
@@ -232,7 +232,7 @@ describe('TaskRepository', () => {
       expect.objectContaining({ leadId: 'l1', companyId: null, prospectId: null }),
     );
     expect(row.leadId).toBe('l1');
-    expect(row.lead).toEqual({ id: 'l1', name: 'Zainab Ali' });
+    expect(row.lead).toEqual({ id: 'l1', name: 'Zainab Ali', email: null });
   });
 
   it('updates and retrieves a CRM relationship', async () => {
@@ -289,6 +289,33 @@ describe('TaskRepository', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].company).toEqual({ id: 'c1', name: 'ABC Technologies' });
-    expect(rows[0].prospect).toEqual({ id: 'p1', name: 'Ahmed Khan' });
+    expect(rows[0].prospect).toEqual({
+      id: 'p1',
+      name: 'Ahmed Khan',
+      email: null,
+    });
+  });
+
+  it('lists through company, prospect, and lead filters without dropping the access clause', async () => {
+    const { repository, where, orderBy } = createRepository();
+    orderBy.mockResolvedValue([]);
+
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      companyId: 'c1',
+    });
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      prospectId: 'p1',
+    });
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      leadId: 'l1',
+    });
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      companyId: 'c1',
+      prospectId: 'p1',
+      leadId: 'l1',
+    });
+    await repository.findAllByTenantAndUser(tenantA, userA);
+
+    expect(where).toHaveBeenCalledTimes(5);
   });
 });

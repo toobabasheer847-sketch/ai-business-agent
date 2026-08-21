@@ -15,6 +15,9 @@ function toListParams(query?: TaskListQuery) {
   if (query.status) params.status = query.status
   if (query.priority) params.priority = query.priority
   if (query.search?.trim()) params.search = query.search.trim()
+  if (query.companyId) params.companyId = query.companyId
+  if (query.prospectId) params.prospectId = query.prospectId
+  if (query.leadId) params.leadId = query.leadId
 
   return Object.keys(params).length > 0 ? params : undefined
 }

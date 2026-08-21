@@ -13,6 +13,7 @@ export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 export interface TaskCrmEntity {
   id: string;
   name: string;
+  email?: string | null;
 }
 
 export interface TaskRecord {

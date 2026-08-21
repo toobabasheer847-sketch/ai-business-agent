@@ -47,6 +47,8 @@ const REFERENCE_STOP = new Set([
   'call',
   'contact',
   'email',
+  'this',
+  'related',
   'company',
   'prospect',
   'lead',
@@ -67,6 +69,16 @@ export function extractCrmReferences(text: string): CrmReferences {
     cleaned.match(/\b([A-Za-z0-9][A-Za-z0-9 .&'-]{0,60}?)\s+company\b/i) ||
     cleaned.match(/\bcompany\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{0,60}?)(?=\s|$)/i);
 
+  const relatedMatch = cleaned.match(
+    /\b(?:tasks?|task)\s+(?:for|related to|about)\s+(?!this\s+company\b)([A-Za-z0-9][A-Za-z0-9 .&'-]{0,60}?)(?=\s|$)/i,
+  );
+
+  const forCreateMatch =
+    !fromMatch &&
+    cleaned.match(
+      /\bfor\s+(?!this\s+company\b)([A-Za-z][A-Za-z0-9 .&'-]{0,40}?)(?:\s+to\b|\s+tomorrow\b|\s+today\b|$)/i,
+    );
+
   const companyQuery = sanitizeQuery(
     fromMatch?.[2] || explicitCompanyMatch?.[1],
   );
@@ -79,6 +91,20 @@ export function extractCrmReferences(text: string): CrmReferences {
       /\b(?:follow(?:\s|-)?up with|contact|call|email)\s+([A-Za-z][A-Za-z'-]{1,40}(?:\s+[A-Za-z][A-Za-z'-]{1,40})?)\b/i,
     );
     personQuery = sanitizeQuery(personMatch?.[1]);
+  }
+
+  if (!personQuery && !emailQuery) {
+    const relatedOrFor = sanitizeQuery(
+      relatedMatch?.[1] || forCreateMatch?.[1],
+    );
+    if (
+      relatedOrFor &&
+      relatedOrFor.toLowerCase() !== (companyQuery || '').toLowerCase()
+    ) {
+      personQuery = relatedOrFor;
+    } else if (relatedOrFor && !companyQuery) {
+      personQuery = relatedOrFor;
+    }
   }
 
   if (personQuery && companyQuery && personQuery.toLowerCase() === companyQuery.toLowerCase()) {

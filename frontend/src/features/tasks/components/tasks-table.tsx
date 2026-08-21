@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { MoreHorizontal } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -30,12 +32,68 @@ type TasksTableProps = {
   onDelete: (item: Task) => void
 }
 
-function crmLabel(item: Task) {
-  const parts: string[] = []
-  if (item.company?.name) parts.push(`Company · ${item.company.name}`)
-  if (item.prospect?.name) parts.push(`Prospect · ${item.prospect.name}`)
-  if (item.lead?.name) parts.push(`Lead · ${item.lead.name}`)
-  return parts.length > 0 ? parts.join(' · ') : null
+function crmHasLinks(item: Task) {
+  return Boolean(item.company?.id || item.prospect?.id || item.lead?.id)
+}
+
+function crmLinkClass() {
+  return 'text-foreground underline-offset-4 hover:underline'
+}
+
+function CrmLinks({ item }: { item: Task }) {
+  const parts: ReactNode[] = []
+
+  if (item.company?.id && item.company.name) {
+    parts.push(
+      <span key="company">
+        Company:{' '}
+        <Link
+          to={`/tasks?companyId=${item.company.id}`}
+          className={crmLinkClass()}
+        >
+          {item.company.name}
+        </Link>
+      </span>,
+    )
+  }
+
+  if (item.prospect?.id && item.prospect.name) {
+    parts.push(
+      <span key="prospect">
+        Prospect:{' '}
+        <Link
+          to={`/tasks?prospectId=${item.prospect.id}`}
+          className={crmLinkClass()}
+        >
+          {item.prospect.name}
+        </Link>
+      </span>,
+    )
+  }
+
+  if (item.lead?.id) {
+    const leadLabel = item.lead.email || item.lead.name
+    if (leadLabel) {
+      parts.push(
+        <span key="lead">
+          Lead:{' '}
+          <Link to={`/tasks?leadId=${item.lead.id}`} className={crmLinkClass()}>
+            {leadLabel}
+          </Link>
+        </span>,
+      )
+    }
+  }
+
+  if (parts.length === 0) return <>{'\u2014'}</>
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {parts.map((part, index) => (
+        <div key={index}>{part}</div>
+      ))}
+    </div>
+  )
 }
 
 function formatDate(value: string | null) {
@@ -94,9 +152,9 @@ export function TasksTable({
                       {item.description}
                     </div>
                   ) : null}
-                  {crmLabel(item) ? (
-                    <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground lg:hidden">
-                      {crmLabel(item)}
+                  {crmHasLinks(item) ? (
+                    <div className="mt-0.5 text-xs text-muted-foreground lg:hidden">
+                      <CrmLinks item={item} />
                     </div>
                   ) : null}
                   <div className="mt-1 text-xs text-muted-foreground sm:hidden">
@@ -116,7 +174,7 @@ export function TasksTable({
                   {assignedName || '—'}
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground lg:table-cell">
-                  {crmLabel(item) || '—'}
+                  <CrmLinks item={item} />
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground lg:table-cell">
                   {formatDate(item.createdAt)}

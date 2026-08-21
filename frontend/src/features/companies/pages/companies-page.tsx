@@ -19,6 +19,7 @@ import { CompaniesFilters } from '@/features/companies/components/companies-filt
 import { CompaniesTable } from '@/features/companies/components/companies-table'
 import { CompanyDeleteDialog } from '@/features/companies/components/company-delete-dialog'
 import { CompanyForm } from '@/features/companies/components/company-form'
+import { RelatedTasksCard } from '@/features/tasks/components/related-tasks-card'
 import {
   useCompanies,
   useCreateCompany,
@@ -246,7 +247,7 @@ export function CompaniesPage() {
         open={Boolean(editing)}
         onOpenChange={(open) => !open && setEditing(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit company</DialogTitle>
             <DialogDescription>
@@ -255,15 +256,21 @@ export function CompaniesPage() {
             </DialogDescription>
           </DialogHeader>
           {editing && (
-            <CompanyForm
-              key={editing.id}
-              mode="edit"
-              initial={editing}
-              submitLabel="Save changes"
-              submitting={updateMutation.isPending}
-              onCancel={() => setEditing(null)}
-              onSubmit={handleUpdate}
-            />
+            <div className="space-y-6">
+              <CompanyForm
+                key={editing.id}
+                mode="edit"
+                initial={editing}
+                submitLabel="Save changes"
+                submitting={updateMutation.isPending}
+                onCancel={() => setEditing(null)}
+                onSubmit={handleUpdate}
+              />
+              <RelatedTasksCard
+                companyId={editing.id}
+                entityLabel={editing.name}
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>

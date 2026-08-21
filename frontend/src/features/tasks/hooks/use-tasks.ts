@@ -19,9 +19,19 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     status: query.status || undefined,
     priority: query.priority || undefined,
     search: query.search?.trim() || undefined,
+    companyId: query.companyId || undefined,
+    prospectId: query.prospectId || undefined,
+    leadId: query.leadId || undefined,
   }
 
-  if (!normalized.status && !normalized.priority && !normalized.search) {
+  if (
+    !normalized.status &&
+    !normalized.priority &&
+    !normalized.search &&
+    !normalized.companyId &&
+    !normalized.prospectId &&
+    !normalized.leadId
+  ) {
     return undefined
   }
 

@@ -16,6 +16,7 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 export type TaskCrmEntity = {
   id: string
   name: string
+  email?: string | null
 }
 
 /**
@@ -79,6 +80,9 @@ export type TaskListQuery = {
   status?: TaskStatus | string
   priority?: TaskPriority | string
   search?: string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
 }
 
 /** Matches POST /api/ai/task/natural-language response */

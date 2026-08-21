@@ -19,6 +19,7 @@ import { ApiError, getErrorMessage } from '@/lib/api'
 import { useCompanies } from '@/features/companies/hooks/use-companies'
 import { LeadDeleteDialog } from '@/features/leads/components/lead-delete-dialog'
 import { LeadForm } from '@/features/leads/components/lead-form'
+import { RelatedTasksCard } from '@/features/tasks/components/related-tasks-card'
 import { LeadsFilters } from '@/features/leads/components/leads-filters'
 import { LeadsTable } from '@/features/leads/components/leads-table'
 import {
@@ -358,16 +359,24 @@ export function LeadsPage() {
             </DialogDescription>
           </DialogHeader>
           {editing && (
-            <LeadForm
-              key={editing.id}
-              mode="edit"
-              initial={editing}
-              companies={companies}
-              submitLabel="Save changes"
-              submitting={updateMutation.isPending}
-              onCancel={() => setEditing(null)}
-              onSubmit={handleUpdate}
-            />
+            <div className="space-y-6">
+              <LeadForm
+                key={editing.id}
+                mode="edit"
+                initial={editing}
+                companies={companies}
+                submitLabel="Save changes"
+                submitting={updateMutation.isPending}
+                onCancel={() => setEditing(null)}
+                onSubmit={handleUpdate}
+              />
+              <RelatedTasksCard
+                leadId={editing.id}
+                entityLabel={[editing.firstName, editing.lastName]
+                  .filter(Boolean)
+                  .join(' ')}
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>

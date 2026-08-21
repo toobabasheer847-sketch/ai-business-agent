@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Bot, ListTodo, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -120,9 +120,15 @@ function taskErrorMessage(error: unknown): string {
 }
 
 export function TasksPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [priority, setPriority] = useState('')
+  const [companyId, setCompanyId] = useState(searchParams.get('companyId') ?? '')
+  const [prospectId, setProspectId] = useState(
+    searchParams.get('prospectId') ?? '',
+  )
+  const [leadId, setLeadId] = useState(searchParams.get('leadId') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -138,17 +144,43 @@ export function TasksPage() {
     return () => window.clearTimeout(timer)
   }, [search])
 
+  useEffect(() => {
+    setCompanyId(searchParams.get('companyId') ?? '')
+    setProspectId(searchParams.get('prospectId') ?? '')
+    setLeadId(searchParams.get('leadId') ?? '')
+  }, [searchParams])
+
+  function setCrmParam(
+    key: 'companyId' | 'prospectId' | 'leadId',
+    value: string,
+  ) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setSearchParams(next, { replace: true })
+  }
+
   const listQueryInput = useMemo<TaskListQuery | undefined>(() => {
     const query: TaskListQuery = {
       search: debouncedSearch.trim() || undefined,
       status: (status as TaskStatus) || undefined,
       priority: (priority as TaskPriority) || undefined,
+      companyId: companyId || undefined,
+      prospectId: prospectId || undefined,
+      leadId: leadId || undefined,
     }
-    if (!query.search && !query.status && !query.priority) {
+    if (
+      !query.search &&
+      !query.status &&
+      !query.priority &&
+      !query.companyId &&
+      !query.prospectId &&
+      !query.leadId
+    ) {
       return undefined
     }
     return query
-  }, [debouncedSearch, status, priority])
+  }, [debouncedSearch, status, priority, companyId, prospectId, leadId])
 
   const usersQuery = useUsers()
   const companiesQuery = useCompanies()
@@ -175,7 +207,9 @@ export function TasksPage() {
     return map
   }, [users])
 
-  const hasFilters = Boolean(search || status || priority)
+  const hasFilters = Boolean(
+    search || status || priority || companyId || prospectId || leadId,
+  )
 
   async function handleCreate(
     values: CreateTaskFormValues | UpdateTaskFormValues,
@@ -271,14 +305,24 @@ export function TasksPage() {
           search={search}
           status={status}
           priority={priority}
+          companyId={companyId}
+          prospectId={prospectId}
+          leadId={leadId}
+          companies={companies}
+          prospects={prospects}
+          leads={leads}
           onSearchChange={setSearch}
           onStatusChange={setStatus}
           onPriorityChange={setPriority}
+          onCompanyChange={(value) => setCrmParam('companyId', value)}
+          onProspectChange={(value) => setCrmParam('prospectId', value)}
+          onLeadChange={(value) => setCrmParam('leadId', value)}
           onReset={() => {
             setSearch('')
             setStatus('')
             setPriority('')
             setDebouncedSearch('')
+            setSearchParams({}, { replace: true })
           }}
         />
       </div>

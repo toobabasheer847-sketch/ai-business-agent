@@ -47,6 +47,32 @@ describe('extractCrmReferences', () => {
       }),
     );
   });
+
+  it('extracts a company or person from list phrasing', () => {
+    expect(extractCrmReferences('Show my tasks for ABC')).toEqual(
+      expect.objectContaining({
+        personQuery: 'ABC',
+        explicitCompany: false,
+      }),
+    );
+    expect(extractCrmReferences('Show tasks related to Ahmed')).toEqual(
+      expect.objectContaining({
+        personQuery: 'Ahmed',
+      }),
+    );
+  });
+
+  it('extracts a company from create-for phrasing', () => {
+    expect(
+      extractCrmReferences(
+        'Create a task for ABC to send the proposal tomorrow.',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        personQuery: 'ABC',
+      }),
+    );
+  });
 });
 
 describe('parseTaskCommand CRM hints', () => {
@@ -65,6 +91,15 @@ describe('parseTaskCommand CRM hints', () => {
         dueAt: '2026-08-21T00:00:00.000Z',
         companyQuery: 'ABC',
         explicitCompany: true,
+      }),
+    );
+  });
+
+  it('parses a CRM-scoped list command', () => {
+    expect(parseTaskCommand('Show my tasks for ABC')).toEqual(
+      expect.objectContaining({
+        action: 'list',
+        personQuery: 'ABC',
       }),
     );
   });

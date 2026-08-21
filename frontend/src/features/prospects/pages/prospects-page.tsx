@@ -20,6 +20,7 @@ import { useCompanies } from '@/features/companies/hooks/use-companies'
 import { useLeads } from '@/features/leads/hooks/use-leads'
 import { ProspectDeleteDialog } from '@/features/prospects/components/prospect-delete-dialog'
 import { ProspectForm } from '@/features/prospects/components/prospect-form'
+import { RelatedTasksCard } from '@/features/tasks/components/related-tasks-card'
 import { ProspectsFilters } from '@/features/prospects/components/prospects-filters'
 import { ProspectsTable } from '@/features/prospects/components/prospects-table'
 import {
@@ -420,16 +421,24 @@ export function ProspectsPage() {
             </DialogDescription>
           </DialogHeader>
           {editing && (
-            <ProspectForm
-              key={editing.id}
-              mode="edit"
-              initial={editing}
-              companies={companies}
-              submitLabel="Save changes"
-              submitting={updateMutation.isPending}
-              onCancel={() => setEditing(null)}
-              onSubmit={handleUpdate}
-            />
+            <div className="space-y-6">
+              <ProspectForm
+                key={editing.id}
+                mode="edit"
+                initial={editing}
+                companies={companies}
+                submitLabel="Save changes"
+                submitting={updateMutation.isPending}
+                onCancel={() => setEditing(null)}
+                onSubmit={handleUpdate}
+              />
+              <RelatedTasksCard
+                prospectId={editing.id}
+                entityLabel={[editing.firstName, editing.lastName]
+                  .filter(Boolean)
+                  .join(' ')}
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>

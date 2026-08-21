@@ -126,7 +126,7 @@ function attachCrmReferences(
   command: TaskNlCommand,
   text: string,
 ): TaskNlCommand {
-  if (command.action === 'clarify' || command.action === 'list') {
+  if (command.action === 'clarify') {
     return command;
   }
 
@@ -345,6 +345,8 @@ function extractTarget(
       'get',
       'find',
       'display',
+      'related',
+      'about',
       'change',
       'set',
       'make',

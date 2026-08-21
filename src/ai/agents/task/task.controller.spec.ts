@@ -202,6 +202,42 @@ describe('TaskController', () => {
     );
   });
 
+  it('lists with a companyId filter from the query string', async () => {
+    const token = signTestJwt(app);
+    const companyId = '22222222-2222-4222-8222-222222222222';
+
+    await request(app.getHttpServer())
+      .get('/ai/task')
+      .query({ companyId })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.listTasks).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
+  it('rejects tenantId and createdBy on list query', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task')
+      .query({ tenantId: 'tenant-attacker', createdBy: 'user-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(taskService.listTasks).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for list without a JWT', async () => {
+    await request(app.getHttpServer()).get('/ai/task').expect(401);
+    expect(taskService.listTasks).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid taskId UUID', async () => {
     const token = signTestJwt(app);
 
