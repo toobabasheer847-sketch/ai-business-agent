@@ -17,4 +17,5 @@ export {
   gmailConfigRelations,
   auditLogRelations,
   taskRelations,
+  taskReminderRelations,
 } from './relations';

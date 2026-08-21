@@ -18,6 +18,10 @@ function toListParams(query?: TaskListQuery) {
   if (query.companyId) params.companyId = query.companyId
   if (query.prospectId) params.prospectId = query.prospectId
   if (query.leadId) params.leadId = query.leadId
+  if (query.overdue) params.overdue = 'true'
+  if (query.dueFrom) params.dueFrom = query.dueFrom
+  if (query.dueTo) params.dueTo = query.dueTo
+  if (query.openOnly) params.openOnly = 'true'
 
   return Object.keys(params).length > 0 ? params : undefined
 }

@@ -1,3 +1,5 @@
+import type { TaskReminderSummary } from '../task-reminder.constants.js';
+
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
@@ -35,6 +37,8 @@ export interface TaskRecord {
   company?: TaskCrmEntity | null;
   prospect?: TaskCrmEntity | null;
   lead?: TaskCrmEntity | null;
+  isOverdue?: boolean;
+  reminder?: TaskReminderSummary | null;
 }
 
 export interface TaskContext {

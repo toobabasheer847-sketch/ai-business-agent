@@ -36,6 +36,63 @@ describe('parseTaskDueAt', () => {
     }
   });
 
+  it('parses next Tuesday as the following Tuesday in UTC', () => {
+    const result = parseTaskDueAt('Create a task next Tuesday', now);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-08-25T00:00:00.000Z');
+    }
+  });
+
+  it('parses an explicit YYYY-MM-DD date', () => {
+    const result = parseTaskDueAt('Create a task on 2026-09-01', now);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    }
+  });
+
+  it('parses next Monday at 10 AM as 10:00 UTC', () => {
+    const result = parseTaskDueAt(
+      'Create a task next Monday at 10 AM',
+      now,
+    );
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-08-24T10:00:00.000Z');
+    }
+  });
+
+  it('parses a time-only phrase against today in UTC', () => {
+    const result = parseTaskDueAt('Remind me at 3 PM', now);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-08-20T15:00:00.000Z');
+    }
+  });
+
+  it('keeps date-only behavior for sometime tomorrow', () => {
+    const result = parseTaskDueAt('remind me sometime tomorrow', now);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-08-21T00:00:00.000Z');
+    }
+  });
+
+  it('keeps next week as seven UTC days later', () => {
+    const result = parseTaskDueAt('remind me next week', now);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.dueAt.toISOString()).toBe('2026-08-27T00:00:00.000Z');
+    }
+  });
+
   it('parses tomorrow at 3 PM as 15:00 UTC', () => {
     const result = parseTaskDueAt('Create a task to call Ahmed tomorrow at 3 PM', now);
 

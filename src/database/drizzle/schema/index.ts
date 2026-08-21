@@ -11,6 +11,7 @@ export * from './phone-number.schema';
 export * from './proposal.schema';
 export * from './prospect.schema';
 export * from './task.schema';
+export * from './task-reminder.schema';
 export * from './tenant.schema';
 export * from './user.schema';
 export * from './knowledge-document.schema';

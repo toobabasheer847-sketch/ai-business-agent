@@ -17,10 +17,13 @@ import {
   TASK_STATUSES,
 } from '@/features/tasks/types/task.types'
 
+type TaskDueWindow = '' | 'overdue' | 'today' | 'tomorrow' | 'upcoming'
+
 type TaskFiltersProps = {
   search: string
   status: string
   priority: string
+  dueWindow: TaskDueWindow
   companyId: string
   prospectId: string
   leadId: string
@@ -30,6 +33,7 @@ type TaskFiltersProps = {
   onSearchChange: (value: string) => void
   onStatusChange: (value: string) => void
   onPriorityChange: (value: string) => void
+  onDueWindowChange: (value: TaskDueWindow) => void
   onCompanyChange: (value: string) => void
   onProspectChange: (value: string) => void
   onLeadChange: (value: string) => void
@@ -55,6 +59,7 @@ export function TaskFilters({
   search,
   status,
   priority,
+  dueWindow,
   companyId,
   prospectId,
   leadId,
@@ -64,13 +69,14 @@ export function TaskFilters({
   onSearchChange,
   onStatusChange,
   onPriorityChange,
+  onDueWindowChange,
   onCompanyChange,
   onProspectChange,
   onLeadChange,
   onReset,
 }: TaskFiltersProps) {
   const hasFilters = Boolean(
-    search || status || priority || companyId || prospectId || leadId,
+    search || status || priority || dueWindow || companyId || prospectId || leadId,
   )
 
   return (
@@ -119,6 +125,24 @@ export function TaskFilters({
               {item}
             </SelectItem>
           ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={dueWindow || ALL}
+        onValueChange={(value) =>
+          onDueWindowChange(value === ALL ? '' : (value as TaskDueWindow))
+        }
+      >
+        <SelectTrigger className="w-full lg:w-[170px]" aria-label="Due window">
+          <SelectValue placeholder="Due" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>All due dates</SelectItem>
+          <SelectItem value="overdue">Overdue</SelectItem>
+          <SelectItem value="today">Due today</SelectItem>
+          <SelectItem value="tomorrow">Due tomorrow</SelectItem>
+          <SelectItem value="upcoming">Upcoming</SelectItem>
         </SelectContent>
       </Select>
 

@@ -96,7 +96,7 @@ function CrmLinks({ item }: { item: Task }) {
   )
 }
 
-function formatDate(value: string | null) {
+function formatDateTime(value: string | null) {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -104,6 +104,24 @@ function formatDate(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
+}
+
+function reminderLabel(item: Task) {
+  if (!item.reminder?.status) return '—'
+  return item.reminder.status.replaceAll('_', ' ')
+}
+
+function DueCell({ item }: { item: Task }) {
+  return (
+    <div className="space-y-0.5">
+      <div className={item.isOverdue ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+        {formatDateTime(item.dueAt)}
+      </div>
+      {item.isOverdue ? (
+        <div className="text-xs font-medium text-destructive">Overdue</div>
+      ) : null}
+    </div>
+  )
 }
 
 export function TasksTable({
@@ -128,6 +146,7 @@ export function TasksTable({
             <TableHead>Priority</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="hidden sm:table-cell">Due</TableHead>
+            <TableHead className="hidden md:table-cell">Reminder</TableHead>
             <TableHead className="hidden md:table-cell">Assigned</TableHead>
             <TableHead className="hidden lg:table-cell">CRM</TableHead>
             <TableHead className="hidden lg:table-cell">Created</TableHead>
@@ -157,8 +176,8 @@ export function TasksTable({
                       <CrmLinks item={item} />
                     </div>
                   ) : null}
-                  <div className="mt-1 text-xs text-muted-foreground sm:hidden">
-                    Due {formatDate(item.dueAt)}
+                  <div className="mt-1 text-xs sm:hidden">
+                    <DueCell item={item} />
                   </div>
                 </TableCell>
                 <TableCell>
@@ -167,8 +186,11 @@ export function TasksTable({
                 <TableCell>
                   <TaskStatusBadge status={item.status} />
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground sm:table-cell">
-                  {formatDate(item.dueAt)}
+                <TableCell className="hidden sm:table-cell">
+                  <DueCell item={item} />
+                </TableCell>
+                <TableCell className="hidden capitalize text-muted-foreground md:table-cell">
+                  {reminderLabel(item)}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   {assignedName || '—'}
@@ -177,7 +199,7 @@ export function TasksTable({
                   <CrmLinks item={item} />
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground lg:table-cell">
-                  {formatDate(item.createdAt)}
+                  {formatDateTime(item.createdAt)}
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>

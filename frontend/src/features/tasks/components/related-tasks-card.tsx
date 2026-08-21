@@ -128,6 +128,9 @@ export function RelatedTasksCard({
                   <TaskStatusBadge status={item.status} />
                   <TaskPriorityBadge priority={item.priority} />
                   <span>Due {formatDate(item.dueAt)}</span>
+                  {item.isOverdue ? (
+                    <span className="font-medium text-destructive">Overdue</span>
+                  ) : null}
                   <span>
                     {item.assignedTo
                       ? userNameById.get(item.assignedTo) || 'Assigned'

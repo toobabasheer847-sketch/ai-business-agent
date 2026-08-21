@@ -39,6 +39,14 @@ export type Task = {
   completedAt: string | null
   createdAt: string | null
   updatedAt: string | null
+  isOverdue?: boolean
+  reminder?: {
+    id: string
+    type: 'upcoming' | 'overdue'
+    status: 'pending' | 'sent' | 'skipped' | 'failed'
+    scheduledAt: string
+    processedAt?: string | null
+  } | null
   company?: TaskCrmEntity | null
   prospect?: TaskCrmEntity | null
   lead?: TaskCrmEntity | null
@@ -83,6 +91,10 @@ export type TaskListQuery = {
   companyId?: string
   prospectId?: string
   leadId?: string
+  overdue?: boolean
+  dueFrom?: string
+  dueTo?: string
+  openOnly?: boolean
 }
 
 /** Matches POST /api/ai/task/natural-language response */

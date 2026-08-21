@@ -36,8 +36,9 @@ async function main() {
     throw new Error('DATABASE_URL is required');
   }
 
-  const sql = fs.readFileSync(SQL_PATH, 'utf8');
-  const hash = drizzleHash(sql);
+  const hasBaseSql = fs.existsSync(SQL_PATH);
+  const sql = hasBaseSql ? fs.readFileSync(SQL_PATH, 'utf8') : '';
+  const hash = hasBaseSql ? drizzleHash(sql) : null;
 
   const client = new Client({ connectionString });
   await client.connect();
@@ -156,6 +157,54 @@ async function main() {
       `CREATE INDEX IF NOT EXISTS "phone_numbers_tenant_id_idx" ON "phone_numbers" USING btree ("tenant_id")`,
     );
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "task_reminders" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "tenant_id" uuid NOT NULL,
+        "task_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "reminder_type" varchar(32) NOT NULL,
+        "scheduled_at" timestamp with time zone NOT NULL,
+        "due_at_snapshot" timestamp with time zone NOT NULL,
+        "status" varchar(32) DEFAULT 'pending' NOT NULL,
+        "last_error" text,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "processed_at" timestamp with time zone
+      );
+    `);
+
+    const reminderConstraints = [
+      `ALTER TABLE "task_reminders" ADD CONSTRAINT "task_reminders_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE cascade`,
+      `ALTER TABLE "task_reminders" ADD CONSTRAINT "task_reminders_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE cascade`,
+      `ALTER TABLE "task_reminders" ADD CONSTRAINT "task_reminders_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE cascade`,
+    ];
+
+    for (const statement of reminderConstraints) {
+      await client.query(`
+        DO $$ BEGIN
+          ${statement};
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+    }
+
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_reminders_tenant_id_idx" ON "task_reminders" USING btree ("tenant_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_reminders_task_id_idx" ON "task_reminders" USING btree ("task_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_reminders_status_idx" ON "task_reminders" USING btree ("status")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_reminders_scheduled_at_idx" ON "task_reminders" USING btree ("scheduled_at")`,
+    );
+    await client.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "task_reminders_task_type_scheduled_unique" ON "task_reminders" USING btree ("task_id", "reminder_type", "scheduled_at")`,
+    );
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
@@ -165,20 +214,26 @@ async function main() {
       )
     `);
 
-    const existing = await client.query(
-      `SELECT 1 FROM drizzle.__drizzle_migrations WHERE hash = $1 LIMIT 1`,
-      [hash],
-    );
-    if (existing.rowCount === 0) {
-      await client.query(
-        `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
-        [hash, Date.now()],
+    if (hash) {
+      const existing = await client.query(
+        `SELECT 1 FROM drizzle.__drizzle_migrations WHERE hash = $1 LIMIT 1`,
+        [hash],
+      );
+      if (existing.rowCount === 0) {
+        await client.query(
+          `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
+          [hash, Date.now()],
+        );
+      }
+      console.log(`Stamped drizzle migration hash for ${MIGRATION_TAG}`);
+    } else {
+      console.log(
+        `Skipped drizzle hash stamp because ${MIGRATION_TAG}.sql is not present`,
       );
     }
 
     await client.query('COMMIT');
     console.log('Existing database upgrade: PASS');
-    console.log(`Stamped drizzle migration hash for ${MIGRATION_TAG}`);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

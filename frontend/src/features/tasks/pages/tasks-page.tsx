@@ -65,6 +65,31 @@ function toIsoDateString(value?: string) {
   return date.toISOString()
 }
 
+function utcDayBounds(offsetDays: number) {
+  const now = new Date()
+  const start = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + offsetDays,
+  )
+  return {
+    dueFrom: new Date(start).toISOString(),
+    dueTo: new Date(start + 24 * 60 * 60 * 1000 - 1).toISOString(),
+  }
+}
+
+function dueWindowQuery(
+  dueWindow: '' | 'overdue' | 'today' | 'tomorrow' | 'upcoming',
+): Pick<TaskListQuery, 'overdue' | 'dueFrom' | 'dueTo' | 'openOnly'> {
+  if (dueWindow === 'overdue') return { overdue: true }
+  if (dueWindow === 'today') return utcDayBounds(0)
+  if (dueWindow === 'tomorrow') return utcDayBounds(1)
+  if (dueWindow === 'upcoming') {
+    return { dueFrom: new Date().toISOString(), openOnly: true }
+  }
+  return {}
+}
+
 function toCreatePayload(values: CreateTaskFormValues): CreateTaskRequest {
   const payload: CreateTaskRequest = {
     title: values.title.trim(),
@@ -129,6 +154,9 @@ export function TasksPage() {
     searchParams.get('prospectId') ?? '',
   )
   const [leadId, setLeadId] = useState(searchParams.get('leadId') ?? '')
+  const [dueWindow, setDueWindow] = useState<
+    '' | 'overdue' | 'today' | 'tomorrow' | 'upcoming'
+  >('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -168,6 +196,7 @@ export function TasksPage() {
       companyId: companyId || undefined,
       prospectId: prospectId || undefined,
       leadId: leadId || undefined,
+      ...dueWindowQuery(dueWindow),
     }
     if (
       !query.search &&
@@ -175,12 +204,16 @@ export function TasksPage() {
       !query.priority &&
       !query.companyId &&
       !query.prospectId &&
-      !query.leadId
+      !query.leadId &&
+      !query.overdue &&
+      !query.dueFrom &&
+      !query.dueTo &&
+      !query.openOnly
     ) {
       return undefined
     }
     return query
-  }, [debouncedSearch, status, priority, companyId, prospectId, leadId])
+  }, [debouncedSearch, status, priority, companyId, prospectId, leadId, dueWindow])
 
   const usersQuery = useUsers()
   const companiesQuery = useCompanies()
@@ -305,6 +338,7 @@ export function TasksPage() {
           search={search}
           status={status}
           priority={priority}
+          dueWindow={dueWindow}
           companyId={companyId}
           prospectId={prospectId}
           leadId={leadId}
@@ -314,6 +348,7 @@ export function TasksPage() {
           onSearchChange={setSearch}
           onStatusChange={setStatus}
           onPriorityChange={setPriority}
+          onDueWindowChange={setDueWindow}
           onCompanyChange={(value) => setCrmParam('companyId', value)}
           onProspectChange={(value) => setCrmParam('prospectId', value)}
           onLeadChange={(value) => setCrmParam('leadId', value)}
@@ -321,6 +356,7 @@ export function TasksPage() {
             setSearch('')
             setStatus('')
             setPriority('')
+            setDueWindow('')
             setDebouncedSearch('')
             setSearchParams({}, { replace: true })
           }}

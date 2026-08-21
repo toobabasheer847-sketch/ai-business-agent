@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -16,10 +17,11 @@ import {
   titleMatchesSearch,
   type TaskNlCommand,
 } from './parse-task-command.js';
-import { isSameUtcDay } from './parse-task-datetime.js';
+import { endOfUtcDay, startOfUtcDay, addUtcDays } from './parse-task-datetime.js';
 import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
 import { TaskCrmResolver } from './resolve-crm-entities.js';
 import { normalizeCrmIds } from './resolve-crm-ids.js';
+import { TaskReminderService } from './task-reminder.service.js';
 import { TaskRepository } from './task.repository.js';
 import {
   TaskAgentResponse,
@@ -35,6 +37,7 @@ export class TaskService {
     private readonly taskRepository: TaskRepository,
     private readonly userRepository: UserRepository,
     private readonly crmResolver: TaskCrmResolver,
+    @Optional() private readonly reminders?: TaskReminderService,
   ) {}
 
   async createTask(
@@ -54,7 +57,7 @@ export class TaskService {
     });
 
     try {
-      return await this.taskRepository.createTask({
+      const created = await this.taskRepository.createTask({
         tenantId: context.tenantId,
         createdBy: context.userId,
         title: dto.title,
@@ -66,6 +69,8 @@ export class TaskService {
         prospectId: crmIds.prospectId ?? null,
         leadId: crmIds.leadId ?? null,
       });
+      await this.reminders?.scheduleReminder(created);
+      return this.withReminder(created);
     } catch (error) {
       this.handleError(error, 'create task');
     }
@@ -84,7 +89,7 @@ export class TaskService {
       throw new NotFoundException('Task not found');
     }
 
-    return task;
+    return this.withReminder(task);
   }
 
   async listTasks(
@@ -99,7 +104,7 @@ export class TaskService {
       leadId: dto.leadId,
     });
 
-    return this.taskRepository.findAllByTenantAndUser(
+    const rows = await this.taskRepository.findAllByTenantAndUser(
       context.tenantId,
       context.userId,
       {
@@ -109,7 +114,34 @@ export class TaskService {
         companyId: crmIds.companyId,
         prospectId: crmIds.prospectId,
         leadId: crmIds.leadId,
+        overdue: dto.overdue,
+        dueFrom: dto.dueFrom,
+        dueTo: dto.dueTo,
+        openOnly: dto.openOnly,
       },
+    );
+
+    return this.withReminders(rows);
+  }
+
+  async getOverdueTasks(
+    dto: TaskQueryDto,
+    context: TaskContext,
+  ): Promise<TaskRecord[]> {
+    return this.listTasks({ ...dto, overdue: true }, context);
+  }
+
+  async getUpcomingTasks(
+    dto: TaskQueryDto,
+    context: TaskContext,
+  ): Promise<TaskRecord[]> {
+    return this.listTasks(
+      {
+        ...dto,
+        dueFrom: dto.dueFrom ?? new Date().toISOString(),
+        openOnly: dto.openOnly ?? true,
+      },
+      context,
     );
   }
 
@@ -154,7 +186,8 @@ export class TaskService {
       throw new NotFoundException('Task not found');
     }
 
-    return updated;
+    await this.reminders?.scheduleReminder(updated);
+    return this.withReminder(updated);
   }
 
   async completeTask(
@@ -287,6 +320,7 @@ export class TaskService {
         };
       }
 
+      const dueWindow = this.dueWindowFilters(command.dueOn, now);
       const rows = await this.listTasks(
         {
           status: command.status,
@@ -294,13 +328,11 @@ export class TaskService {
           companyId: crm.companyId,
           prospectId: crm.prospectId,
           leadId: crm.leadId,
+          ...dueWindow,
         },
         context,
       );
-      const data =
-        command.dueOn === 'today'
-          ? rows.filter((row) => isSameUtcDay(row.dueAt, now))
-          : rows;
+      const data = rows;
 
       if (crm.label && data.length === 0) {
         return {
@@ -694,6 +726,52 @@ export class TaskService {
     }
 
     return value;
+  }
+
+  private dueWindowFilters(
+    dueOn: 'today' | 'tomorrow' | 'overdue' | 'upcoming' | undefined,
+    now: Date,
+  ): Pick<TaskQueryDto, 'overdue' | 'dueFrom' | 'dueTo' | 'openOnly'> {
+    if (dueOn === 'overdue') {
+      return { overdue: true };
+    }
+    if (dueOn === 'today') {
+      return {
+        dueFrom: startOfUtcDay(now).toISOString(),
+        dueTo: endOfUtcDay(now).toISOString(),
+      };
+    }
+    if (dueOn === 'tomorrow') {
+      const tomorrow = addUtcDays(now, 1);
+      return {
+        dueFrom: startOfUtcDay(tomorrow).toISOString(),
+        dueTo: endOfUtcDay(tomorrow).toISOString(),
+      };
+    }
+    if (dueOn === 'upcoming') {
+      return {
+        dueFrom: now.toISOString(),
+        openOnly: true,
+      };
+    }
+    return {};
+  }
+
+  private async withReminder(task: TaskRecord): Promise<TaskRecord> {
+    const [attached] = await this.withReminders([task]);
+    return attached;
+  }
+
+  private async withReminders(tasks: TaskRecord[]): Promise<TaskRecord[]> {
+    if (!this.reminders || tasks.length === 0) {
+      return tasks;
+    }
+
+    try {
+      return await this.reminders.attachReminderStatus(tasks);
+    } catch {
+      return tasks;
+    }
   }
 
   private requireAuthContext(context: TaskContext) {

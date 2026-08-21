@@ -28,7 +28,7 @@ export interface TaskNlCommand {
   dueAt?: string;
   taskId?: string;
   searchTerm?: string;
-  dueOn?: 'today';
+  dueOn?: 'today' | 'tomorrow' | 'overdue' | 'upcoming';
   message?: string;
   companyQuery?: string;
   personQuery?: string;
@@ -181,6 +181,11 @@ function parseCreate(text: string, now: Date): TaskNlCommand {
     /^\s*(?:please\s+)?(?:create|add|new)(?:\s+a|\s+an)?(?:\s+task)?(?:\s*:)?(?:\s+to)?\s*/i,
     '',
   );
+  remainder = remainder.replace(
+    /^\s*(?:please\s+)?remind\s+me(?:\s+to)?\s*/i,
+    '',
+  );
+  remainder = remainder.replace(/\band\s+remind\s+me(?:\s+at)?\b/gi, ' ');
   remainder = remainder.replace(/\s+/g, ' ').trim().replace(/[.,!?]+$/, '');
 
   const title = capitalizeFirst(remainder);
@@ -214,7 +219,7 @@ function parseList(lower: string): TaskNlCommand {
     action: 'list',
     status,
     priority: priority.priority,
-    dueOn: /\bfor today\b|\btoday'?s tasks\b/.test(lower) ? 'today' : undefined,
+    dueOn: parseDueOn(lower),
   };
 }
 
@@ -417,8 +422,31 @@ function extractStatus(text: string): TaskStatus | undefined {
   return undefined;
 }
 
+function parseDueOn(
+  lower: string,
+): 'today' | 'tomorrow' | 'overdue' | 'upcoming' | undefined {
+  if (/\boverdue\b/.test(lower)) {
+    return 'overdue';
+  }
+  if (/\bdue tomorrow\b|\btomorrow'?s tasks\b/.test(lower)) {
+    return 'tomorrow';
+  }
+  if (/\bdue today\b|\bfor today\b|\btoday'?s tasks\b/.test(lower)) {
+    return 'today';
+  }
+  if (/\bupcoming\b/.test(lower)) {
+    return 'upcoming';
+  }
+  return undefined;
+}
+
 function isCreateIntent(lower: string): boolean {
-  return /^(?:please\s+)?(?:create|add|new)\b/.test(lower) || /\bnew\s+task\b/.test(lower);
+  return (
+    /^(?:please\s+)?(?:create|add|new)\b/.test(lower) ||
+    /\bnew\s+task\b/.test(lower) ||
+    /^(?:please\s+)?remind\s+me\b/.test(lower) ||
+    /\bremind me to\b/.test(lower)
+  );
 }
 
 function isCompleteIntent(lower: string): boolean {
@@ -438,7 +466,7 @@ function isListIntent(lower: string): boolean {
   }
 
   return (
-    /\b(show|list|display)\s+my\s+(pending|completed|cancelled|in[\s-]*progress)(?:\s+task)?$/.test(
+    /\b(show|list|display)\s+my\s+(pending|completed|cancelled|in[\s-]*progress|overdue)(?:\s+task)?$/.test(
       lower,
     ) ||
     /\b(show|list|display)\s+my\s+(high|low|medium|urgent)\s+priority(?:\s+task)?$/.test(

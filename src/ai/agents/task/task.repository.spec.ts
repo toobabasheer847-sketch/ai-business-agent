@@ -318,4 +318,17 @@ describe('TaskRepository', () => {
 
     expect(where).toHaveBeenCalledTimes(5);
   });
+
+  it('lists overdue tasks without dropping the access clause', async () => {
+    const { repository, where, orderBy } = createRepository();
+    orderBy.mockResolvedValue([]);
+
+    await repository.findAllByTenantAndUser(tenantA, userA, { overdue: true });
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      dueFrom: '2026-08-20T00:00:00.000Z',
+      dueTo: '2026-08-20T23:59:59.999Z',
+    });
+
+    expect(where).toHaveBeenCalledTimes(2);
+  });
 });

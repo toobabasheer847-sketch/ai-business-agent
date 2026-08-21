@@ -1,5 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, or, SQL } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNotNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  SQL,
+} from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
@@ -7,7 +19,21 @@ import { companies } from '../../../database/drizzle/schema/company.schema.js';
 import { leads } from '../../../database/drizzle/schema/lead.schema.js';
 import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { tasks } from '../../../database/drizzle/schema/task.schema.js';
+import { computeIsOverdue } from './task-overdue.js';
 import { TaskRecord, TaskPriority, TaskStatus } from './types/task.types.js';
+
+export type TaskListFilters = {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  search?: string;
+  companyId?: string | null;
+  prospectId?: string | null;
+  leadId?: string | null;
+  overdue?: boolean;
+  dueFrom?: Date | string;
+  dueTo?: Date | string;
+  openOnly?: boolean;
+};
 
 type TaskCrmWrite = {
   companyId?: string | null;
@@ -81,14 +107,7 @@ export class TaskRepository {
   async findAllByTenantAndUser(
     tenantId: string,
     userId: string,
-    filters?: {
-      status?: TaskStatus;
-      priority?: TaskPriority;
-      search?: string;
-      companyId?: string | null;
-      prospectId?: string | null;
-      leadId?: string | null;
-    },
+    filters?: TaskListFilters,
   ): Promise<TaskRecord[]> {
     const clauses: SQL[] = [this.accessFilter(tenantId, userId)];
 
@@ -116,6 +135,27 @@ export class TaskRepository {
       clauses.push(eq(tasks.leadId, filters.leadId));
     }
 
+    const now = new Date();
+
+    if (filters?.openOnly || filters?.overdue) {
+      clauses.push(notInArray(tasks.status, ['completed', 'cancelled']));
+    }
+
+    if (filters?.overdue) {
+      clauses.push(isNotNull(tasks.dueAt));
+      clauses.push(lt(tasks.dueAt, now));
+    }
+
+    if (filters?.dueFrom) {
+      clauses.push(isNotNull(tasks.dueAt));
+      clauses.push(gte(tasks.dueAt, new Date(filters.dueFrom)));
+    }
+
+    if (filters?.dueTo) {
+      clauses.push(isNotNull(tasks.dueAt));
+      clauses.push(lte(tasks.dueAt, new Date(filters.dueTo)));
+    }
+
     const rows = await this.crmQuery()
       .where(and(...clauses))
       .orderBy(desc(tasks.createdAt));
@@ -126,16 +166,23 @@ export class TaskRepository {
   async listTasks(
     tenantId: string,
     userId: string,
-    filters?: {
-      status?: TaskStatus;
-      priority?: TaskPriority;
-      search?: string;
-      companyId?: string | null;
-      prospectId?: string | null;
-      leadId?: string | null;
-    },
+    filters?: TaskListFilters,
   ): Promise<TaskRecord[]> {
     return this.findAllByTenantAndUser(tenantId, userId, filters);
+  }
+
+  async findOpenTasksDueOnOrBefore(until: Date): Promise<TaskRecord[]> {
+    const rows = await this.crmQuery()
+      .where(
+        and(
+          isNotNull(tasks.dueAt),
+          lte(tasks.dueAt, until),
+          notInArray(tasks.status, ['completed', 'cancelled']),
+        ),
+      )
+      .orderBy(tasks.dueAt);
+
+    return rows.map((row) => this.mapRow(row));
   }
 
   async findAllByTenantAndUserAndStatus(
@@ -308,6 +355,7 @@ export class TaskRepository {
             email: row.leadEmail ?? null,
           }
         : null,
+      isOverdue: computeIsOverdue(row.status, row.dueAt),
     };
   }
 }

@@ -22,6 +22,10 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     companyId: query.companyId || undefined,
     prospectId: query.prospectId || undefined,
     leadId: query.leadId || undefined,
+    overdue: query.overdue || undefined,
+    dueFrom: query.dueFrom || undefined,
+    dueTo: query.dueTo || undefined,
+    openOnly: query.openOnly || undefined,
   }
 
   if (
@@ -30,7 +34,11 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     !normalized.search &&
     !normalized.companyId &&
     !normalized.prospectId &&
-    !normalized.leadId
+    !normalized.leadId &&
+    !normalized.overdue &&
+    !normalized.dueFrom &&
+    !normalized.dueTo &&
+    !normalized.openOnly
   ) {
     return undefined
   }

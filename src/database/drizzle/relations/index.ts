@@ -16,6 +16,7 @@ import { phoneNumbers } from '../schema/phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
+import { taskReminders } from '../schema/task-reminder.schema';
 import { masterSettings } from '../schema/master-settings.schema';
 
 /**
@@ -42,6 +43,7 @@ export const tenantRelations = relations(
 
     auditLogs: many(auditLogs),
     tasks: many(tasks),
+    taskReminders: many(taskReminders),
   }),
 );
 
@@ -68,6 +70,8 @@ export const userRelations = relations(
     assignedTasks: many(tasks, {
       relationName: 'assignedTasks',
     }),
+
+    taskReminders: many(taskReminders),
   }),
 );
 
@@ -320,11 +324,11 @@ export const auditLogRelations = relations(
 );
 
 /**
- * Task relations
+ * Task relation
  */
 export const taskRelations = relations(
   tasks,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [tasks.tenantId],
       references: [tenants.id],
@@ -355,6 +359,28 @@ export const taskRelations = relations(
     lead: one(leads, {
       fields: [tasks.leadId],
       references: [leads.id],
+    }),
+
+    reminders: many(taskReminders),
+  }),
+);
+
+export const taskReminderRelations = relations(
+  taskReminders,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [taskReminders.tenantId],
+      references: [tenants.id],
+    }),
+
+    task: one(tasks, {
+      fields: [taskReminders.taskId],
+      references: [tasks.id],
+    }),
+
+    user: one(users, {
+      fields: [taskReminders.userId],
+      references: [users.id],
     }),
   }),
 );

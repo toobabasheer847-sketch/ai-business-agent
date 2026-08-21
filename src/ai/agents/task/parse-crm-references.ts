@@ -42,6 +42,7 @@ const REFERENCE_STOP = new Set([
   'please',
   'new',
   'create',
+  'remind',
   'follow',
   'up',
   'call',
@@ -55,7 +56,11 @@ const REFERENCE_STOP = new Set([
 ]);
 
 export function extractCrmReferences(text: string): CrmReferences {
-  const cleaned = stripDueDatePhrases(text).replace(/\s+/g, ' ').trim();
+  const cleaned = stripDueDatePhrases(text)
+    .replace(/\band\s+remind\s+me(?:\s+at)?\b/gi, ' ')
+    .replace(/\bremind\s+me(?:\s+to)?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const emailQuery = cleaned.match(EMAIL_RE)?.[0];
 
   const fromMatch = cleaned.match(

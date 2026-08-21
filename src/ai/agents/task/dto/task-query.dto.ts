@@ -1,4 +1,7 @@
+import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
+  IsDateString,
   IsIn,
   IsOptional,
   IsString,
@@ -39,4 +42,32 @@ export class TaskQueryDto {
   @ValidateIf((_, value) => value !== '' && value != null)
   @IsUUID()
   leadId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  overdue?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  dueFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dueTo?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  openOnly?: boolean;
 }

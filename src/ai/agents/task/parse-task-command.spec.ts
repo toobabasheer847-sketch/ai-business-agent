@@ -41,6 +41,56 @@ describe('parseTaskCommand', () => {
     expect(command.dueAt).toBe('2026-08-24T00:00:00.000Z');
   });
 
+  it('parses remind-me creates and overdue list queries', () => {
+    expect(
+      parseTaskCommand('Remind me to call Ahmed tomorrow at 3 PM', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        title: 'Call Ahmed',
+        dueAt: '2026-08-21T15:00:00.000Z',
+      }),
+    );
+    expect(
+      parseTaskCommand(
+        'Create a task to follow up with ABC tomorrow and remind me at 2 PM',
+        { now },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        title: 'Follow up with ABC',
+        dueAt: '2026-08-21T14:00:00.000Z',
+        personQuery: 'ABC',
+      }),
+    );
+    expect(parseTaskCommand('Show my overdue tasks.')).toEqual(
+      expect.objectContaining({
+        action: 'list',
+        dueOn: 'overdue',
+      }),
+    );
+    expect(parseTaskCommand('Show tasks due today.')).toEqual(
+      expect.objectContaining({
+        action: 'list',
+        dueOn: 'today',
+      }),
+    );
+    expect(parseTaskCommand('Show tasks due tomorrow.')).toEqual(
+      expect.objectContaining({
+        action: 'list',
+        dueOn: 'tomorrow',
+      }),
+    );
+    expect(parseTaskCommand('Show my overdue tasks for ABC.')).toEqual(
+      expect.objectContaining({
+        action: 'list',
+        dueOn: 'overdue',
+        personQuery: 'ABC',
+      }),
+    );
+  });
+
   it('parses list pending tasks', () => {
     expect(parseTaskCommand('Show my pending tasks.')).toEqual(
       expect.objectContaining({

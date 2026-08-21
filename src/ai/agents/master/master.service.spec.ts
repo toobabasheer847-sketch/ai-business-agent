@@ -776,4 +776,36 @@ describe('MasterAgentService', () => {
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('ABC Technologies');
   });
+
+  it('routes overdue and remind-me task phrasing through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'list',
+      message: 'Tasks retrieved.',
+      data: [{ title: 'Follow up', status: 'pending', priority: 'medium' }],
+    });
+
+    await service.invoke(tenantId, userId, 'Show my overdue tasks');
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Show my overdue tasks',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'create',
+      message: 'Task created successfully.',
+      data: { title: 'Call Ahmed', status: 'pending', priority: 'medium' },
+    });
+
+    await service.invoke(
+      tenantId,
+      userId,
+      'Remind me to call Ahmed tomorrow at 3 PM',
+    );
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Remind me to call Ahmed tomorrow at 3 PM',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
 });

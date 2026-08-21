@@ -221,6 +221,32 @@ describe('TaskController', () => {
     );
   });
 
+  it('lists with overdue and due window filters without accepting tenantId', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task')
+      .query({
+        overdue: 'true',
+        dueFrom: '2026-08-20T00:00:00.000Z',
+        dueTo: '2026-08-20T23:59:59.999Z',
+      })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.listTasks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overdue: true,
+        dueFrom: '2026-08-20T00:00:00.000Z',
+        dueTo: '2026-08-20T23:59:59.999Z',
+      }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
   it('rejects tenantId and createdBy on list query', async () => {
     const token = signTestJwt(app);
 

@@ -83,6 +83,10 @@ export function addUtcDays(from: Date, days: number): Date {
   return new Date(startOfUtcDay(from).getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+export function endOfUtcDay(date: Date): Date {
+  return new Date(startOfUtcDay(date).getTime() + 24 * 60 * 60 * 1000 - 1);
+}
+
 export function parseClockTime(
   raw: string,
 ): { hours: number; minutes: number } | null {

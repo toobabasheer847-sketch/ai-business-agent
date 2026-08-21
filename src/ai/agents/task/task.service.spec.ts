@@ -298,6 +298,46 @@ describe('TaskService', () => {
     );
   });
 
+  it('lists overdue tasks through the repository overdue filter', async () => {
+    const now = new Date('2026-08-20T12:00:00.000Z');
+
+    await service.processNaturalLanguage('Show my overdue tasks', contextA, now);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ overdue: true }),
+    );
+  });
+
+  it('lists tasks due today and tomorrow using UTC day bounds', async () => {
+    const now = new Date('2026-08-20T12:00:00.000Z');
+
+    await service.processNaturalLanguage('Show tasks due today', contextA, now);
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        dueFrom: '2026-08-20T00:00:00.000Z',
+        dueTo: '2026-08-20T23:59:59.999Z',
+      }),
+    );
+
+    await service.processNaturalLanguage(
+      'Show tasks due tomorrow',
+      contextA,
+      now,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        dueFrom: '2026-08-21T00:00:00.000Z',
+        dueTo: '2026-08-21T23:59:59.999Z',
+      }),
+    );
+  });
+
   it('lists by same-tenant company without weakening ownership', async () => {
     await service.listTasks({ companyId: 'company-1' } as any, contextA);
 
