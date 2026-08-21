@@ -16,6 +16,7 @@ import {
 
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard.js';
 import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types.js';
+import { PaginationDto } from '../../../common/dto/pagination.dto.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { ProcessNaturalLanguageDto } from './dto/process-natural-language.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
@@ -46,6 +47,16 @@ export class TaskController {
   ) {
     const context = this.buildContext(req);
     return this.taskService.processNaturalLanguage(dto.message, context);
+  }
+
+  @Get(':taskId/activity')
+  async activity(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Query() query: PaginationDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getTaskActivity(taskId, query, context);
   }
 
   @Get(':taskId')

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ListTodo, RefreshCw } from 'lucide-react'
 
@@ -13,8 +14,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { TaskPriorityBadge } from '@/features/tasks/components/task-priority-badge'
 import { TaskStatusBadge } from '@/features/tasks/components/task-status-badge'
+import { TaskActivityDialog } from '@/features/tasks/components/task-activity-dialog'
 import { useTasks } from '@/features/tasks/hooks/use-tasks'
-import type { TaskListQuery } from '@/features/tasks/types/task.types'
+import type { Task, TaskListQuery } from '@/features/tasks/types/task.types'
 import { useUsers } from '@/features/users/hooks/use-users'
 import { getErrorMessage } from '@/lib/api'
 
@@ -57,6 +59,7 @@ export function RelatedTasksCard({
   }
   const listQuery = useTasks(query)
   const usersQuery = useUsers()
+  const [activityTask, setActivityTask] = useState<Task | null>(null)
   const items = listQuery.data ?? []
   const users = usersQuery.data ?? []
   const userNameById = new Map(
@@ -137,12 +140,24 @@ export function RelatedTasksCard({
                       : 'Unassigned'}
                   </span>
                   <span>Created {formatDate(item.createdAt)}</span>
+                  <button
+                    type="button"
+                    className="text-foreground underline-offset-4 hover:underline"
+                    onClick={() => setActivityTask(item)}
+                  >
+                    View activity
+                  </button>
                 </div>
               </li>
             ))}
           </ul>
         )}
       </CardContent>
+      <TaskActivityDialog
+        task={activityTask}
+        open={Boolean(activityTask)}
+        onOpenChange={(open) => !open && setActivityTask(null)}
+      />
     </Card>
   )
 }

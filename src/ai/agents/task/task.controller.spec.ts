@@ -39,6 +39,7 @@ describe('TaskController', () => {
     completeTask: jest.Mock;
     cancelTask: jest.Mock;
     deleteTask: jest.Mock;
+    getTaskActivity: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -56,6 +57,11 @@ describe('TaskController', () => {
       deleteTask: jest.fn().mockResolvedValue({
         message: 'Task deleted successfully',
         id: TASK_ID,
+      }),
+      getTaskActivity: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        activities: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
       }),
     };
 
@@ -319,5 +325,43 @@ describe('TaskController', () => {
         userId: AUTHENTICATED_TEST_USER.userId,
       }),
     );
+  });
+
+  it('returns 401 for activity without a JWT', async () => {
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/activity`)
+      .expect(401);
+
+    expect(taskService.getTaskActivity).not.toHaveBeenCalled();
+  });
+
+  it('loads activity with JWT tenant and user', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/activity`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.getTaskActivity).toHaveBeenCalledWith(
+      TASK_ID,
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
+  it('rejects tenantId, createdBy, and actorUserId query fields on activity', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/activity`)
+      .query({ tenantId: 'other-tenant', createdBy: 'other-user', actorUserId: 'spoof' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(taskService.getTaskActivity).not.toHaveBeenCalled();
   });
 });

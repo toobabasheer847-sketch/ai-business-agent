@@ -541,6 +541,9 @@ export class MasterAgentService {
     if (result.action === 'get') {
       return summary;
     }
+    if (result.action === 'activity') {
+      return result.message || summary;
+    }
 
     return result.message || summary;
   }

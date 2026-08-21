@@ -192,6 +192,23 @@ describe('parseTaskCommand', () => {
     );
   });
 
+  it('parses activity and history requests', () => {
+    expect(parseTaskCommand('Show activity for my Ahmed task.')).toEqual(
+      expect.objectContaining({
+        action: 'activity',
+        searchTerm: 'Ahmed',
+      }),
+    );
+    expect(
+      parseTaskCommand('Show the history of my NimbusForge follow-up task.'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'activity',
+        searchTerm: 'NimbusForge follow-up',
+      }),
+    );
+  });
+
   it('ignores tenantId and createdBy in the text', () => {
     const command = parseTaskCommand(
       'Create a task to call Ahmed tomorrow tenantId=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb createdBy=attacker',

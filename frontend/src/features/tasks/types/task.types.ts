@@ -107,6 +107,46 @@ export type TaskNaturalLanguageResponse = {
     | 'complete'
     | 'cancel'
     | 'clarify'
+    | 'activity'
   data: Task | Task[] | null
   message?: string
+}
+
+export const TASK_ACTIVITY_EVENTS = [
+  'TASK_CREATED',
+  'TASK_UPDATED',
+  'TASK_COMPLETED',
+  'TASK_CANCELLED',
+  'TASK_REOPENED',
+  'TASK_CRM_LINKED',
+  'TASK_CRM_UNLINKED',
+  'REMINDER_SCHEDULED',
+  'REMINDER_SENT',
+  'REMINDER_FAILED',
+] as const
+
+export type TaskActivityEventType = (typeof TASK_ACTIVITY_EVENTS)[number]
+
+export type TaskActivityActor = {
+  id: string
+  name: string
+} | null
+
+export type TaskActivityItem = {
+  id: string
+  eventType: TaskActivityEventType
+  actor: TaskActivityActor
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export type TaskActivityResponse = {
+  taskId: string
+  activities: TaskActivityItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
 }

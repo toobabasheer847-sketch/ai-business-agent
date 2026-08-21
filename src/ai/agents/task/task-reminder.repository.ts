@@ -36,7 +36,7 @@ export class TaskReminderRepository {
     reminderType: TaskReminderType;
     scheduledAt: Date;
     dueAtSnapshot: Date;
-  }): Promise<TaskReminderRecord> {
+  }): Promise<{ reminder: TaskReminderRecord; inserted: boolean }> {
     const [row] = await this.db
       .insert(taskReminders)
       .values({
@@ -58,7 +58,7 @@ export class TaskReminderRepository {
       .returning();
 
     if (row) {
-      return this.mapRow(row);
+      return { reminder: this.mapRow(row), inserted: true };
     }
 
     const existing = await this.findByIdempotencyKey(
@@ -71,7 +71,7 @@ export class TaskReminderRepository {
       throw new Error('Task reminder insert conflicted but no existing row was found');
     }
 
-    return existing;
+    return { reminder: existing, inserted: false };
   }
 
   async findByIdAndTenant(

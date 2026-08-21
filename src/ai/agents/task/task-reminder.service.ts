@@ -14,6 +14,7 @@ import {
   type TaskReminderType,
 } from './task-reminder.constants.js';
 import { TaskReminderRepository } from './task-reminder.repository.js';
+import { TaskActivityRepository } from './task-activity.repository.js';
 import { computeIsOverdue, isClosedTaskStatus } from './task-overdue.js';
 import { TaskRepository } from './task.repository.js';
 import type { TaskRecord } from './types/task.types.js';
@@ -31,6 +32,8 @@ export class TaskReminderService {
     private readonly reminderQueue?: Queue<TaskReminderJobPayload>,
     @Optional()
     private readonly gmailService?: GmailService,
+    @Optional()
+    private readonly activity?: TaskActivityRepository,
   ) {}
 
   reminderMinutesBefore(): number {
@@ -294,7 +297,7 @@ export class TaskReminderService {
     now: Date,
   ): Promise<number> {
     const normalized = normalizeScheduledAt(scheduledAt);
-    const reminder = await this.reminderRepository.insertPending({
+    const { reminder, inserted } = await this.reminderRepository.insertPending({
       tenantId: task.tenantId,
       taskId: task.id,
       userId,
@@ -302,6 +305,20 @@ export class TaskReminderService {
       scheduledAt: normalized,
       dueAtSnapshot: dueAt,
     });
+
+    if (inserted) {
+      await this.recordActivity({
+        tenantId: task.tenantId,
+        taskId: task.id,
+        actorUserId: null,
+        eventType: 'REMINDER_SCHEDULED',
+        metadata: {
+          reminderType,
+          scheduledAt: normalized.toISOString(),
+          recipientUserId: userId,
+        },
+      });
+    }
 
     if (reminder.status === 'sent' || reminder.status === 'skipped') {
       return 0;
@@ -453,7 +470,7 @@ export class TaskReminderService {
           reminderId,
           reminderType: payload.reminderType,
           lastError: lastError ?? null,
-          ...extra,
+          channel: extra?.channel,
         },
       });
     } catch (error) {
@@ -463,6 +480,35 @@ export class TaskReminderService {
         { tenantId, userId: payload.userId },
         { reminderId, taskId: payload.taskId },
       );
+    }
+
+    if (status === 'sent') {
+      await this.recordActivity({
+        tenantId,
+        taskId: task?.id ?? payload.taskId,
+        actorUserId: null,
+        eventType: 'REMINDER_SENT',
+        metadata: {
+          channel: extra?.channel ?? 'audit',
+          scheduledAt: payload.scheduledAt,
+          recipientUserId: payload.userId,
+          reminderType: payload.reminderType,
+        },
+      });
+    } else if (status === 'failed' || lastError === 'missing_recipient') {
+      await this.recordActivity({
+        tenantId,
+        taskId: task?.id ?? payload.taskId,
+        actorUserId: null,
+        eventType: 'REMINDER_FAILED',
+        metadata: {
+          channel: extra?.channel ?? 'audit',
+          scheduledAt: payload.scheduledAt,
+          recipientUserId: payload.userId,
+          reminderType: payload.reminderType,
+          reason: lastError ?? 'failed',
+        },
+      });
     }
 
     const logContext = { tenantId, userId: payload.userId };
@@ -486,6 +532,29 @@ export class TaskReminderService {
       this.logger.warn('Task reminder skipped', logContext, extraFields);
     } else {
       this.logger.log('Task reminder processed', logContext, extraFields);
+    }
+  }
+
+  private async recordActivity(input: {
+    tenantId: string;
+    taskId: string;
+    actorUserId: string | null;
+    eventType: 'REMINDER_SCHEDULED' | 'REMINDER_SENT' | 'REMINDER_FAILED';
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.activity) {
+      return;
+    }
+
+    try {
+      await this.activity.record(input);
+    } catch (error) {
+      this.logger.error(
+        'Task reminder activity write failed (non-fatal)',
+        error instanceof Error ? error.stack : undefined,
+        { tenantId: input.tenantId },
+        { taskId: input.taskId, eventType: input.eventType },
+      );
     }
   }
 }

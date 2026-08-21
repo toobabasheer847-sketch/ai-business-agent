@@ -17,7 +17,8 @@ export type TaskNlAction =
   | 'complete'
   | 'cancel'
   | 'update'
-  | 'clarify';
+  | 'clarify'
+  | 'activity';
 
 export interface TaskNlCommand {
   action: TaskNlAction;
@@ -100,6 +101,16 @@ export function parseTaskCommand(
       const statusUpdate = parseStatusUpdate(text);
       if (statusUpdate) {
         command = statusUpdate;
+      } else if (isActivityIntent(lower)) {
+        command = parseTargetedAction(text, 'activity', [
+          'show',
+          'get',
+          'display',
+          'activity',
+          'history',
+          'the',
+          'of',
+        ]);
       } else if (isListIntent(lower)) {
         command = parseList(lower);
       } else if (isGetIntent(lower)) {
@@ -320,7 +331,7 @@ function parseStatusUpdate(text: string): TaskNlCommand | null {
 
 function parseTargetedAction(
   text: string,
-  action: 'get' | 'complete' | 'cancel',
+  action: 'get' | 'complete' | 'cancel' | 'activity',
   extraStops: string[],
 ): TaskNlCommand {
   return {
@@ -458,6 +469,13 @@ function isCompleteIntent(lower: string): boolean {
 
 function isCancelIntent(lower: string): boolean {
   return /^(?:please\s+)?cancel\b/.test(lower) || /\bcancel\s+(?:my|the)\b/.test(lower);
+}
+
+function isActivityIntent(lower: string): boolean {
+  return (
+    /\b(activity|history)\b/.test(lower) &&
+    /\b(task|follow-?up|follow up)\b/.test(lower)
+  );
 }
 
 function isListIntent(lower: string): boolean {

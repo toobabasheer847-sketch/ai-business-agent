@@ -48,7 +48,15 @@ export interface TaskContext {
 }
 
 export interface TaskAgentResponse {
-  action: 'create' | 'get' | 'list' | 'update' | 'complete' | 'cancel' | 'clarify';
+  action:
+    | 'create'
+    | 'get'
+    | 'list'
+    | 'update'
+    | 'complete'
+    | 'cancel'
+    | 'clarify'
+    | 'activity';
   data: TaskRecord | TaskRecord[] | null;
   message?: string;
 }

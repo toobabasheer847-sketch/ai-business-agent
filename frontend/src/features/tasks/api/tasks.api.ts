@@ -6,6 +6,7 @@ import type {
   TaskListQuery,
   TaskNaturalLanguageResponse,
   UpdateTaskRequest,
+  TaskActivityResponse,
 } from '@/features/tasks/types/task.types'
 
 function toListParams(query?: TaskListQuery) {
@@ -70,6 +71,12 @@ export const tasksApi = {
       .post<TaskNaturalLanguageResponse>('/ai/task/natural-language', {
         message,
       })
+      .then((r) => r.data)
+  },
+
+  activity(taskId: string, params?: { page?: number; limit?: number }) {
+    return apiClient
+      .get<TaskActivityResponse>(`/ai/task/${taskId}/activity`, { params })
       .then((r) => r.data)
   },
 }

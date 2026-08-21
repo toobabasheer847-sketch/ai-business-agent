@@ -53,12 +53,14 @@ export const taskKeys = {
     [...taskKeys.lists(), normalizeListQuery(query) ?? {}] as const,
   details: () => [...taskKeys.all, 'detail'] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
+  activities: (id: string) => [...taskKeys.all, 'activity', id] as const,
 }
 
 async function invalidateTaskQueries(queryClient: QueryClient, taskId?: string) {
   await queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
   if (taskId) {
     await queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
+    await queryClient.invalidateQueries({ queryKey: taskKeys.activities(taskId) })
   }
 }
 
@@ -142,5 +144,13 @@ export function useDeleteTask() {
       await invalidateTaskQueries(queryClient)
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) })
     },
+  })
+}
+
+export function useTaskActivity(taskId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: taskKeys.activities(taskId ?? ''),
+    queryFn: () => tasksApi.activity(taskId!, { limit: 50 }),
+    enabled: Boolean(taskId) && enabled,
   })
 }

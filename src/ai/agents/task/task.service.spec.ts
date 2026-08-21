@@ -37,6 +37,7 @@ describe('TaskService', () => {
   };
   let userRepository: { findByIdAndTenant: jest.Mock };
   let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
+  let activity: { record: jest.Mock; listForTask: jest.Mock };
 
   beforeEach(() => {
     taskRepository = {
@@ -53,11 +54,17 @@ describe('TaskService', () => {
       resolve: jest.fn().mockResolvedValue({ status: 'none' }),
       assertIds: jest.fn(async (_tenantId: string, ids: any) => ids),
     };
+    activity = {
+      record: jest.fn().mockResolvedValue(undefined),
+      listForTask: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    };
 
     service = new TaskService(
       taskRepository as any,
       userRepository as any,
       crmResolver as any,
+      undefined,
+      activity as any,
     );
   });
 
@@ -879,5 +886,150 @@ describe('TaskService', () => {
         userId: userA,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('records TASK_CREATED activity on create', async () => {
+    await service.createTask({ title: 'Call Ahmed' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        taskId,
+        actorUserId: userA,
+        eventType: 'TASK_CREATED',
+      }),
+    );
+  });
+
+  it('records TASK_UPDATED activity for changed fields only', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      priority: 'high',
+    });
+
+    await service.updateTask(taskId, { priority: 'high' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_UPDATED',
+        metadata: {
+          changes: { priority: { from: 'medium', to: 'high' } },
+        },
+      }),
+    );
+  });
+
+  it('records TASK_COMPLETED activity', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      status: 'completed',
+    });
+
+    await service.completeTask(taskId, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'TASK_COMPLETED' }),
+    );
+  });
+
+  it('records TASK_CANCELLED activity', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      status: 'cancelled',
+    });
+
+    await service.cancelTask(taskId, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'TASK_CANCELLED' }),
+    );
+  });
+
+  it('records CRM link activity from resolved database names', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-1',
+      company: { id: 'company-1', name: 'NimbusForge' },
+    });
+
+    await service.updateTask(taskId, { companyId: 'company-1' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_CRM_LINKED',
+        metadata: {
+          type: 'company',
+          id: 'company-1',
+          name: 'NimbusForge',
+        },
+      }),
+    );
+  });
+
+  it('records CRM unlink activity', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-1',
+      company: { id: 'company-1', name: 'NimbusForge' },
+    });
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: null,
+      company: null,
+    });
+
+    await service.updateTask(taskId, { companyId: null } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_CRM_UNLINKED',
+        metadata: {
+          type: 'company',
+          id: 'company-1',
+          name: 'NimbusForge',
+        },
+      }),
+    );
+  });
+
+  it('lists activity for the owner and assigned user', async () => {
+    activity.listForTask.mockResolvedValue({
+      items: [
+        {
+          id: 'act-1',
+          eventType: 'TASK_CREATED',
+          actor: { id: userA, name: 'Ahmed' },
+          metadata: {},
+          createdAt: new Date('2026-08-21T00:00:00.000Z'),
+        },
+      ],
+      total: 1,
+    });
+
+    const ownerResult = await service.getTaskActivity(taskId, {}, contextA);
+    expect(ownerResult.activities).toHaveLength(1);
+    expect(activity.listForTask).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: tenantA, taskId }),
+    );
+
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue({
+      ...ownedTask,
+      assignedTo: userB,
+    });
+    await expect(
+      service.getTaskActivity(taskId, {}, contextB),
+    ).resolves.toEqual(expect.objectContaining({ taskId }));
+  });
+
+  it('rejects activity for another user or tenant', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(null);
+
+    await expect(service.getTaskActivity(taskId, {}, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(
+      service.getTaskActivity(taskId, {}, otherTenant),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(activity.listForTask).not.toHaveBeenCalled();
   });
 });

@@ -29,6 +29,17 @@ describe('TaskReminderService', () => {
     scheduledAt: '2027-08-21T14:30:00.000Z',
   };
 
+  const pendingReminderRow = {
+    id: reminderId,
+    tenantId: tenantA,
+    taskId,
+    userId: userB,
+    reminderType: 'upcoming' as const,
+    scheduledAt: new Date(payload.scheduledAt),
+    dueAtSnapshot: dueAt,
+    status: 'pending' as const,
+  };
+
   let service: TaskReminderService;
   let taskRepository: {
     findByIdAndTenantAndUser: jest.Mock;
@@ -43,6 +54,7 @@ describe('TaskReminderService', () => {
   };
   let userRepository: { findByIdAndTenant: jest.Mock };
   let reminderQueue: { add: jest.Mock };
+  let activity: { record: jest.Mock };
   let gmailService: {
     findActiveCredentialsForTenant: jest.Mock;
     mailOperations: { sendEmail: jest.Mock };
@@ -56,14 +68,8 @@ describe('TaskReminderService', () => {
     };
     reminderRepository = {
       insertPending: jest.fn().mockResolvedValue({
-        id: reminderId,
-        tenantId: tenantA,
-        taskId,
-        userId: userB,
-        reminderType: 'upcoming',
-        scheduledAt: new Date(payload.scheduledAt),
-        dueAtSnapshot: dueAt,
-        status: 'pending',
+        reminder: pendingReminderRow,
+        inserted: true,
       }),
       findByIdAndTenant: jest.fn().mockResolvedValue({
         id: reminderId,
@@ -89,6 +95,7 @@ describe('TaskReminderService', () => {
     reminderQueue = {
       add: jest.fn().mockResolvedValue({ id: 'job-1' }),
     };
+    activity = { record: jest.fn().mockResolvedValue(undefined) };
     gmailService = {
       findActiveCredentialsForTenant: jest.fn().mockResolvedValue(null),
       mailOperations: { sendEmail: jest.fn() },
@@ -103,6 +110,7 @@ describe('TaskReminderService', () => {
       { log: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
       reminderQueue as any,
       gmailService as any,
+      activity as any,
     );
   });
 
@@ -122,18 +130,23 @@ describe('TaskReminderService', () => {
     expect(jobPayload.tenantId).toBe(tenantA);
     expect(jobPayload.userId).toBe(userB);
     expect(jobPayload.taskId).toBe(taskId);
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'REMINDER_SCHEDULED',
+        tenantId: tenantA,
+        taskId,
+        actorUserId: null,
+      }),
+    );
   });
 
   it('does not enqueue a duplicate reminder job', async () => {
     reminderRepository.insertPending.mockResolvedValue({
-      id: reminderId,
-      tenantId: tenantA,
-      taskId,
-      userId: userB,
-      reminderType: 'upcoming',
-      scheduledAt: new Date(payload.scheduledAt),
-      dueAtSnapshot: dueAt,
-      status: 'sent',
+      reminder: {
+        ...pendingReminderRow,
+        status: 'sent',
+      },
+      inserted: false,
     });
 
     await service.scheduleReminder(pendingTask as any);
@@ -161,6 +174,15 @@ describe('TaskReminderService', () => {
       tenantA,
       'sent',
       null,
+    );
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'REMINDER_SENT',
+        metadata: expect.objectContaining({
+          channel: 'audit',
+          recipientUserId: userB,
+        }),
+      }),
     );
   });
 
@@ -213,6 +235,9 @@ describe('TaskReminderService', () => {
       'skipped',
       'missing_recipient',
     );
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'REMINDER_FAILED' }),
+    );
   });
 
   it('fails closed when trusted worker context is missing', async () => {
@@ -249,5 +274,25 @@ describe('TaskReminderService', () => {
       'skipped',
       'task_not_accessible',
     );
+  });
+
+  it('records REMINDER_FAILED when Gmail delivery throws', async () => {
+    gmailService.findActiveCredentialsForTenant.mockResolvedValue({
+      accessToken: 'token',
+      refreshToken: 'refresh',
+    });
+    gmailService.mailOperations.sendEmail.mockRejectedValue(new Error('gmail_down'));
+
+    await expect(service.processReminder(payload)).rejects.toThrow('gmail_down');
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'REMINDER_FAILED',
+        metadata: expect.objectContaining({
+          channel: 'gmail',
+          recipientUserId: userB,
+        }),
+      }),
+    );
+    expect(activity.record.mock.calls.flat().join(' ')).not.toMatch(/token|refresh/i);
   });
 });

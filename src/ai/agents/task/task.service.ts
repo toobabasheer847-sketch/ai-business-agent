@@ -12,6 +12,7 @@ import { UserRepository } from '../../../modules/user/user.repository';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
+import { PaginationDto } from '../../../common/dto/pagination.dto.js';
 import {
   parseTaskCommand,
   titleMatchesSearch,
@@ -22,6 +23,11 @@ import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
 import { TaskCrmResolver } from './resolve-crm-entities.js';
 import { normalizeCrmIds } from './resolve-crm-ids.js';
 import { TaskReminderService } from './task-reminder.service.js';
+import { TaskActivityRepository } from './task-activity.repository.js';
+import {
+  buildCreateActivities,
+  buildUpdateActivities,
+} from './task-activity.diff.js';
 import { TaskRepository } from './task.repository.js';
 import {
   TaskAgentResponse,
@@ -38,6 +44,7 @@ export class TaskService {
     private readonly userRepository: UserRepository,
     private readonly crmResolver: TaskCrmResolver,
     @Optional() private readonly reminders?: TaskReminderService,
+    @Optional() private readonly activity?: TaskActivityRepository,
   ) {}
 
   async createTask(
@@ -70,6 +77,12 @@ export class TaskService {
         leadId: crmIds.leadId ?? null,
       });
       await this.reminders?.scheduleReminder(created);
+      await this.recordActivities(
+        context.tenantId,
+        created.id,
+        context.userId,
+        buildCreateActivities(created),
+      );
       return this.withReminder(created);
     } catch (error) {
       this.handleError(error, 'create task');
@@ -124,6 +137,43 @@ export class TaskService {
     return this.withReminders(rows);
   }
 
+  async getTaskActivity(
+    taskId: string,
+    query: PaginationDto,
+    context: TaskContext,
+  ) {
+    this.requireAuthContext(context);
+    await this.requireAccessibleTask(taskId, context);
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const result = this.activity
+      ? await this.activity.listForTask({
+          tenantId: context.tenantId,
+          taskId,
+          limit,
+          offset: (page - 1) * limit,
+        })
+      : { items: [], total: 0 };
+
+    return {
+      taskId,
+      activities: result.items.map((item) => ({
+        id: item.id,
+        eventType: item.eventType,
+        actor: item.actor,
+        metadata: item.metadata,
+        createdAt: item.createdAt,
+      })),
+      meta: {
+        page,
+        limit,
+        total: result.total,
+        totalPages: Math.max(1, Math.ceil(result.total / limit)),
+      },
+    };
+  }
+
   async getOverdueTasks(
     dto: TaskQueryDto,
     context: TaskContext,
@@ -151,7 +201,7 @@ export class TaskService {
     context: TaskContext,
   ): Promise<TaskRecord> {
     this.requireAuthContext(context);
-    await this.requireAccessibleTask(taskId, context);
+    const existing = await this.requireAccessibleTask(taskId, context);
 
     const assignedTo =
       dto.assignedTo === undefined
@@ -187,6 +237,12 @@ export class TaskService {
     }
 
     await this.reminders?.scheduleReminder(updated);
+    await this.recordActivities(
+      context.tenantId,
+      updated.id,
+      context.userId,
+      buildUpdateActivities(existing, updated),
+    );
     return this.withReminder(updated);
   }
 
@@ -195,7 +251,7 @@ export class TaskService {
     context: TaskContext,
   ): Promise<TaskRecord> {
     this.requireAuthContext(context);
-    await this.requireAccessibleTask(taskId, context);
+    const existing = await this.requireAccessibleTask(taskId, context);
 
     const updated = await this.taskRepository.updateTask(
       taskId,
@@ -211,12 +267,18 @@ export class TaskService {
       throw new NotFoundException('Task not found');
     }
 
+    await this.recordActivities(
+      context.tenantId,
+      updated.id,
+      context.userId,
+      buildUpdateActivities(existing, updated),
+    );
     return updated;
   }
 
   async cancelTask(taskId: string, context: TaskContext): Promise<TaskRecord> {
     this.requireAuthContext(context);
-    await this.requireAccessibleTask(taskId, context);
+    const existing = await this.requireAccessibleTask(taskId, context);
 
     const updated = await this.taskRepository.updateTask(
       taskId,
@@ -231,6 +293,12 @@ export class TaskService {
       throw new NotFoundException('Task not found');
     }
 
+    await this.recordActivities(
+      context.tenantId,
+      updated.id,
+      context.userId,
+      buildUpdateActivities(existing, updated),
+    );
     return updated;
   }
 
@@ -361,6 +429,15 @@ export class TaskService {
         action: 'get',
         data: resolved.task,
         message: 'Task retrieved.',
+      };
+    }
+
+    if (command.action === 'activity') {
+      const history = await this.getTaskActivity(resolved.task.id, {}, context);
+      return {
+        action: 'activity',
+        data: resolved.task,
+        message: formatActivityMessage(resolved.task.title, history.activities),
       };
     }
 
@@ -774,6 +851,31 @@ export class TaskService {
     }
   }
 
+  private async recordActivities(
+    tenantId: string,
+    taskId: string,
+    actorUserId: string | null,
+    events: ReturnType<typeof buildCreateActivities>,
+  ): Promise<void> {
+    if (!this.activity || events.length === 0) {
+      return;
+    }
+
+    for (const event of events) {
+      try {
+        await this.activity.record({
+          tenantId,
+          taskId,
+          actorUserId,
+          eventType: event.eventType,
+          metadata: event.metadata,
+        });
+      } catch (error) {
+        console.error('TaskService activity write failed (non-fatal)', error);
+      }
+    }
+  }
+
   private requireAuthContext(context: TaskContext) {
     if (!context?.tenantId) {
       throw new UnauthorizedException('Tenant context is required');
@@ -797,6 +899,31 @@ export class TaskService {
     console.error(`TaskService.${operation} failed`, error);
     throw new InternalServerErrorException(`Failed to ${operation}`);
   }
+}
+
+function formatActivityMessage(
+  title: string,
+  activities: Array<{
+    eventType: string;
+    actor: { name: string } | null;
+    createdAt: Date | string;
+    metadata: Record<string, unknown>;
+  }>,
+): string {
+  if (activities.length === 0) {
+    return `No activity recorded for “${title}”.`;
+  }
+
+  const lines = activities.slice(0, 20).map((item) => {
+    const when =
+      item.createdAt instanceof Date
+        ? item.createdAt.toISOString()
+        : String(item.createdAt);
+    const actor = item.actor?.name || 'System';
+    return `- ${item.eventType} by ${actor} at ${when}`;
+  });
+
+  return `Activity for “${title}”:\n${lines.join('\n')}`;
 }
 
 function crmPatch(

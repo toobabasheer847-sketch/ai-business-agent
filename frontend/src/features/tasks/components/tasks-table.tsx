@@ -30,6 +30,7 @@ type TasksTableProps = {
   onComplete: (item: Task) => void
   onCancel: (item: Task) => void
   onDelete: (item: Task) => void
+  onViewActivity: (item: Task) => void
 }
 
 function crmHasLinks(item: Task) {
@@ -131,6 +132,7 @@ export function TasksTable({
   onComplete,
   onCancel,
   onDelete,
+  onViewActivity,
 }: TasksTableProps) {
   return (
     <motion.div
@@ -216,6 +218,9 @@ export function TasksTable({
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => onEdit(item)}>
                         Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onViewActivity(item)}>
+                        View activity
                       </DropdownMenuItem>
                       {canComplete ? (
                         <DropdownMenuItem onClick={() => onComplete(item)}>
