@@ -314,9 +314,12 @@ describe('TaskRepository', () => {
       prospectId: 'p1',
       leadId: 'l1',
     });
+    await repository.findAllByTenantAndUser(tenantA, userA, {
+      assigneeId: userA,
+    });
     await repository.findAllByTenantAndUser(tenantA, userA);
 
-    expect(where).toHaveBeenCalledTimes(5);
+    expect(where).toHaveBeenCalledTimes(6);
   });
 
   it('lists overdue tasks without dropping the access clause', async () => {

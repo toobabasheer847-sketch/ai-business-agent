@@ -108,6 +108,7 @@ export type TaskListQuery = {
   hasReminder?: boolean
   reminderFrom?: string
   reminderTo?: string
+  assigneeId?: string
 }
 
 /** Matches POST /api/ai/task/natural-language response */
@@ -224,6 +225,7 @@ export type TaskAnalytics = {
     dueTomorrow: number
     highPriorityOpen: number
     urgentOpen: number
+    withReminders: number
   }
   completionRate: number
   overdueRate: number

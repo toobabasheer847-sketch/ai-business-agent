@@ -30,16 +30,14 @@ import { TaskAnalyticsRepository } from './task-analytics.repository.js';
 import {
   resolveAnalyticsRange,
   TREND_MAX_DAYS,
+  buildTaskCsv,
 } from './task-analytics.metrics.js';
-import {
-  buildCreateActivities,
-  buildUpdateActivities,
-} from './task-activity.diff.js';
-import { TaskRepository } from './task.repository.js';
+import { toApiReminderStatus } from './task-reminder.constants.js';
 import {
   TaskAgentResponse,
   TaskAnalyticsFilters,
   TaskAnalyticsGroupBy,
+  TaskAnalyticsReport,
   TaskAnalyticsResult,
   TaskAnalyticsTrendsResult,
   TaskContext,
@@ -48,6 +46,11 @@ import {
   TaskRecord,
   TaskStatus,
 } from './types/task.types.js';
+import {
+  buildCreateActivities,
+  buildUpdateActivities,
+} from './task-activity.diff.js';
+import { TaskRepository } from './task.repository.js';
 
 @Injectable()
 export class TaskService {
@@ -124,6 +127,14 @@ export class TaskService {
   ): Promise<TaskRecord[]> {
     this.requireAuthContext(context);
 
+    if (dto.assigneeId) {
+      await resolveAssignedToForTenant(
+        this.userRepository,
+        dto.assigneeId,
+        context.tenantId,
+      );
+    }
+
     const crmIds = await this.crmResolver.assertIds(context.tenantId, {
       companyId: dto.companyId,
       prospectId: dto.prospectId,
@@ -148,6 +159,7 @@ export class TaskService {
         hasReminder: dto.hasReminder,
         reminderFrom: dto.reminderFrom,
         reminderTo: dto.reminderTo,
+        assigneeId: dto.assigneeId,
       },
     );
 
@@ -199,6 +211,81 @@ export class TaskService {
       to: to.toISOString(),
       trends,
     };
+  }
+
+  async getReport(
+    dto: TaskAnalyticsTrendsQueryDto,
+    context: TaskContext,
+    now: Date = new Date(),
+  ): Promise<TaskAnalyticsReport> {
+    const groupBy: TaskAnalyticsGroupBy = dto.groupBy ?? 'day';
+    const range = resolveAnalyticsRange({
+      from: dto.from,
+      to: dto.to,
+      now,
+      required: true,
+      maxDays: TREND_MAX_DAYS[groupBy],
+    });
+    if (!range.ok) {
+      throw new BadRequestException(range.message);
+    }
+    const bounded = {
+      ...dto,
+      groupBy,
+      from: (range.from ?? addUtcDays(now, -29)).toISOString(),
+      to: (range.to ?? now).toISOString(),
+    };
+    const [summary, trends] = await Promise.all([
+      this.getAnalytics(bounded, context, now),
+      this.getAnalyticsTrends(bounded, context, now),
+    ]);
+
+    return {
+      ...summary,
+      groupBy: trends.groupBy,
+      from: trends.from,
+      to: trends.to,
+      trends: trends.trends,
+    };
+  }
+
+  async exportAnalyticsCsv(
+    dto: TaskAnalyticsQueryDto,
+    context: TaskContext,
+    now: Date = new Date(),
+  ): Promise<string> {
+    this.requireAuthContext(context);
+    const filters = await this.buildAnalyticsFilters(dto, context, { now });
+    const rows = await this.requireAnalytics().listExportRows(
+      context.tenantId,
+      context.userId,
+      filters,
+    );
+    const reminderByTaskId = new Map<string, string>();
+    if (this.reminders && rows.length > 0) {
+      const attached = await this.reminders.attachReminderStatus(
+        rows.map((row) => ({
+          id: row.id,
+          tenantId: context.tenantId,
+          createdBy: context.userId,
+          title: row.title,
+          status: row.status as TaskStatus,
+          priority: row.priority as TaskPriority,
+        })),
+      );
+      for (const task of attached) {
+        if (task.reminder?.status) {
+          reminderByTaskId.set(task.id, toApiReminderStatus(task.reminder.status));
+        }
+      }
+    }
+
+    return buildTaskCsv(
+      rows.map((row) => ({
+        ...row,
+        reminderStatus: reminderByTaskId.get(row.id) ?? row.reminderStatus ?? '',
+      })),
+    );
   }
 
   async getTaskActivity(
@@ -650,6 +737,22 @@ export class TaskService {
       };
     }
 
+    let assigneeId: string | undefined;
+    if (command.assigneeQuery) {
+      const assignee = await this.resolveAssigneeByName(
+        command.assigneeQuery,
+        context,
+      );
+      if (assignee.kind === 'clarify') {
+        return {
+          action: 'clarify',
+          data: null,
+          message: assignee.message,
+        };
+      }
+      assigneeId = assignee.id;
+    }
+
     const analytics = await this.getAnalytics(
       {
         from: command.from,
@@ -659,6 +762,7 @@ export class TaskService {
         companyId: crm.companyId,
         prospectId: crm.prospectId,
         leadId: crm.leadId,
+        assigneeId,
         rangeField: command.rangeField,
         hasReminder: command.hasReminder,
       },
@@ -666,10 +770,34 @@ export class TaskService {
       now,
     );
 
+    let trendsMessage = '';
+    if (command.focus === 'report' || command.focus === 'trends') {
+      const grouped = await this.getAnalyticsTrends(
+        {
+          from: command.from,
+          to: command.to,
+          status: command.status,
+          priority: command.priority,
+          companyId: crm.companyId,
+          prospectId: crm.prospectId,
+          leadId: crm.leadId,
+          assigneeId,
+          groupBy: command.from && spanDays(command.from, command.to ?? now) > 62 ? 'week' : 'day',
+        },
+        context,
+        now,
+      );
+      trendsMessage = formatTrendsMessage(grouped.trends);
+    }
+
+    const label = [crm.label, assigneeId ? command.assigneeQuery : undefined]
+      .filter(Boolean)
+      .join(' / ');
+
     return {
       action: 'analytics',
       data: analytics,
-      message: formatAnalyticsMessage(command, analytics, crm.label),
+      message: `${formatAnalyticsMessage(command, analytics, label || undefined)}${trendsMessage}`.trim(),
     };
   }
 
@@ -1031,6 +1159,40 @@ export class TaskService {
     };
   }
 
+  private async resolveAssigneeByName(
+    query: string,
+    context: TaskContext,
+  ): Promise<{ kind: 'ok'; id: string } | { kind: 'clarify'; message: string }> {
+    const matches = await this.userRepository.findAllByTenant(context.tenantId, {
+      search: query,
+    });
+    const needle = query.trim().toLowerCase();
+    const filtered = matches.filter((user) => {
+      const name = (user.name || '').toLowerCase();
+      const email = (user.email || '').toLowerCase();
+      return name === needle || email === needle || name.includes(needle);
+    });
+
+    if (filtered.length === 0) {
+      return {
+        kind: 'clarify',
+        message: `I couldn't find anyone named ${query} in your tenant.`,
+      };
+    }
+    if (filtered.length > 1) {
+      const names = filtered
+        .slice(0, 5)
+        .map((user) => user.name || user.email)
+        .join(', ');
+      return {
+        kind: 'clarify',
+        message: `I found ${filtered.length} people matching ${query}: ${names}. Which assignee do you mean?`,
+      };
+    }
+
+    return { kind: 'ok', id: filtered[0].id };
+  }
+
   private requireAnalytics(): TaskAnalyticsRepository {
     if (!this.analytics) {
       throw new InternalServerErrorException('Failed to load task analytics');
@@ -1203,7 +1365,8 @@ function formatAnalyticsMessage(
   const scoped = label ? ` for ${label}` : '';
 
   if (focus === 'overdue') {
-    return `You have ${summary.overdue} overdue task${summary.overdue === 1 ? '' : 's'}${scoped}.`;
+    const priorityLabel = command.priority ? ` ${command.priority} priority` : '';
+    return `You have ${summary.overdue} overdue${priorityLabel} task${summary.overdue === 1 ? '' : 's'}${scoped}.`;
   }
 
   if (focus === 'completed') {
@@ -1234,7 +1397,36 @@ function formatAnalyticsMessage(
     return `Task activity${scoped}: ${activity.created} created, ${activity.updated} updated, ${activity.completed} completed, ${activity.cancelled} cancelled, ${activity.reopened} reopened.`;
   }
 
+  if (focus === 'trends') {
+    return `Task trends${scoped}: ${analytics.summary.total} tasks in range, ${analytics.summary.completed} completed, ${analytics.summary.overdue} overdue.`;
+  }
+
+  if (focus === 'report') {
+    return `Task report${scoped}: ${analytics.summary.total} total (${analytics.summary.pending} pending, ${analytics.summary.inProgress} in progress, ${analytics.summary.completed} completed, ${analytics.summary.cancelled} cancelled). Completion rate ${analytics.completionRate}%, overdue rate ${analytics.overdueRate}%.`;
+  }
+
   return `You have ${summary.total} task${summary.total === 1 ? '' : 's'}${scoped} (${summary.pending} pending, ${summary.inProgress} in progress, ${summary.completed} completed, ${summary.cancelled} cancelled). Completion rate ${analytics.completionRate}%, overdue rate ${analytics.overdueRate}%.`;
+}
+
+function formatTrendsMessage(
+  trends: Array<{ period: string; created: number; completed: number; overdue: number }>,
+): string {
+  if (trends.length === 0) {
+    return '';
+  }
+  const created = trends.reduce((sum, row) => sum + row.created, 0);
+  const completed = trends.reduce((sum, row) => sum + row.completed, 0);
+  const overdue = trends.reduce((sum, row) => sum + row.overdue, 0);
+  return ` Trends: ${created} created, ${completed} completed, ${overdue} overdue across ${trends.length} period${trends.length === 1 ? '' : 's'}.`;
+}
+
+function spanDays(from: string, to: Date | string): number {
+  const start = new Date(from).getTime();
+  const end = (to instanceof Date ? to : new Date(to)).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return 0;
+  }
+  return Math.round((end - start) / (24 * 60 * 60 * 1000));
 }
 
 function crmPatch(

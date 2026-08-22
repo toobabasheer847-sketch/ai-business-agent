@@ -23,6 +23,7 @@ function toListParams(query?: TaskListQuery) {
   if (query.companyId) params.companyId = query.companyId
   if (query.prospectId) params.prospectId = query.prospectId
   if (query.leadId) params.leadId = query.leadId
+  if (query.assigneeId) params.assigneeId = query.assigneeId
   if (query.overdue) params.overdue = 'true'
   if (query.dueFrom) params.dueFrom = query.dueFrom
   if (query.dueTo) params.dueTo = query.dueTo
@@ -143,6 +144,17 @@ export const tasksApi = {
     return apiClient
       .get<TaskAnalyticsTrends>('/ai/task/analytics/trends', {
         params: toAnalyticsParams(query),
+      })
+      .then((r) => r.data)
+  },
+
+  exportAnalyticsCsv(query?: TaskAnalyticsQuery) {
+    const { groupBy: _groupBy, ...rest } = query ?? {}
+    return apiClient
+      .get<Blob>('/ai/task/analytics/export', {
+        params: toAnalyticsParams(rest),
+        responseType: 'blob',
+        headers: { Accept: 'text/csv' },
       })
       .then((r) => r.data)
   },

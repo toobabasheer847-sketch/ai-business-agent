@@ -12,6 +12,7 @@ import {
 import type { Company } from '@/features/companies/types/company.types'
 import type { Lead } from '@/features/leads/types/lead.types'
 import type { Prospect } from '@/features/prospects/types/prospect.types'
+import type { User } from '@/features/users/types/user.types'
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -27,9 +28,11 @@ type TaskFiltersProps = {
   companyId: string
   prospectId: string
   leadId: string
+  assigneeId?: string
   companies: Company[]
   prospects: Prospect[]
   leads: Lead[]
+  users?: User[]
   onSearchChange: (value: string) => void
   onStatusChange: (value: string) => void
   onPriorityChange: (value: string) => void
@@ -37,6 +40,7 @@ type TaskFiltersProps = {
   onCompanyChange: (value: string) => void
   onProspectChange: (value: string) => void
   onLeadChange: (value: string) => void
+  onAssigneeChange?: (value: string) => void
   onReset: () => void
 }
 
@@ -63,9 +67,11 @@ export function TaskFilters({
   companyId,
   prospectId,
   leadId,
+  assigneeId = '',
   companies,
   prospects,
   leads,
+  users = [],
   onSearchChange,
   onStatusChange,
   onPriorityChange,
@@ -73,10 +79,18 @@ export function TaskFilters({
   onCompanyChange,
   onProspectChange,
   onLeadChange,
+  onAssigneeChange,
   onReset,
 }: TaskFiltersProps) {
   const hasFilters = Boolean(
-    search || status || priority || dueWindow || companyId || prospectId || leadId,
+    search ||
+      status ||
+      priority ||
+      dueWindow ||
+      companyId ||
+      prospectId ||
+      leadId ||
+      assigneeId,
   )
 
   return (
@@ -196,6 +210,25 @@ export function TaskFilters({
           ))}
         </SelectContent>
       </Select>
+
+      {onAssigneeChange ? (
+        <Select
+          value={assigneeId || ALL}
+          onValueChange={(value) => onAssigneeChange(value === ALL ? '' : value)}
+        >
+          <SelectTrigger className="w-full lg:w-[190px]" aria-label="Assignee">
+            <SelectValue placeholder="Assignee" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All assignees</SelectItem>
+            {users.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.name || user.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
 
       {hasFilters && (
         <Button type="button" variant="ghost" onClick={onReset}>

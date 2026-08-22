@@ -306,7 +306,9 @@ describe('parseTaskCommand', () => {
         hasReminder: true,
       }),
     );
-    expect(parseTaskCommand("What's my task completion rate?")).toEqual(
+    expect(
+      parseTaskCommand("What's my task completion rate?"),
+    ).toEqual(
       expect.objectContaining({ action: 'analytics', focus: 'rate' }),
     );
     expect(
@@ -316,6 +318,65 @@ describe('parseTaskCommand', () => {
         action: 'analytics',
         focus: 'activity',
         from: '2026-08-17T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('parses reporting, trends, assignee, and overdue high-priority analytics', () => {
+    const reportNow = new Date('2026-08-22T12:00:00.000Z');
+    expect(parseTaskCommand('Give me a report of my tasks.', { now: reportNow })).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'report' }),
+    );
+    expect(
+      parseTaskCommand('Show my task report for this month.', { now: reportNow }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'report',
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+      }),
+    );
+    expect(
+      parseTaskCommand('Show my task performance this month.', { now: reportNow }),
+    ).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'report' }),
+    );
+    expect(
+      parseTaskCommand('Show my task trends this month.', { now: reportNow }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'trends',
+        from: '2026-08-01T00:00:00.000Z',
+      }),
+    );
+    expect(
+      parseTaskCommand('Show my task statistics for this week.', { now: reportNow }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'summary',
+        from: '2026-08-17T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+      }),
+    );
+    expect(
+      parseTaskCommand('How many overdue high priority tasks do I have?'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'overdue',
+        priority: 'high',
+      }),
+    );
+    expect(
+      parseTaskCommand('How many tasks are assigned to Ahmed?'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        assigneeQuery: 'Ahmed',
+        personQuery: undefined,
       }),
     );
   });

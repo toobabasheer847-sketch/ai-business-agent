@@ -1,5 +1,6 @@
 import {
   addUtcDays,
+  endOfUtcDay,
   startOfUtcDay,
   startOfUtcMonth,
   startOfUtcWeek,
@@ -50,6 +51,7 @@ export function emptySummary(): TaskAnalyticsSummary {
     dueTomorrow: 0,
     highPriorityOpen: 0,
     urgentOpen: 0,
+    withReminders: 0,
   };
 }
 
@@ -244,4 +246,129 @@ export function mergeTrendRows(
     completed: completedBy[period] ?? 0,
     overdue: overdueBy[period] ?? 0,
   }));
+}
+
+export const TASK_DATE_PRESETS = [
+  'today',
+  'yesterday',
+  'this_week',
+  'last_week',
+  'this_month',
+  'last_month',
+  'last_30_days',
+  'last_90_days',
+  'custom',
+] as const;
+
+export type TaskDatePreset = (typeof TASK_DATE_PRESETS)[number];
+
+export function resolveDatePreset(
+  preset: TaskDatePreset,
+  now: Date = new Date(),
+): { from: Date; to: Date } | null {
+  const todayStart = startOfUtcDay(now);
+  const todayEnd = endOfUtcDay(now);
+
+  if (preset === 'custom') {
+    return null;
+  }
+  if (preset === 'today') {
+    return { from: todayStart, to: todayEnd };
+  }
+  if (preset === 'yesterday') {
+    const yesterday = addUtcDays(now, -1);
+    return { from: startOfUtcDay(yesterday), to: endOfUtcDay(yesterday) };
+  }
+  if (preset === 'this_week') {
+    return { from: startOfUtcWeek(now), to: todayEnd };
+  }
+  if (preset === 'last_week') {
+    const thisWeek = startOfUtcWeek(now);
+    return {
+      from: addUtcDays(thisWeek, -7),
+      to: new Date(thisWeek.getTime() - 1),
+    };
+  }
+  if (preset === 'this_month') {
+    return { from: startOfUtcMonth(now), to: todayEnd };
+  }
+  if (preset === 'last_month') {
+    const thisMonth = startOfUtcMonth(now);
+    const lastMonthStart = new Date(
+      Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth() - 1, 1),
+    );
+    return { from: lastMonthStart, to: new Date(thisMonth.getTime() - 1) };
+  }
+  if (preset === 'last_90_days') {
+    return { from: startOfUtcDay(addUtcDays(now, -89)), to: todayEnd };
+  }
+  return { from: startOfUtcDay(addUtcDays(now, -29)), to: todayEnd };
+}
+
+export const TASK_CSV_HEADERS = [
+  'Title',
+  'Status',
+  'Priority',
+  'Due date',
+  'Completed date',
+  'Company',
+  'Prospect',
+  'Lead',
+  'Assignee',
+  'Reminder status',
+  'Created date',
+] as const;
+
+export type TaskCsvRow = {
+  title: string;
+  status: string;
+  priority: string;
+  dueAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  company?: string | null;
+  prospect?: string | null;
+  lead?: string | null;
+  assignee?: string | null;
+  reminderStatus?: string | null;
+  createdAt?: Date | string | null;
+};
+
+export function formatCsvDate(value?: Date | string | null): string {
+  if (!value) {
+    return '';
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toISOString();
+}
+
+export function csvEscape(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export function buildTaskCsv(rows: TaskCsvRow[]): string {
+  const lines = [
+    TASK_CSV_HEADERS.join(','),
+    ...rows.map((row) =>
+      [
+        csvEscape(row.title ?? ''),
+        csvEscape(row.status ?? ''),
+        csvEscape(row.priority ?? ''),
+        csvEscape(formatCsvDate(row.dueAt)),
+        csvEscape(formatCsvDate(row.completedAt)),
+        csvEscape(row.company ?? ''),
+        csvEscape(row.prospect ?? ''),
+        csvEscape(row.lead ?? ''),
+        csvEscape(row.assignee ?? ''),
+        csvEscape(row.reminderStatus ?? ''),
+        csvEscape(formatCsvDate(row.createdAt)),
+      ].join(','),
+    ),
+  ];
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }

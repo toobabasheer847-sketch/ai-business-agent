@@ -31,6 +31,7 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     hasReminder: query.hasReminder || undefined,
     reminderFrom: query.reminderFrom || undefined,
     reminderTo: query.reminderTo || undefined,
+    assigneeId: query.assigneeId || undefined,
   }
 
   if (
@@ -40,6 +41,7 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     !normalized.companyId &&
     !normalized.prospectId &&
     !normalized.leadId &&
+    !normalized.assigneeId &&
     !normalized.overdue &&
     !normalized.dueFrom &&
     !normalized.dueTo &&
@@ -265,5 +267,11 @@ export function useTaskAnalyticsTrends(query?: TaskAnalyticsQuery) {
   return useQuery({
     queryKey: taskKeys.analyticsTrends(normalized),
     queryFn: () => tasksApi.analyticsTrends(normalized),
+  })
+}
+
+export function useExportTaskAnalyticsCsv() {
+  return useMutation({
+    mutationFn: (query?: TaskAnalyticsQuery) => tasksApi.exportAnalyticsCsv(query),
   })
 }

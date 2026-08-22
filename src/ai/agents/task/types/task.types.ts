@@ -56,7 +56,9 @@ export type TaskNlAnalyticsFocus =
   | 'priority'
   | 'reminders'
   | 'activity'
-  | 'rate';
+  | 'rate'
+  | 'report'
+  | 'trends';
 
 export interface TaskAnalyticsFilters {
   from?: Date;
@@ -82,6 +84,7 @@ export interface TaskAnalyticsSummary {
   dueTomorrow: number;
   highPriorityOpen: number;
   urgentOpen: number;
+  withReminders: number;
 }
 
 export interface TaskAnalyticsPriority {
@@ -141,6 +144,13 @@ export interface TaskAnalyticsTrendPoint {
 }
 
 export interface TaskAnalyticsTrendsResult {
+  groupBy: TaskAnalyticsGroupBy;
+  from: string;
+  to: string;
+  trends: TaskAnalyticsTrendPoint[];
+}
+
+export interface TaskAnalyticsReport extends TaskAnalyticsResult {
   groupBy: TaskAnalyticsGroupBy;
   from: string;
   to: string;

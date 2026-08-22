@@ -1,6 +1,9 @@
 import { extractCrmReferences } from './parse-crm-references.js';
 import {
+  addUtcDays,
+  endOfUtcDay,
   parseTaskDueAt,
+  startOfUtcDay,
   startOfUtcMonth,
   startOfUtcWeek,
   stripDueDatePhrases,
@@ -48,6 +51,7 @@ export interface TaskNlCommand {
   rangeField?: 'createdAt' | 'completedAt';
   hasReminder?: boolean;
   focus?: TaskNlAnalyticsFocus;
+  assigneeQuery?: string;
 }
 
 const UUID_RE =
@@ -158,14 +162,24 @@ function attachCrmReferences(
     return command;
   }
 
+  const assigneeQuery = extractAssigneeQuery(text);
   const refs = extractCrmReferences(text);
   return {
     ...command,
+    assigneeQuery,
     companyQuery: refs.companyQuery,
-    personQuery: refs.personQuery,
+    personQuery: assigneeQuery ? undefined : refs.personQuery,
     emailQuery: refs.emailQuery,
     explicitCompany: refs.explicitCompany,
   };
+}
+
+function extractAssigneeQuery(text: string): string | undefined {
+  const match = text.match(
+    /\bassigned to\s+([A-Za-z][A-Za-z0-9 .'-]{0,60}?)(?=\s|$)/i,
+  );
+  const value = match?.[1]?.replace(/[.,!?]+$/g, '').trim();
+  return value || undefined;
 }
 
 export function titleMatchesSearch(title: string, searchTerm: string): boolean {
@@ -581,7 +595,11 @@ function parseAnalytics(text: string, now: Date): TaskNlCommand {
   }
 
   let focus: TaskNlAnalyticsFocus = 'summary';
-  if (/\bcompletion rate\b|\boverdue rate\b/.test(lower)) {
+  if (/\b(report|performance)\b/.test(lower)) {
+    focus = 'report';
+  } else if (/\btrends?\b/.test(lower)) {
+    focus = 'trends';
+  } else if (/\bcompletion rate\b|\boverdue rate\b/.test(lower)) {
     focus = 'rate';
   } else if (/\boverdue\b/.test(lower)) {
     focus = 'overdue';
@@ -596,13 +614,15 @@ function parseAnalytics(text: string, now: Date): TaskNlCommand {
   }
 
   const completedRange = focus === 'completed' && Boolean(range.from);
+  const needsDefaultRange =
+    (focus === 'report' || focus === 'trends') && !range.from;
 
   return {
     action: 'analytics',
     status: completedRange ? 'completed' : status,
     priority: priority.priority,
-    from: range.from,
-    to: range.to,
+    from: range.from ?? (needsDefaultRange ? addUtcDays(now, -29).toISOString() : undefined),
+    to: range.to ?? (needsDefaultRange ? endOfUtcDay(now).toISOString() : undefined),
     rangeField: completedRange ? 'completedAt' : 'createdAt',
     hasReminder: focus === 'reminders' ? true : undefined,
     focus,
@@ -613,16 +633,48 @@ function parseAnalyticsRange(
   lower: string,
   now: Date,
 ): { from?: string; to?: string } {
+  if (/\btoday\b/.test(lower) && !/\byesterday\b/.test(lower) && !/\bthis week\b|\bthis month\b/.test(lower)) {
+    if (/\bfor today\b|\btoday'?s\b|\btasks today\b/.test(lower)) {
+      return {
+        from: startOfUtcDay(now).toISOString(),
+        to: endOfUtcDay(now).toISOString(),
+      };
+    }
+  }
+  if (/\byesterday\b/.test(lower)) {
+    const yesterday = addUtcDays(now, -1);
+    return {
+      from: startOfUtcDay(yesterday).toISOString(),
+      to: endOfUtcDay(yesterday).toISOString(),
+    };
+  }
+  if (/\blast week\b/.test(lower)) {
+    const thisWeek = startOfUtcWeek(now);
+    return {
+      from: addUtcDays(thisWeek, -7).toISOString(),
+      to: new Date(thisWeek.getTime() - 1).toISOString(),
+    };
+  }
   if (/\bthis week\b/.test(lower)) {
     return {
       from: startOfUtcWeek(now).toISOString(),
-      to: now.toISOString(),
+      to: endOfUtcDay(now).toISOString(),
+    };
+  }
+  if (/\blast month\b/.test(lower)) {
+    const thisMonth = startOfUtcMonth(now);
+    const lastMonthStart = new Date(
+      Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth() - 1, 1),
+    );
+    return {
+      from: lastMonthStart.toISOString(),
+      to: new Date(thisMonth.getTime() - 1).toISOString(),
     };
   }
   if (/\bthis month\b/.test(lower)) {
     return {
       from: startOfUtcMonth(now).toISOString(),
-      to: now.toISOString(),
+      to: endOfUtcDay(now).toISOString(),
     };
   }
   return {};
@@ -630,7 +682,7 @@ function parseAnalyticsRange(
 
 function isAnalyticsIntent(lower: string): boolean {
   if (
-    /\b(how many|how much|statistics|stats|analytics|completion rate|overdue rate)\b/.test(
+    /\b(how many|how much|statistics|stats|analytics|completion rate|overdue rate|report|performance|trends?)\b/.test(
       lower,
     )
   ) {
@@ -638,13 +690,15 @@ function isAnalyticsIntent(lower: string): boolean {
   }
 
   if (
-    /\b(this week|this month)\b/.test(lower) &&
+    /\b(this week|this month|last week|last month)\b/.test(lower) &&
     /\b(tasks?|activity)\b/.test(lower)
   ) {
     return true;
   }
 
-  return /\btask (?:statistics|stats|analytics|activity)\b/.test(lower);
+  return /\btask (?:statistics|stats|analytics|activity|report|performance|trends?)\b/.test(
+    lower,
+  );
 }
 
 function isActivityIntent(lower: string): boolean {

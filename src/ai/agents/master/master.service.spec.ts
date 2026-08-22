@@ -830,4 +830,26 @@ describe('MasterAgentService', () => {
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('4 overdue');
   });
+
+  it('routes task report phrasing through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'analytics',
+      message: 'Task report: 20 total.',
+      data: { summary: { total: 20 } },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Give me a report of my tasks.',
+    );
+
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'Give me a report of my tasks.',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('Task report');
+  });
 });

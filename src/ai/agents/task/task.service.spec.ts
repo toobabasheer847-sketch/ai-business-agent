@@ -35,10 +35,10 @@ describe('TaskService', () => {
     updateTask: jest.Mock;
     deleteTask: jest.Mock;
   };
-  let userRepository: { findByIdAndTenant: jest.Mock };
+  let userRepository: { findByIdAndTenant: jest.Mock; findAllByTenant: jest.Mock };
   let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
   let activity: { record: jest.Mock; listForTask: jest.Mock };
-  let analytics: { getSummary: jest.Mock; getTrends: jest.Mock };
+  let analytics: { getSummary: jest.Mock; getTrends: jest.Mock; listExportRows: jest.Mock };
 
   const analyticsFixture = {
     summary: {
@@ -52,6 +52,7 @@ describe('TaskService', () => {
       dueTomorrow: 2,
       highPriorityOpen: 4,
       urgentOpen: 1,
+      withReminders: 9,
     },
     completionRate: 35,
     overdueRate: 20,
@@ -92,6 +93,9 @@ describe('TaskService', () => {
     };
     userRepository = {
       findByIdAndTenant: jest.fn().mockResolvedValue({ id: userB, tenantId: tenantA }),
+      findAllByTenant: jest.fn().mockResolvedValue([
+        { id: userB, tenantId: tenantA, name: 'Ahmed', email: 'ahmed@example.com' },
+      ]),
     };
     crmResolver = {
       resolve: jest.fn().mockResolvedValue({ status: 'none' }),
@@ -106,6 +110,7 @@ describe('TaskService', () => {
       getTrends: jest.fn().mockResolvedValue([
         { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
       ]),
+      listExportRows: jest.fn().mockResolvedValue([]),
     };
 
     service = new TaskService(
@@ -353,6 +358,21 @@ describe('TaskService', () => {
       tenantA,
       expect.any(Object),
     );
+  });
+
+  it('lists tasks by tenant-safe assignee and rejects a cross-tenant assignee', async () => {
+    await service.listTasks({ assigneeId: userB }, contextA);
+    expect(userRepository.findByIdAndTenant).toHaveBeenCalledWith(userB, tenantA);
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+    );
+
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+    await expect(
+      service.listTasks({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('lists overdue tasks through the repository overdue filter', async () => {
@@ -1324,6 +1344,178 @@ describe('TaskService', () => {
 
     const result = await service.processNaturalLanguage(
       'How many tasks are related to ABC?',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('returns a report by reusing analytics summary and trends', async () => {
+    const result = await service.getReport(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        groupBy: 'week',
+      },
+      contextA,
+    );
+
+    expect(result.summary.total).toBe(20);
+    expect(result.trends).toEqual([
+      { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+    ]);
+    expect(result.groupBy).toBe('week');
+    expect(analytics.getSummary).toHaveBeenCalledTimes(1);
+    expect(analytics.getTrends).toHaveBeenCalledTimes(1);
+  });
+
+  it('exports CSV rows from the same analytics access scope and omits secrets', async () => {
+    analytics.listExportRows.mockResolvedValue([
+      {
+        id: taskId,
+        title: 'Call Ahmed',
+        status: 'pending',
+        priority: 'high',
+        dueAt: new Date('2026-08-22T09:00:00.000Z'),
+        completedAt: null,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        company: 'NimbusForge',
+        prospect: '',
+        lead: '',
+        assignee: 'Ahmed',
+        reminderStatus: '',
+      },
+    ]);
+
+    const csv = await service.exportAnalyticsCsv(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'pending',
+        priority: 'high',
+        companyId: 'company-1',
+      } as any,
+      contextA,
+    );
+
+    expect(analytics.listExportRows).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        status: 'pending',
+        priority: 'high',
+        companyId: 'company-1',
+      }),
+    );
+    expect(csv).toContain('Title,Status,Priority');
+    expect(csv).toContain('Call Ahmed');
+    expect(csv).toContain('NimbusForge');
+    expect(csv).not.toContain(tenantA);
+    expect(csv).not.toMatch(/createdBy|password|token|api[_-]?key/i);
+  });
+
+  it('exports header-only CSV for an empty dataset', async () => {
+    const csv = await service.exportAnalyticsCsv({}, contextA);
+    expect(csv).toContain('Title,Status,Priority');
+    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(1);
+  });
+
+  it('rejects cross-tenant CRM and assignee filters on CSV export', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Company not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.exportAnalyticsCsv({ companyId: 'company-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    crmResolver.assertIds.mockResolvedValue({});
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+    await expect(
+      service.exportAnalyticsCsv({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.listExportRows).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-tenant prospect and lead analytics filters', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Prospect not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.getAnalytics({ prospectId: 'prospect-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Lead not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.getAnalytics({ leadId: 'lead-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('answers NL report, trends, overdue high priority, and assignee analytics', async () => {
+    const reportNow = new Date('2026-08-22T12:00:00.000Z');
+    const report = await service.processNaturalLanguage(
+      'Show my task report for this month.',
+      contextA,
+      reportNow,
+    );
+    expect(report.action).toBe('analytics');
+    expect(report.message).toMatch(/Task report/i);
+    expect(analytics.getTrends).toHaveBeenCalled();
+
+    const completed = await service.processNaturalLanguage(
+      'How many tasks did I complete this month?',
+      contextA,
+      reportNow,
+    );
+    expect(completed.message).toContain('completed');
+
+    const overdueHigh = await service.processNaturalLanguage(
+      'How many overdue high priority tasks do I have?',
+      contextA,
+    );
+    expect(overdueHigh.message).toMatch(/overdue high priority/i);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ priority: 'high' }),
+      expect.any(Date),
+    );
+
+    const assigned = await service.processNaturalLanguage(
+      'How many tasks are assigned to Ahmed?',
+      contextA,
+    );
+    expect(assigned.action).toBe('analytics');
+    expect(userRepository.findAllByTenant).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ search: 'Ahmed' }),
+    );
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+      expect.any(Date),
+    );
+
+    const trends = await service.processNaturalLanguage(
+      'Show my task trends this month.',
+      contextA,
+      reportNow,
+    );
+    expect(trends.message).toMatch(/trends/i);
+  });
+
+  it('asks for clarification when an assignee name is ambiguous', async () => {
+    userRepository.findAllByTenant.mockResolvedValue([
+      { id: userA, name: 'Ahmed Ali', email: 'ahmed.ali@example.com' },
+      { id: userB, name: 'Ahmed Khan', email: 'ahmed.khan@example.com' },
+    ]);
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks are assigned to Ahmed?',
       contextA,
     );
 

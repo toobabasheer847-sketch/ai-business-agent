@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  desc,
   eq,
   exists,
   gte,
@@ -15,8 +16,12 @@ import {
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
 import { auditLogs } from '../../../database/drizzle/schema/audit-log.schema.js';
+import { companies } from '../../../database/drizzle/schema/company.schema.js';
+import { leads } from '../../../database/drizzle/schema/lead.schema.js';
+import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { tasks } from '../../../database/drizzle/schema/task.schema.js';
 import { taskReminders } from '../../../database/drizzle/schema/task-reminder.schema.js';
+import { users } from '../../../database/drizzle/schema/user.schema.js';
 import { addUtcDays, endOfUtcDay, startOfUtcDay } from './parse-task-datetime.js';
 import {
   buildAnalyticsResult,
@@ -29,6 +34,7 @@ import {
   iterateTrendPeriods,
   mergeTrendRows,
   toCount,
+  type TaskCsvRow,
 } from './task-analytics.metrics.js';
 import { TASK_ACTIVITY_ENTITY_TYPE } from './task-activity.constants.js';
 import type {
@@ -72,6 +78,7 @@ export class TaskAnalyticsRepository {
         dueTomorrow: sql<number>`count(*) filter (where ${tasks.dueAt} is not null and ${tasks.dueAt} >= ${tomorrowStart} and ${tasks.dueAt} <= ${tomorrowEnd})::int`,
         highPriorityOpen: sql<number>`count(*) filter (where ${tasks.priority} = 'high' and ${openSql})::int`,
         urgentOpen: sql<number>`count(*) filter (where ${tasks.priority} = 'urgent' and ${openSql})::int`,
+        withReminders: sql<number>`count(*) filter (where exists (select 1 from ${taskReminders} where ${taskReminders.taskId} = ${tasks.id}))::int`,
         low: sql<number>`count(*) filter (where ${tasks.priority} = 'low')::int`,
         medium: sql<number>`count(*) filter (where ${tasks.priority} = 'medium')::int`,
         high: sql<number>`count(*) filter (where ${tasks.priority} = 'high')::int`,
@@ -102,6 +109,7 @@ export class TaskAnalyticsRepository {
         dueTomorrow: toCount(row?.dueTomorrow),
         highPriorityOpen: toCount(row?.highPriorityOpen),
         urgentOpen: toCount(row?.urgentOpen),
+        withReminders: toCount(row?.withReminders),
       },
       priority: {
         ...emptyPriority(),
@@ -206,6 +214,58 @@ export class TaskAnalyticsRepository {
       mapRows(completedRows),
       mapRows(overdueRows),
     );
+  }
+
+  async listExportRows(
+    tenantId: string,
+    userId: string,
+    filters: TaskAnalyticsFilters,
+    limit = 10000,
+  ): Promise<Array<TaskCsvRow & { id: string }>> {
+    const clauses = this.taskFilterClauses(tenantId, userId, filters);
+    const rows = await this.db
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueAt: tasks.dueAt,
+        completedAt: tasks.completedAt,
+        createdAt: tasks.createdAt,
+        companyName: companies.name,
+        prospectFirstName: prospects.firstName,
+        prospectLastName: prospects.lastName,
+        leadFirstName: leads.firstName,
+        leadLastName: leads.lastName,
+        assigneeName: users.name,
+        assigneeEmail: users.email,
+      })
+      .from(tasks)
+      .leftJoin(companies, eq(tasks.companyId, companies.id))
+      .leftJoin(leads, eq(tasks.leadId, leads.id))
+      .leftJoin(prospects, eq(tasks.prospectId, prospects.id))
+      .leftJoin(users, eq(tasks.assignedTo, users.id))
+      .where(and(...clauses))
+      .orderBy(desc(tasks.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      priority: row.priority,
+      dueAt: row.dueAt,
+      completedAt: row.completedAt,
+      createdAt: row.createdAt,
+      company: row.companyName ?? '',
+      prospect: [row.prospectFirstName, row.prospectLastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim(),
+      lead: [row.leadFirstName, row.leadLastName].filter(Boolean).join(' ').trim(),
+      assignee: row.assigneeName || row.assigneeEmail || '',
+      reminderStatus: '',
+    }));
   }
 
   private async getReminderStats(

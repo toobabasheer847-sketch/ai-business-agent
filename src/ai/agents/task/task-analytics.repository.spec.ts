@@ -12,20 +12,29 @@ describe('TaskAnalyticsRepository', () => {
     const select = jest.fn();
     const from = jest.fn();
     const innerJoin = jest.fn();
+    const leftJoin = jest.fn();
     const where = jest.fn();
     const groupBy = jest.fn();
+    const orderBy = jest.fn();
+    const limit = jest.fn();
 
     chain.from = from;
     chain.innerJoin = innerJoin;
+    chain.leftJoin = leftJoin;
     chain.where = where;
     chain.groupBy = groupBy;
+    chain.orderBy = orderBy;
+    chain.limit = limit;
     chain.then = (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
       Promise.resolve([summaryRow ?? {}]).then(resolve, reject);
 
     from.mockReturnValue(chain);
     innerJoin.mockReturnValue(chain);
+    leftJoin.mockReturnValue(chain);
     where.mockReturnValue(chain);
     groupBy.mockResolvedValue([]);
+    orderBy.mockReturnValue(chain);
+    limit.mockReturnValue(chain);
     select.mockReturnValue(chain);
 
     const db = { select };
@@ -49,6 +58,7 @@ describe('TaskAnalyticsRepository', () => {
       dueTomorrow: 2,
       highPriorityOpen: 4,
       urgentOpen: 1,
+      withReminders: 9,
       low: 2,
       medium: 10,
       high: 6,
@@ -76,6 +86,7 @@ describe('TaskAnalyticsRepository', () => {
     expect(result.summary.overdue).toBe(4);
     expect(result.summary.dueToday).toBe(3);
     expect(result.summary.dueTomorrow).toBe(2);
+    expect(result.summary.withReminders).toBe(9);
     expect(result.priority.high).toBe(6);
     expect(result.crm.company).toBe(8);
     expect(result.reminders.scheduled).toBe(5);
@@ -129,5 +140,38 @@ describe('TaskAnalyticsRepository', () => {
     expect(trends).toEqual([
       { period: '2026-08-22', created: 5, completed: 5, overdue: 5 },
     ]);
+  });
+
+  it('lists export rows with names instead of tenant or secret fields', async () => {
+    const { repository } = createRepository({
+      id: '33333333-3333-4333-8333-333333333333',
+      title: 'Call Ahmed',
+      status: 'pending',
+      priority: 'high',
+      dueAt: new Date('2026-08-22T09:00:00.000Z'),
+      completedAt: null,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      companyName: 'NimbusForge',
+      prospectFirstName: null,
+      prospectLastName: null,
+      leadFirstName: null,
+      leadLastName: null,
+      assigneeName: 'Ahmed',
+      assigneeEmail: 'ahmed@example.com',
+    });
+
+    const rows = await repository.listExportRows(tenantA, userA, {
+      status: 'pending',
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        title: 'Call Ahmed',
+        status: 'pending',
+        company: 'NimbusForge',
+        assignee: 'Ahmed',
+      }),
+    ]);
+    expect(JSON.stringify(rows)).not.toMatch(/tenantId|passwordHash|createdBy/);
   });
 });

@@ -45,6 +45,12 @@ export class TaskQueryDto {
   leadId?: string;
 
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsUUID()
+  assigneeId?: string;
+
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') return undefined;
     if (value === true || value === 'true') return true;

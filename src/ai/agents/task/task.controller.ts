@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -44,6 +45,17 @@ export class TaskController {
     return this.taskService.listTasks(dto, context);
   }
 
+  @Get('analytics/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="task-analytics.csv"')
+  async exportAnalytics(
+    @Query() dto: TaskAnalyticsQueryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.exportAnalyticsCsv(dto, context);
+  }
+
   @Get('analytics/trends')
   async analyticsTrends(
     @Query() dto: TaskAnalyticsTrendsQueryDto,
@@ -60,6 +72,15 @@ export class TaskController {
   ) {
     const context = this.buildContext(req);
     return this.taskService.getAnalytics(dto, context);
+  }
+
+  @Get('report')
+  async report(
+    @Query() dto: TaskAnalyticsTrendsQueryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getReport(dto, context);
   }
 
   @Post('natural-language')

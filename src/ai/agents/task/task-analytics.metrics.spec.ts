@@ -1,5 +1,6 @@
 import {
   buildAnalyticsResult,
+  buildTaskCsv,
   emptyActivity,
   emptyCrm,
   emptyPriority,
@@ -9,6 +10,7 @@ import {
   mergeTrendRows,
   percent,
   resolveAnalyticsRange,
+  resolveDatePreset,
   toCount,
 } from './task-analytics.metrics';
 
@@ -110,5 +112,66 @@ describe('task analytics metrics', () => {
         [{ period: '2026-08-22', count: 1 }],
       ),
     ).toEqual([{ period: '2026-08-22', created: 5, completed: 3, overdue: 1 }]);
+  });
+
+  it('resolves UTC date presets including custom as a manual range', () => {
+    const now = new Date('2026-08-22T12:00:00.000Z');
+    expect(resolveDatePreset('today', now)).toEqual({
+      from: new Date('2026-08-22T00:00:00.000Z'),
+      to: new Date('2026-08-22T23:59:59.999Z'),
+    });
+    expect(resolveDatePreset('yesterday', now)?.from).toEqual(
+      new Date('2026-08-21T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('this_week', now)?.from).toEqual(
+      new Date('2026-08-17T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('last_week', now)?.from).toEqual(
+      new Date('2026-08-10T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('this_month', now)?.from).toEqual(
+      new Date('2026-08-01T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('last_month', now)?.from).toEqual(
+      new Date('2026-07-01T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('last_30_days', now)?.from).toEqual(
+      new Date('2026-07-24T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('last_90_days', now)?.from).toEqual(
+      new Date('2026-05-25T00:00:00.000Z'),
+    );
+    expect(resolveDatePreset('custom', now)).toBeNull();
+  });
+
+  it('builds CSV with the reporting columns and no tenant or secret fields', () => {
+    const csv = buildTaskCsv([
+      {
+        title: 'Call Ahmed, urgent',
+        status: 'pending',
+        priority: 'high',
+        dueAt: new Date('2026-08-22T09:00:00.000Z'),
+        completedAt: null,
+        company: 'NimbusForge',
+        prospect: '',
+        lead: '',
+        assignee: 'Ahmed',
+        reminderStatus: 'scheduled',
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      },
+    ]);
+
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('Title,Status,Priority,Due date,Completed date,Company,Prospect,Lead,Assignee,Reminder status,Created date');
+    expect(csv).toContain('"Call Ahmed, urgent"');
+    expect(csv).toContain('NimbusForge');
+    expect(csv).toContain('scheduled');
+    expect(csv).not.toMatch(/tenantId|createdBy|password|token|secret/i);
+  });
+
+  it('builds header-only CSV for an empty dataset', () => {
+    const csv = buildTaskCsv([]);
+    expect(csv).toContain('Title,Status,Priority');
+    expect(csv).not.toContain('Call Ahmed');
   });
 });

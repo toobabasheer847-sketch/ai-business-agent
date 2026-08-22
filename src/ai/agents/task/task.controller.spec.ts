@@ -46,6 +46,8 @@ describe('TaskController', () => {
     rescheduleTaskReminder: jest.Mock;
     getAnalytics: jest.Mock;
     getAnalyticsTrends: jest.Mock;
+    getReport: jest.Mock;
+    exportAnalyticsCsv: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -94,6 +96,13 @@ describe('TaskController', () => {
         groupBy: 'day',
         trends: [],
       }),
+      getReport: jest.fn().mockResolvedValue({
+        summary: { total: 0 },
+        trends: [],
+      }),
+      exportAnalyticsCsv: jest.fn().mockResolvedValue(
+        'Title,Status,Priority,Due date,Completed date,Company,Prospect,Lead,Assignee,Reminder status,Created date\r\n',
+      ),
     };
 
     app = await initTaskTestApp(
@@ -470,8 +479,12 @@ describe('TaskController', () => {
   it('returns 401 for analytics without a JWT', async () => {
     await request(app.getHttpServer()).get('/ai/task/analytics').expect(401);
     await request(app.getHttpServer()).get('/ai/task/analytics/trends').expect(401);
+    await request(app.getHttpServer()).get('/ai/task/analytics/export').expect(401);
+    await request(app.getHttpServer()).get('/ai/task/report').expect(401);
     expect(taskService.getAnalytics).not.toHaveBeenCalled();
     expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
+    expect(taskService.exportAnalyticsCsv).not.toHaveBeenCalled();
+    expect(taskService.getReport).not.toHaveBeenCalled();
   });
 
   it('routes GET /ai/task/analytics with JWT tenant and user, not query ownership fields', async () => {
@@ -529,8 +542,70 @@ describe('TaskController', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
 
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics/export')
+      .query({ tenantId: 'tenant-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/report')
+      .query({ createdBy: 'user-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics/export')
+      .query({ userId: 'user-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
     expect(taskService.getAnalytics).not.toHaveBeenCalled();
     expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
+    expect(taskService.exportAnalyticsCsv).not.toHaveBeenCalled();
+    expect(taskService.getReport).not.toHaveBeenCalled();
+  });
+
+  it('routes CSV export and report with JWT tenant and user', async () => {
+    const token = signTestJwt(app);
+
+    const exportResponse = await request(app.getHttpServer())
+      .get('/ai/task/analytics/export')
+      .query({
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'pending',
+        priority: 'high',
+      })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(exportResponse.headers['content-type']).toMatch(/text\/csv/);
+    expect(taskService.exportAnalyticsCsv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: '2026-08-01T00:00:00.000Z',
+        status: 'pending',
+        priority: 'high',
+      }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/ai/task/report')
+      .query({ groupBy: 'week' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.getReport).toHaveBeenCalledWith(
+      expect.objectContaining({ groupBy: 'week' }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
   });
 
   it('rejects invalid trend grouping', async () => {

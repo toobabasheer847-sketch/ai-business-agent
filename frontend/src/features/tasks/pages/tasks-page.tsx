@@ -149,16 +149,22 @@ function taskErrorMessage(error: unknown): string {
 export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
-  const [priority, setPriority] = useState('')
+  const [status, setStatus] = useState(searchParams.get('status') ?? '')
+  const [priority, setPriority] = useState(searchParams.get('priority') ?? '')
   const [companyId, setCompanyId] = useState(searchParams.get('companyId') ?? '')
   const [prospectId, setProspectId] = useState(
     searchParams.get('prospectId') ?? '',
   )
   const [leadId, setLeadId] = useState(searchParams.get('leadId') ?? '')
+  const [assigneeId, setAssigneeId] = useState(
+    searchParams.get('assigneeId') ?? '',
+  )
   const [dueWindow, setDueWindow] = useState<
     '' | 'overdue' | 'today' | 'tomorrow' | 'upcoming'
-  >('')
+  >(searchParams.get('overdue') === 'true' ? 'overdue' : '')
+  const [hasReminder, setHasReminder] = useState(
+    searchParams.get('hasReminder') === 'true',
+  )
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -177,15 +183,23 @@ export function TasksPage() {
   }, [search])
 
   useEffect(() => {
+    setStatus(searchParams.get('status') ?? '')
+    setPriority(searchParams.get('priority') ?? '')
     setCompanyId(searchParams.get('companyId') ?? '')
     setProspectId(searchParams.get('prospectId') ?? '')
     setLeadId(searchParams.get('leadId') ?? '')
+    setAssigneeId(searchParams.get('assigneeId') ?? '')
+    setHasReminder(searchParams.get('hasReminder') === 'true')
+    setDueWindow((prev) =>
+      searchParams.get('overdue') === 'true'
+        ? 'overdue'
+        : prev === 'overdue'
+          ? ''
+          : prev,
+    )
   }, [searchParams])
 
-  function setCrmParam(
-    key: 'companyId' | 'prospectId' | 'leadId',
-    value: string,
-  ) {
+  function setFilterParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams)
     if (value) next.set(key, value)
     else next.delete(key)
@@ -200,6 +214,8 @@ export function TasksPage() {
       companyId: companyId || undefined,
       prospectId: prospectId || undefined,
       leadId: leadId || undefined,
+      assigneeId: assigneeId || undefined,
+      hasReminder: hasReminder || undefined,
       ...dueWindowQuery(dueWindow),
     }
     if (
@@ -209,6 +225,8 @@ export function TasksPage() {
       !query.companyId &&
       !query.prospectId &&
       !query.leadId &&
+      !query.assigneeId &&
+      !query.hasReminder &&
       !query.overdue &&
       !query.dueFrom &&
       !query.dueTo &&
@@ -217,7 +235,17 @@ export function TasksPage() {
       return undefined
     }
     return query
-  }, [debouncedSearch, status, priority, companyId, prospectId, leadId, dueWindow])
+  }, [
+    debouncedSearch,
+    status,
+    priority,
+    companyId,
+    prospectId,
+    leadId,
+    assigneeId,
+    hasReminder,
+    dueWindow,
+  ])
 
   const usersQuery = useUsers()
   const companiesQuery = useCompanies()
@@ -245,7 +273,15 @@ export function TasksPage() {
   }, [users])
 
   const hasFilters = Boolean(
-    search || status || priority || companyId || prospectId || leadId,
+    search ||
+      status ||
+      priority ||
+      companyId ||
+      prospectId ||
+      leadId ||
+      assigneeId ||
+      hasReminder ||
+      dueWindow,
   )
 
   async function handleCreate(
@@ -352,21 +388,32 @@ export function TasksPage() {
           companyId={companyId}
           prospectId={prospectId}
           leadId={leadId}
+          assigneeId={assigneeId}
           companies={companies}
           prospects={prospects}
           leads={leads}
+          users={users}
           onSearchChange={setSearch}
-          onStatusChange={setStatus}
-          onPriorityChange={setPriority}
-          onDueWindowChange={setDueWindow}
-          onCompanyChange={(value) => setCrmParam('companyId', value)}
-          onProspectChange={(value) => setCrmParam('prospectId', value)}
-          onLeadChange={(value) => setCrmParam('leadId', value)}
+          onStatusChange={(value) => setFilterParam('status', value)}
+          onPriorityChange={(value) => setFilterParam('priority', value)}
+          onDueWindowChange={(value) => {
+            setDueWindow(value)
+            const next = new URLSearchParams(searchParams)
+            if (value === 'overdue') next.set('overdue', 'true')
+            else next.delete('overdue')
+            setSearchParams(next, { replace: true })
+          }}
+          onCompanyChange={(value) => setFilterParam('companyId', value)}
+          onProspectChange={(value) => setFilterParam('prospectId', value)}
+          onLeadChange={(value) => setFilterParam('leadId', value)}
+          onAssigneeChange={(value) => setFilterParam('assigneeId', value)}
           onReset={() => {
             setSearch('')
             setStatus('')
             setPriority('')
             setDueWindow('')
+            setAssigneeId('')
+            setHasReminder(false)
             setDebouncedSearch('')
             setSearchParams({}, { replace: true })
           }}

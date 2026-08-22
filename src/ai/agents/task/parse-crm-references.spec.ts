@@ -80,6 +80,25 @@ describe('extractCrmReferences', () => {
       }),
     );
   });
+
+  it('does not treat reporting date phrases as CRM names', () => {
+    expect(
+      extractCrmReferences('Show my task report for this month.'),
+    ).toEqual(
+      expect.objectContaining({
+        personQuery: undefined,
+        companyQuery: undefined,
+      }),
+    );
+    expect(
+      extractCrmReferences('Show my task statistics for this week.'),
+    ).toEqual(
+      expect.objectContaining({
+        personQuery: undefined,
+        companyQuery: undefined,
+      }),
+    );
+  });
 });
 
 describe('parseTaskCommand CRM hints', () => {

@@ -42,6 +42,7 @@ export type TaskListFilters = {
   hasReminder?: boolean;
   reminderFrom?: Date | string;
   reminderTo?: Date | string;
+  assigneeId?: string;
 };
 
 type TaskCrmWrite = {
@@ -142,6 +143,10 @@ export class TaskRepository {
 
     if (filters?.leadId) {
       clauses.push(eq(tasks.leadId, filters.leadId));
+    }
+
+    if (filters?.assigneeId) {
+      clauses.push(eq(tasks.assignedTo, filters.assigneeId));
     }
 
     const now = new Date();
