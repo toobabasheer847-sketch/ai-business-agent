@@ -520,7 +520,11 @@ export class MasterAgentService {
       return `${result.message || 'Here are your tasks:'}\n${lines.join('\n')}`;
     }
 
-    if (!result.data || Array.isArray(result.data)) {
+    if (result.action === 'analytics') {
+      return result.message || 'Here are your task statistics.';
+    }
+
+    if (!result.data || Array.isArray(result.data) || !this.isTaskRecord(result.data)) {
       return result.message || 'Task not found.';
     }
 
@@ -554,6 +558,15 @@ export class MasterAgentService {
     }
 
     return result.message || summary;
+  }
+
+  private isTaskRecord(value: TaskAgentResponse['data']): value is TaskRecord {
+    return Boolean(
+      value &&
+        !Array.isArray(value) &&
+        'title' in value &&
+        'status' in value,
+    );
   }
 
   private formatTaskSummary(task: TaskRecord, index?: number): string {

@@ -13,6 +13,8 @@ import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
 import { PaginationDto } from '../../../common/dto/pagination.dto.js';
+import { TaskAnalyticsQueryDto } from './dto/task-analytics-query.dto.js';
+import { TaskAnalyticsTrendsQueryDto } from './dto/task-analytics-trends-query.dto.js';
 import {
   parseTaskCommand,
   titleMatchesSearch,
@@ -24,6 +26,11 @@ import { TaskCrmResolver } from './resolve-crm-entities.js';
 import { normalizeCrmIds } from './resolve-crm-ids.js';
 import { TaskReminderService } from './task-reminder.service.js';
 import { TaskActivityRepository } from './task-activity.repository.js';
+import { TaskAnalyticsRepository } from './task-analytics.repository.js';
+import {
+  resolveAnalyticsRange,
+  TREND_MAX_DAYS,
+} from './task-analytics.metrics.js';
 import {
   buildCreateActivities,
   buildUpdateActivities,
@@ -31,7 +38,12 @@ import {
 import { TaskRepository } from './task.repository.js';
 import {
   TaskAgentResponse,
+  TaskAnalyticsFilters,
+  TaskAnalyticsGroupBy,
+  TaskAnalyticsResult,
+  TaskAnalyticsTrendsResult,
   TaskContext,
+  TaskNlAnalyticsFocus,
   TaskPriority,
   TaskRecord,
   TaskStatus,
@@ -45,6 +57,7 @@ export class TaskService {
     private readonly crmResolver: TaskCrmResolver,
     @Optional() private readonly reminders?: TaskReminderService,
     @Optional() private readonly activity?: TaskActivityRepository,
+    @Optional() private readonly analytics?: TaskAnalyticsRepository,
   ) {}
 
   async createTask(
@@ -139,6 +152,53 @@ export class TaskService {
     );
 
     return this.withReminders(rows);
+  }
+
+  async getAnalytics(
+    dto: TaskAnalyticsQueryDto & Pick<TaskAnalyticsFilters, 'rangeField' | 'hasReminder'>,
+    context: TaskContext,
+    now: Date = new Date(),
+  ): Promise<TaskAnalyticsResult> {
+    this.requireAuthContext(context);
+    const filters = await this.buildAnalyticsFilters(dto, context, { now });
+    return this.requireAnalytics().getSummary(
+      context.tenantId,
+      context.userId,
+      filters,
+      now,
+    );
+  }
+
+  async getAnalyticsTrends(
+    dto: TaskAnalyticsTrendsQueryDto,
+    context: TaskContext,
+    now: Date = new Date(),
+  ): Promise<TaskAnalyticsTrendsResult> {
+    this.requireAuthContext(context);
+    const groupBy: TaskAnalyticsGroupBy = dto.groupBy ?? 'day';
+    const filters = await this.buildAnalyticsFilters(dto, context, {
+      now,
+      requiredRange: true,
+      maxDays: TREND_MAX_DAYS[groupBy],
+    });
+    const from = filters.from ?? addUtcDays(now, -29);
+    const to = filters.to ?? now;
+    const trends = await this.requireAnalytics().getTrends(
+      context.tenantId,
+      context.userId,
+      filters,
+      groupBy,
+      from,
+      to,
+      now,
+    );
+
+    return {
+      groupBy,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      trends,
+    };
   }
 
   async getTaskActivity(
@@ -398,6 +458,10 @@ export class TaskService {
       };
     }
 
+    if (command.action === 'analytics') {
+      return this.executeAnalyticsCommand(command, context, now);
+    }
+
     if (command.action === 'create') {
       const crm = await this.applyCrmToCreate(command, context);
       if (crm.kind === 'clarify') {
@@ -569,6 +633,43 @@ export class TaskService {
       action: 'update',
       data: updated,
       message: 'Task updated.',
+    };
+  }
+
+  private async executeAnalyticsCommand(
+    command: TaskNlCommand,
+    context: TaskContext,
+    now: Date,
+  ): Promise<TaskAgentResponse> {
+    const crm = await this.applyCrmToList(command, context);
+    if (crm.kind === 'clarify') {
+      return {
+        action: 'clarify',
+        data: null,
+        message: crm.message,
+      };
+    }
+
+    const analytics = await this.getAnalytics(
+      {
+        from: command.from,
+        to: command.to,
+        status: command.status,
+        priority: command.priority,
+        companyId: crm.companyId,
+        prospectId: crm.prospectId,
+        leadId: crm.leadId,
+        rangeField: command.rangeField,
+        hasReminder: command.hasReminder,
+      },
+      context,
+      now,
+    );
+
+    return {
+      action: 'analytics',
+      data: analytics,
+      message: formatAnalyticsMessage(command, analytics, crm.label),
     };
   }
 
@@ -889,6 +990,55 @@ export class TaskService {
     return existing;
   }
 
+  private async buildAnalyticsFilters(
+    dto: TaskAnalyticsQueryDto & Pick<TaskAnalyticsFilters, 'rangeField' | 'hasReminder'>,
+    context: TaskContext,
+    options: { now: Date; requiredRange?: boolean; maxDays?: number },
+  ): Promise<TaskAnalyticsFilters> {
+    const range = resolveAnalyticsRange({
+      from: dto.from,
+      to: dto.to,
+      now: options.now,
+      required: options.requiredRange,
+      maxDays: options.maxDays,
+    });
+    if (!range.ok) {
+      throw new BadRequestException(range.message);
+    }
+
+    const assignedTo = await resolveAssignedToForTenant(
+      this.userRepository,
+      dto.assigneeId,
+      context.tenantId,
+    );
+    const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+      companyId: dto.companyId,
+      prospectId: dto.prospectId,
+      leadId: dto.leadId,
+    });
+
+    return {
+      from: range.from,
+      to: range.to,
+      rangeField: dto.rangeField,
+      status: dto.status as TaskStatus | undefined,
+      priority: dto.priority as TaskPriority | undefined,
+      companyId: crmIds.companyId ?? undefined,
+      prospectId: crmIds.prospectId ?? undefined,
+      leadId: crmIds.leadId ?? undefined,
+      assigneeId: assignedTo ?? undefined,
+      hasReminder: dto.hasReminder,
+    };
+  }
+
+  private requireAnalytics(): TaskAnalyticsRepository {
+    if (!this.analytics) {
+      throw new InternalServerErrorException('Failed to load task analytics');
+    }
+
+    return this.analytics;
+  }
+
   private parseOptionalDueAt(value?: string | null) {
     if (value === undefined || value === null || value === '') {
       return value === null ? null : undefined;
@@ -1041,6 +1191,50 @@ function formatReminderListMessage(
       `- ${item.type} ${item.status} at ${item.scheduledAt}${item.channel ? ` via ${item.channel}` : ''}`,
   );
   return `Reminders for “${title}”:\n${lines.join('\n')}`;
+}
+
+function formatAnalyticsMessage(
+  command: TaskNlCommand,
+  analytics: TaskAnalyticsResult,
+  label?: string,
+): string {
+  const { summary } = analytics;
+  const focus: TaskNlAnalyticsFocus = command.focus ?? 'summary';
+  const scoped = label ? ` for ${label}` : '';
+
+  if (focus === 'overdue') {
+    return `You have ${summary.overdue} overdue task${summary.overdue === 1 ? '' : 's'}${scoped}.`;
+  }
+
+  if (focus === 'completed') {
+    return `You completed ${summary.completed} task${summary.completed === 1 ? '' : 's'}${scoped}${command.from ? ' in that period' : ''}.`;
+  }
+
+  if (focus === 'priority' && command.priority) {
+    const count = analytics.priority[command.priority];
+    const open =
+      command.priority === 'high'
+        ? summary.highPriorityOpen
+        : command.priority === 'urgent'
+          ? summary.urgentOpen
+          : count;
+    return `You have ${count} ${command.priority} priority task${count === 1 ? '' : 's'}${scoped}${command.priority === 'high' || command.priority === 'urgent' ? ` (${open} still open)` : ''}.`;
+  }
+
+  if (focus === 'reminders') {
+    return `${summary.total} of your tasks have reminders${scoped}. Scheduled ${analytics.reminders.scheduled}, sent ${analytics.reminders.sent}, failed ${analytics.reminders.failed}. Reminder success rate is ${analytics.reminderSuccessRate}%.`;
+  }
+
+  if (focus === 'rate') {
+    return `Your task completion rate is ${analytics.completionRate}%${scoped}. Overdue rate is ${analytics.overdueRate}%.`;
+  }
+
+  if (focus === 'activity') {
+    const { activity } = analytics;
+    return `Task activity${scoped}: ${activity.created} created, ${activity.updated} updated, ${activity.completed} completed, ${activity.cancelled} cancelled, ${activity.reopened} reopened.`;
+  }
+
+  return `You have ${summary.total} task${summary.total === 1 ? '' : 's'}${scoped} (${summary.pending} pending, ${summary.inProgress} in progress, ${summary.completed} completed, ${summary.cancelled} cancelled). Completion rate ${analytics.completionRate}%, overdue rate ${analytics.overdueRate}%.`;
 }
 
 function crmPatch(

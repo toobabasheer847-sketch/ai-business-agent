@@ -8,6 +8,9 @@ import type {
   UpdateTaskRequest,
   TaskActivityResponse,
   TaskReminderListResponse,
+  TaskAnalytics,
+  TaskAnalyticsQuery,
+  TaskAnalyticsTrends,
 } from '@/features/tasks/types/task.types'
 
 function toListParams(query?: TaskListQuery) {
@@ -29,6 +32,23 @@ function toListParams(query?: TaskListQuery) {
   if (query.hasReminder === false) params.hasReminder = 'false'
   if (query.reminderFrom) params.reminderFrom = query.reminderFrom
   if (query.reminderTo) params.reminderTo = query.reminderTo
+
+  return Object.keys(params).length > 0 ? params : undefined
+}
+
+function toAnalyticsParams(query?: TaskAnalyticsQuery) {
+  if (!query) return undefined
+
+  const params: Record<string, string> = {}
+  if (query.from) params.from = query.from
+  if (query.to) params.to = query.to
+  if (query.status) params.status = query.status
+  if (query.priority) params.priority = query.priority
+  if (query.companyId) params.companyId = query.companyId
+  if (query.prospectId) params.prospectId = query.prospectId
+  if (query.leadId) params.leadId = query.leadId
+  if (query.assigneeId) params.assigneeId = query.assigneeId
+  if (query.groupBy) params.groupBy = query.groupBy
 
   return Object.keys(params).length > 0 ? params : undefined
 }
@@ -108,6 +128,21 @@ export const tasksApi = {
     return apiClient
       .post<TaskReminderListResponse>(`/ai/task/${taskId}/reminders/reschedule`, {
         scheduledAt,
+      })
+      .then((r) => r.data)
+  },
+
+  analytics(query?: TaskAnalyticsQuery) {
+    const { groupBy: _groupBy, ...rest } = query ?? {}
+    return apiClient
+      .get<TaskAnalytics>('/ai/task/analytics', { params: toAnalyticsParams(rest) })
+      .then((r) => r.data)
+  },
+
+  analyticsTrends(query?: TaskAnalyticsQuery) {
+    return apiClient
+      .get<TaskAnalyticsTrends>('/ai/task/analytics/trends', {
+        params: toAnalyticsParams(query),
       })
       .then((r) => r.data)
   },

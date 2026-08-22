@@ -1,11 +1,14 @@
 import { extractCrmReferences } from './parse-crm-references.js';
 import {
   parseTaskDueAt,
+  startOfUtcMonth,
+  startOfUtcWeek,
   stripDueDatePhrases,
 } from './parse-task-datetime.js';
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
+  TaskNlAnalyticsFocus,
   TaskPriority,
   TaskStatus,
 } from './types/task.types.js';
@@ -19,6 +22,7 @@ export type TaskNlAction =
   | 'update'
   | 'clarify'
   | 'activity'
+  | 'analytics'
   | 'reminder_list'
   | 'reminder_enable'
   | 'reminder_disable'
@@ -39,6 +43,11 @@ export interface TaskNlCommand {
   personQuery?: string;
   emailQuery?: string;
   explicitCompany?: boolean;
+  from?: string;
+  to?: string;
+  rangeField?: 'createdAt' | 'completedAt';
+  hasReminder?: boolean;
+  focus?: TaskNlAnalyticsFocus;
 }
 
 const UUID_RE =
@@ -107,6 +116,8 @@ export function parseTaskCommand(
       const statusUpdate = parseStatusUpdate(text);
       if (statusUpdate) {
         command = statusUpdate;
+      } else if (isAnalyticsIntent(lower)) {
+        command = parseAnalytics(text, now);
       } else if (isActivityIntent(lower)) {
         command = parseTargetedAction(text, 'activity', [
           'show',
@@ -554,6 +565,86 @@ function isCompleteIntent(lower: string): boolean {
 
 function isCancelIntent(lower: string): boolean {
   return /^(?:please\s+)?cancel\b/.test(lower) || /\bcancel\s+(?:my|the)\b/.test(lower);
+}
+
+function parseAnalytics(text: string, now: Date): TaskNlCommand {
+  const lower = text.toLowerCase();
+  const range = parseAnalyticsRange(lower, now);
+  const status = extractStatus(lower);
+  const priority = extractPriority(lower);
+
+  if (priority.invalid) {
+    return {
+      action: 'clarify',
+      message: `"${priority.invalid}" is not a valid priority. Use low, medium, high, or urgent.`,
+    };
+  }
+
+  let focus: TaskNlAnalyticsFocus = 'summary';
+  if (/\bcompletion rate\b|\boverdue rate\b/.test(lower)) {
+    focus = 'rate';
+  } else if (/\boverdue\b/.test(lower)) {
+    focus = 'overdue';
+  } else if (/\bactivity\b/.test(lower)) {
+    focus = 'activity';
+  } else if (/\breminders?\b/.test(lower)) {
+    focus = 'reminders';
+  } else if (priority.priority) {
+    focus = 'priority';
+  } else if (status === 'completed' || /\b(?:did i |have i )?complete[d]?\b/.test(lower)) {
+    focus = 'completed';
+  }
+
+  const completedRange = focus === 'completed' && Boolean(range.from);
+
+  return {
+    action: 'analytics',
+    status: completedRange ? 'completed' : status,
+    priority: priority.priority,
+    from: range.from,
+    to: range.to,
+    rangeField: completedRange ? 'completedAt' : 'createdAt',
+    hasReminder: focus === 'reminders' ? true : undefined,
+    focus,
+  };
+}
+
+function parseAnalyticsRange(
+  lower: string,
+  now: Date,
+): { from?: string; to?: string } {
+  if (/\bthis week\b/.test(lower)) {
+    return {
+      from: startOfUtcWeek(now).toISOString(),
+      to: now.toISOString(),
+    };
+  }
+  if (/\bthis month\b/.test(lower)) {
+    return {
+      from: startOfUtcMonth(now).toISOString(),
+      to: now.toISOString(),
+    };
+  }
+  return {};
+}
+
+function isAnalyticsIntent(lower: string): boolean {
+  if (
+    /\b(how many|how much|statistics|stats|analytics|completion rate|overdue rate)\b/.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(this week|this month)\b/.test(lower) &&
+    /\b(tasks?|activity)\b/.test(lower)
+  ) {
+    return true;
+  }
+
+  return /\btask (?:statistics|stats|analytics|activity)\b/.test(lower);
 }
 
 function isActivityIntent(lower: string): boolean {

@@ -60,6 +60,13 @@ describe('extractCrmReferences', () => {
         personQuery: 'Ahmed',
       }),
     );
+    expect(
+      extractCrmReferences('How many tasks are related to NimbusForge?'),
+    ).toEqual(
+      expect.objectContaining({
+        personQuery: 'NimbusForge',
+      }),
+    );
   });
 
   it('extracts a company from create-for phrasing', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bot, ListTodo, Plus, RefreshCw } from 'lucide-react'
+import { Bot, BarChart3, ListTodo, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -312,6 +312,12 @@ export function TasksPage() {
         description="View and manage tasks assigned to you or created by you. Tenant and owner come from your session — they are never sent from this page."
         actions={
           <>
+            <Button type="button" variant="outline" asChild>
+              <Link to="/tasks/analytics">
+                <BarChart3 className="size-4" />
+                Analytics
+              </Link>
+            </Button>
             <Button type="button" variant="outline" asChild>
               <Link to="/assistant">
                 <Bot className="size-4" />

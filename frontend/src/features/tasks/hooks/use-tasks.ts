@@ -8,6 +8,7 @@ import {
 import { tasksApi } from '@/features/tasks/api/tasks.api'
 import type {
   CreateTaskRequest,
+  TaskAnalyticsQuery,
   TaskListQuery,
   UpdateTaskRequest,
 } from '@/features/tasks/types/task.types'
@@ -54,6 +55,40 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
   return normalized
 }
 
+function normalizeAnalyticsQuery(
+  query?: TaskAnalyticsQuery,
+): TaskAnalyticsQuery | undefined {
+  if (!query) return undefined
+
+  const normalized: TaskAnalyticsQuery = {
+    from: query.from || undefined,
+    to: query.to || undefined,
+    status: query.status || undefined,
+    priority: query.priority || undefined,
+    companyId: query.companyId || undefined,
+    prospectId: query.prospectId || undefined,
+    leadId: query.leadId || undefined,
+    assigneeId: query.assigneeId || undefined,
+    groupBy: query.groupBy || undefined,
+  }
+
+  if (
+    !normalized.from &&
+    !normalized.to &&
+    !normalized.status &&
+    !normalized.priority &&
+    !normalized.companyId &&
+    !normalized.prospectId &&
+    !normalized.leadId &&
+    !normalized.assigneeId &&
+    !normalized.groupBy
+  ) {
+    return undefined
+  }
+
+  return normalized
+}
+
 export const taskKeys = {
   all: ['tasks'] as const,
   lists: () => [...taskKeys.all, 'list'] as const,
@@ -63,10 +98,16 @@ export const taskKeys = {
   detail: (id: string) => [...taskKeys.details(), id] as const,
   activities: (id: string) => [...taskKeys.all, 'activity', id] as const,
   reminders: (id: string) => [...taskKeys.all, 'reminders', id] as const,
+  analytics: (query?: TaskAnalyticsQuery) =>
+    [...taskKeys.all, 'analytics', normalizeAnalyticsQuery(query) ?? {}] as const,
+  analyticsTrends: (query?: TaskAnalyticsQuery) =>
+    [...taskKeys.all, 'analytics-trends', normalizeAnalyticsQuery(query) ?? {}] as const,
 }
 
 async function invalidateTaskQueries(queryClient: QueryClient, taskId?: string) {
   await queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
+  await queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'analytics'] })
+  await queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'analytics-trends'] })
   if (taskId) {
     await queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
     await queryClient.invalidateQueries({ queryKey: taskKeys.activities(taskId) })
@@ -206,5 +247,23 @@ export function useRescheduleTaskReminders() {
     onSuccess: async (data) => {
       await invalidateTaskQueries(queryClient, data.taskId)
     },
+  })
+}
+
+export function useTaskAnalytics(query?: TaskAnalyticsQuery) {
+  const normalized = normalizeAnalyticsQuery(query)
+
+  return useQuery({
+    queryKey: taskKeys.analytics(normalized),
+    queryFn: () => tasksApi.analytics(normalized),
+  })
+}
+
+export function useTaskAnalyticsTrends(query?: TaskAnalyticsQuery) {
+  const normalized = normalizeAnalyticsQuery(query)
+
+  return useQuery({
+    queryKey: taskKeys.analyticsTrends(normalized),
+    queryFn: () => tasksApi.analyticsTrends(normalized),
   })
 }

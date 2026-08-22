@@ -89,7 +89,7 @@ export async function resolveMasterRoute(
   const routeToProposal =
     /\b(?:project proposal|business proposal|implementation proposal|scope and pricing|quotation|quote|estimate|bid|rfp|proposal content|generate proposal|send proposal|create proposal|write proposal|professional proposal|proposal for|proposal)\b/;
   const routeToTask =
-    /\b(tasks|task|todo|deadline|due|assign|complete|cancel|remind|follow up|follow-up)\b/;
+    /\b(tasks|task|todo|deadline|due|assign|complete|cancel|remind|follow up|follow-up|overdue|statistics|analytics)\b/;
   const routeToCommunication =
     /\b(email|mail|draft|send|inbox|reply|compose|respond|outgoing|sms|call|phone)\b/;
   const routeToRag =

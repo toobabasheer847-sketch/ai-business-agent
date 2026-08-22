@@ -44,6 +44,8 @@ describe('TaskController', () => {
     enableTaskReminders: jest.Mock;
     disableTaskReminders: jest.Mock;
     rescheduleTaskReminder: jest.Mock;
+    getAnalytics: jest.Mock;
+    getAnalyticsTrends: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -82,6 +84,15 @@ describe('TaskController', () => {
       rescheduleTaskReminder: jest.fn().mockResolvedValue({
         taskId: TASK_ID,
         reminders: [],
+      }),
+      getAnalytics: jest.fn().mockResolvedValue({
+        summary: { total: 0 },
+        completionRate: 0,
+        overdueRate: 0,
+      }),
+      getAnalyticsTrends: jest.fn().mockResolvedValue({
+        groupBy: 'day',
+        trends: [],
       }),
     };
 
@@ -454,5 +465,83 @@ describe('TaskController', () => {
       .expect(400);
 
     expect(taskService.rescheduleTaskReminder).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for analytics without a JWT', async () => {
+    await request(app.getHttpServer()).get('/ai/task/analytics').expect(401);
+    await request(app.getHttpServer()).get('/ai/task/analytics/trends').expect(401);
+    expect(taskService.getAnalytics).not.toHaveBeenCalled();
+    expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
+  });
+
+  it('routes GET /ai/task/analytics with JWT tenant and user, not query ownership fields', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics')
+      .query({
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'pending',
+        priority: 'high',
+      })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.getAnalytics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'pending',
+        priority: 'high',
+      }),
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
+  it('rejects tenantId, createdBy, and userId query injection on analytics', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics')
+      .query({ tenantId: 'tenant-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics')
+      .query({ createdBy: 'user-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics')
+      .query({ userId: 'user-attacker' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics/trends')
+      .query({ tenantId: 'tenant-attacker', groupBy: 'day' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(taskService.getAnalytics).not.toHaveBeenCalled();
+    expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid trend grouping', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get('/ai/task/analytics/trends')
+      .query({ groupBy: 'year' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
   });
 });

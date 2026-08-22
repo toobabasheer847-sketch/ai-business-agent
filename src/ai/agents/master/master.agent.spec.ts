@@ -63,6 +63,12 @@ describe('Master Agent regex router', () => {
     await expect(
       router(ALL_AGENTS, messageContext('Remind me to call Ahmed tomorrow at 3 PM')),
     ).resolves.toBe('task_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('How many tasks are overdue?')),
+    ).resolves.toBe('task_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Show my task statistics')),
+    ).resolves.toBe('task_agent');
   });
 
   it('routes plural task requests to task_agent', async () => {

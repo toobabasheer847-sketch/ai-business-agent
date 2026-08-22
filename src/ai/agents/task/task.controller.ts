@@ -22,6 +22,8 @@ import { ForbidUnknownDto } from './dto/forbid-unknown.dto.js';
 import { ProcessNaturalLanguageDto } from './dto/process-natural-language.dto.js';
 import { RescheduleTaskReminderDto } from './dto/reschedule-task-reminder.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
+import { TaskAnalyticsQueryDto } from './dto/task-analytics-query.dto.js';
+import { TaskAnalyticsTrendsQueryDto } from './dto/task-analytics-trends-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskService } from './task.service.js';
 
@@ -40,6 +42,24 @@ export class TaskController {
   async list(@Query() dto: TaskQueryDto, @Req() req: AuthenticatedRequest) {
     const context = this.buildContext(req);
     return this.taskService.listTasks(dto, context);
+  }
+
+  @Get('analytics/trends')
+  async analyticsTrends(
+    @Query() dto: TaskAnalyticsTrendsQueryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getAnalyticsTrends(dto, context);
+  }
+
+  @Get('analytics')
+  async analytics(
+    @Query() dto: TaskAnalyticsQueryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getAnalytics(dto, context);
   }
 
   @Post('natural-language')

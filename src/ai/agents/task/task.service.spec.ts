@@ -38,6 +38,49 @@ describe('TaskService', () => {
   let userRepository: { findByIdAndTenant: jest.Mock };
   let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
   let activity: { record: jest.Mock; listForTask: jest.Mock };
+  let analytics: { getSummary: jest.Mock; getTrends: jest.Mock };
+
+  const analyticsFixture = {
+    summary: {
+      total: 20,
+      pending: 8,
+      inProgress: 3,
+      completed: 7,
+      cancelled: 2,
+      overdue: 4,
+      dueToday: 3,
+      dueTomorrow: 2,
+      highPriorityOpen: 4,
+      urgentOpen: 1,
+    },
+    completionRate: 35,
+    overdueRate: 20,
+    reminderSuccessRate: 89,
+    reminderFailureRate: 11,
+    priority: { low: 2, medium: 10, high: 6, urgent: 2 },
+    crm: { company: 8, prospect: 5, lead: 4, unlinked: 3 },
+    reminders: {
+      scheduled: 5,
+      processing: 0,
+      sent: 8,
+      failed: 1,
+      cancelled: 0,
+      disabled: 3,
+    },
+    activity: {
+      created: 5,
+      updated: 2,
+      completed: 3,
+      cancelled: 1,
+      reopened: 0,
+      crmLinked: 1,
+      crmUnlinked: 0,
+      reminderEnabled: 1,
+      reminderDisabled: 0,
+      reminderSent: 8,
+      reminderFailed: 1,
+    },
+  };
 
   beforeEach(() => {
     taskRepository = {
@@ -58,6 +101,12 @@ describe('TaskService', () => {
       record: jest.fn().mockResolvedValue(undefined),
       listForTask: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     };
+    analytics = {
+      getSummary: jest.fn().mockResolvedValue(analyticsFixture),
+      getTrends: jest.fn().mockResolvedValue([
+        { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+      ]),
+    };
 
     service = new TaskService(
       taskRepository as any,
@@ -65,6 +114,7 @@ describe('TaskService', () => {
       crmResolver as any,
       undefined,
       activity as any,
+      analytics as any,
     );
   });
 
@@ -1041,5 +1091,243 @@ describe('TaskService', () => {
     await expect(service.enableTaskReminders(taskId, otherTenant)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('computes analytics for the JWT tenant and user only', async () => {
+    const result = await service.getAnalytics({}, contextA);
+
+    expect(result.summary.total).toBe(20);
+    expect(result.summary.pending).toBe(8);
+    expect(result.completionRate).toBe(35);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('does not let another tenant or user read private analytics', async () => {
+    await service.getAnalytics({}, otherTenant);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantB,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+
+    await service.getAnalytics({}, contextB);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userB,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('allows an assigned user path through the same access scope', async () => {
+    await service.getAnalytics({ assigneeId: userB }, contextA);
+    expect(userRepository.findByIdAndTenant).toHaveBeenCalledWith(userB, tenantA);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+      expect.any(Date),
+    );
+  });
+
+  it('rejects a cross-tenant assignee filter', async () => {
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+
+    await expect(
+      service.getAnalytics({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-tenant CRM filter', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Company not found or does not belong to your tenant.'),
+    );
+
+    await expect(
+      service.getAnalytics({ companyId: 'company-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('filters analytics by date range, CRM, and status', async () => {
+    await service.getAnalytics(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'completed',
+        companyId: 'company-1',
+      } as any,
+      contextA,
+    );
+
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        from: new Date('2026-08-01T00:00:00.000Z'),
+        to: new Date('2026-08-22T23:59:59.999Z'),
+        status: 'completed',
+        companyId: 'company-1',
+      }),
+      expect.any(Date),
+    );
+  });
+
+  it('rejects an inverted analytics date range', async () => {
+    await expect(
+      service.getAnalytics(
+        {
+          from: '2026-08-22T00:00:00.000Z',
+          to: '2026-08-01T00:00:00.000Z',
+        },
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('returns trend grouping from SQL aggregation', async () => {
+    const result = await service.getAnalyticsTrends(
+      {
+        from: '2026-08-22T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        groupBy: 'day',
+      },
+      contextA,
+    );
+
+    expect(result.trends).toEqual([
+      { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+    ]);
+    expect(analytics.getTrends).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      'day',
+      expect.any(Date),
+      expect.any(Date),
+      expect.any(Date),
+    );
+  });
+
+  it('handles zero-task analytics from natural language', async () => {
+    analytics.getSummary.mockResolvedValue({
+      ...analyticsFixture,
+      summary: {
+        ...analyticsFixture.summary,
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        completed: 0,
+        cancelled: 0,
+        overdue: 0,
+      },
+      completionRate: 0,
+      overdueRate: 0,
+    });
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks do I have?',
+      contextA,
+    );
+
+    expect(result.action).toBe('analytics');
+    expect(result.message).toContain('0 tasks');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('answers overdue, completed, priority, CRM, and rate analytics in NL', async () => {
+    const overdue = await service.processNaturalLanguage(
+      'How many tasks are overdue?',
+      contextA,
+    );
+    expect(overdue.action).toBe('analytics');
+    expect(overdue.message).toContain('4 overdue');
+
+    const completed = await service.processNaturalLanguage(
+      'How many tasks did I complete this week?',
+      contextA,
+      new Date('2026-08-22T12:00:00.000Z'),
+    );
+    expect(completed.action).toBe('analytics');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        status: 'completed',
+        rangeField: 'completedAt',
+      }),
+      expect.any(Date),
+    );
+
+    const priority = await service.processNaturalLanguage(
+      'How many high priority tasks do I have?',
+      contextA,
+    );
+    expect(priority.message).toContain('high priority');
+
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'NimbusForge' },
+    });
+    const crm = await service.processNaturalLanguage(
+      'How many tasks are related to NimbusForge?',
+      contextA,
+    );
+    expect(crm.action).toBe('analytics');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+      expect.any(Date),
+    );
+
+    const rate = await service.processNaturalLanguage(
+      "What's my task completion rate?",
+      contextA,
+    );
+    expect(rate.message).toContain('35%');
+
+    const reminders = await service.processNaturalLanguage(
+      'How many tasks have reminders?',
+      contextA,
+    );
+    expect(reminders.action).toBe('analytics');
+    expect(reminders.message).toMatch(/reminders/i);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ hasReminder: true }),
+      expect.any(Date),
+    );
+  });
+
+  it('asks for clarification when CRM analytics is ambiguous', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'company',
+      query: 'ABC',
+      matches: ['ABC Solutions', 'ABC Technologies'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks are related to ABC?',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(analytics.getSummary).not.toHaveBeenCalled();
   });
 });

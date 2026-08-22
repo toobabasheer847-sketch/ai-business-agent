@@ -121,11 +121,12 @@ export type TaskNaturalLanguageResponse = {
     | 'cancel'
     | 'clarify'
     | 'activity'
+    | 'analytics'
     | 'reminder_list'
     | 'reminder_enable'
     | 'reminder_disable'
     | 'reminder_reschedule'
-  data: Task | Task[] | null
+  data: Task | Task[] | TaskAnalytics | null
   message?: string
 }
 
@@ -195,4 +196,84 @@ export type TaskReminderItem = {
 export type TaskReminderListResponse = {
   taskId: string
   reminders: TaskReminderItem[]
+}
+
+export type TaskAnalyticsGroupBy = 'day' | 'week' | 'month'
+
+export type TaskAnalyticsQuery = {
+  from?: string
+  to?: string
+  status?: TaskStatus | string
+  priority?: TaskPriority | string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
+  assigneeId?: string
+  groupBy?: TaskAnalyticsGroupBy
+}
+
+export type TaskAnalytics = {
+  summary: {
+    total: number
+    pending: number
+    inProgress: number
+    completed: number
+    cancelled: number
+    overdue: number
+    dueToday: number
+    dueTomorrow: number
+    highPriorityOpen: number
+    urgentOpen: number
+  }
+  completionRate: number
+  overdueRate: number
+  reminderSuccessRate: number
+  reminderFailureRate: number
+  priority: {
+    low: number
+    medium: number
+    high: number
+    urgent: number
+  }
+  crm: {
+    company: number
+    prospect: number
+    lead: number
+    unlinked: number
+  }
+  reminders: {
+    scheduled: number
+    processing: number
+    sent: number
+    failed: number
+    cancelled: number
+    disabled: number
+  }
+  activity: {
+    created: number
+    updated: number
+    completed: number
+    cancelled: number
+    reopened: number
+    crmLinked: number
+    crmUnlinked: number
+    reminderEnabled: number
+    reminderDisabled: number
+    reminderSent: number
+    reminderFailed: number
+  }
+}
+
+export type TaskAnalyticsTrendPoint = {
+  period: string
+  created: number
+  completed: number
+  overdue: number
+}
+
+export type TaskAnalyticsTrends = {
+  groupBy: TaskAnalyticsGroupBy
+  from: string
+  to: string
+  trends: TaskAnalyticsTrendPoint[]
 }

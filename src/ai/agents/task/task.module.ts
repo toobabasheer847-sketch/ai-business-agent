@@ -15,6 +15,7 @@ import { TaskAgent } from './task.agent.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskCrmResolver } from './resolve-crm-entities.js';
 import { TaskActivityRepository } from './task-activity.repository.js';
+import { TaskAnalyticsRepository } from './task-analytics.repository.js';
 import { TaskReminderProcessor } from './task-reminder.processor.js';
 import { TaskReminderRepository } from './task-reminder.repository.js';
 import { TaskReminderService } from './task-reminder.service.js';
@@ -43,6 +44,7 @@ import { CancelTaskTool } from './tools/cancel-task.tool.js';
     TaskRepository,
     TaskCrmResolver,
     TaskActivityRepository,
+    TaskAnalyticsRepository,
     TaskReminderRepository,
     TaskReminderService,
     TaskReminderProcessor,

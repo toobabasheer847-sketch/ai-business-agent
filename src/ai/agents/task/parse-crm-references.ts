@@ -59,6 +59,7 @@ export function extractCrmReferences(text: string): CrmReferences {
   const cleaned = stripDueDatePhrases(text)
     .replace(/\band\s+remind\s+me(?:\s+at)?\b/gi, ' ')
     .replace(/\bremind\s+me(?:\s+to)?\b/gi, ' ')
+    .replace(/[.,!?]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   const emailQuery = cleaned.match(EMAIL_RE)?.[0];
@@ -76,6 +77,9 @@ export function extractCrmReferences(text: string): CrmReferences {
 
   const relatedMatch = cleaned.match(
     /\b(?:tasks?|task)\s+(?:for|related to|about)\s+(?!this\s+company\b)([A-Za-z0-9][A-Za-z0-9 .&'-]{0,60}?)(?=\s|$)/i,
+  );
+  const relatedToMatch = cleaned.match(
+    /\brelated to\s+(?!this\s+company\b)([A-Za-z0-9][A-Za-z0-9 .&'-]{0,60}?)(?=\s|$)/i,
   );
 
   const forCreateMatch =
@@ -100,7 +104,7 @@ export function extractCrmReferences(text: string): CrmReferences {
 
   if (!personQuery && !emailQuery) {
     const relatedOrFor = sanitizeQuery(
-      relatedMatch?.[1] || forCreateMatch?.[1],
+      relatedMatch?.[1] || relatedToMatch?.[1] || forCreateMatch?.[1],
     );
     if (
       relatedOrFor &&

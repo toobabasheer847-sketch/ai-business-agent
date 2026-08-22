@@ -83,6 +83,16 @@ export function addUtcDays(from: Date, days: number): Date {
   return new Date(startOfUtcDay(from).getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+export function startOfUtcWeek(date: Date): Date {
+  const day = date.getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  return addUtcDays(date, mondayOffset);
+}
+
+export function startOfUtcMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
 export function endOfUtcDay(date: Date): Date {
   return new Date(startOfUtcDay(date).getTime() + 24 * 60 * 60 * 1000 - 1);
 }

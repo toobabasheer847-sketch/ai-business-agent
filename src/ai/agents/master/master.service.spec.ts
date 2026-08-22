@@ -808,4 +808,26 @@ describe('MasterAgentService', () => {
     );
     expect(mockRunEphemeral).not.toHaveBeenCalled();
   });
+
+  it('routes task analytics phrasing through TaskService and skips ADK', async () => {
+    taskService.processNaturalLanguage.mockResolvedValue({
+      action: 'analytics',
+      message: 'You have 4 overdue tasks.',
+      data: { summary: { total: 20, overdue: 4 }, completionRate: 35 },
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'How many tasks are overdue?',
+    );
+
+    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+      'How many tasks are overdue?',
+      { tenantId, userId },
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result.delegation).toBe('task');
+    expect(result.response).toContain('4 overdue');
+  });
 });

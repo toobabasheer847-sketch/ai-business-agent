@@ -47,6 +47,106 @@ export interface TaskContext {
   email?: string;
 }
 
+export type TaskAnalyticsGroupBy = 'day' | 'week' | 'month';
+export type TaskAnalyticsRangeField = 'createdAt' | 'completedAt';
+export type TaskNlAnalyticsFocus =
+  | 'summary'
+  | 'overdue'
+  | 'completed'
+  | 'priority'
+  | 'reminders'
+  | 'activity'
+  | 'rate';
+
+export interface TaskAnalyticsFilters {
+  from?: Date;
+  to?: Date;
+  rangeField?: TaskAnalyticsRangeField;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  companyId?: string;
+  prospectId?: string;
+  leadId?: string;
+  assigneeId?: string;
+  hasReminder?: boolean;
+}
+
+export interface TaskAnalyticsSummary {
+  total: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+  overdue: number;
+  dueToday: number;
+  dueTomorrow: number;
+  highPriorityOpen: number;
+  urgentOpen: number;
+}
+
+export interface TaskAnalyticsPriority {
+  low: number;
+  medium: number;
+  high: number;
+  urgent: number;
+}
+
+export interface TaskAnalyticsCrm {
+  company: number;
+  prospect: number;
+  lead: number;
+  unlinked: number;
+}
+
+export interface TaskAnalyticsReminders {
+  scheduled: number;
+  processing: number;
+  sent: number;
+  failed: number;
+  cancelled: number;
+  disabled: number;
+}
+
+export interface TaskAnalyticsActivity {
+  created: number;
+  updated: number;
+  completed: number;
+  cancelled: number;
+  reopened: number;
+  crmLinked: number;
+  crmUnlinked: number;
+  reminderEnabled: number;
+  reminderDisabled: number;
+  reminderSent: number;
+  reminderFailed: number;
+}
+
+export interface TaskAnalyticsResult {
+  summary: TaskAnalyticsSummary;
+  completionRate: number;
+  overdueRate: number;
+  reminderSuccessRate: number;
+  reminderFailureRate: number;
+  priority: TaskAnalyticsPriority;
+  crm: TaskAnalyticsCrm;
+  reminders: TaskAnalyticsReminders;
+  activity: TaskAnalyticsActivity;
+}
+
+export interface TaskAnalyticsTrendPoint {
+  period: string;
+  created: number;
+  completed: number;
+  overdue: number;
+}
+
+export interface TaskAnalyticsTrendsResult {
+  groupBy: TaskAnalyticsGroupBy;
+  from: string;
+  to: string;
+  trends: TaskAnalyticsTrendPoint[];
+}
+
 export interface TaskAgentResponse {
   action:
     | 'create'
@@ -57,10 +157,11 @@ export interface TaskAgentResponse {
     | 'cancel'
     | 'clarify'
     | 'activity'
+    | 'analytics'
     | 'reminder_list'
     | 'reminder_enable'
     | 'reminder_disable'
     | 'reminder_reschedule';
-  data: TaskRecord | TaskRecord[] | null;
+  data: TaskRecord | TaskRecord[] | TaskAnalyticsResult | null;
   message?: string;
 }

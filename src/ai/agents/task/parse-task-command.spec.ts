@@ -256,6 +256,70 @@ describe('parseTaskCommand', () => {
     );
   });
 
+  it('parses analytics and statistics commands before list or activity', () => {
+    expect(parseTaskCommand('How many tasks do I have?')).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'summary' }),
+    );
+    expect(parseTaskCommand('Show my task statistics.')).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'summary' }),
+    );
+    expect(parseTaskCommand('How many tasks are overdue?')).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'overdue' }),
+    );
+    expect(
+      parseTaskCommand('How many tasks did I complete this week?', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'completed',
+        status: 'completed',
+        rangeField: 'completedAt',
+        from: '2026-08-17T00:00:00.000Z',
+      }),
+    );
+    expect(
+      parseTaskCommand('Show my completed tasks this month.', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'completed',
+        from: '2026-08-01T00:00:00.000Z',
+      }),
+    );
+    expect(parseTaskCommand('How many high priority tasks do I have?')).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'priority',
+        priority: 'high',
+      }),
+    );
+    expect(parseTaskCommand('How many tasks are related to NimbusForge?')).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        personQuery: 'NimbusForge',
+      }),
+    );
+    expect(parseTaskCommand('How many tasks have reminders?')).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'reminders',
+        hasReminder: true,
+      }),
+    );
+    expect(parseTaskCommand("What's my task completion rate?")).toEqual(
+      expect.objectContaining({ action: 'analytics', focus: 'rate' }),
+    );
+    expect(
+      parseTaskCommand('Show my task activity this week.', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'analytics',
+        focus: 'activity',
+        from: '2026-08-17T00:00:00.000Z',
+      }),
+    );
+  });
+
   it('ignores tenantId and createdBy in the text', () => {
     const command = parseTaskCommand(
       'Create a task to call Ahmed tomorrow tenantId=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb createdBy=attacker',
