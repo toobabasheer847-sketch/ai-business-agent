@@ -3,11 +3,14 @@ import {
   and,
   desc,
   eq,
+  exists,
   gte,
   ilike,
+  inArray,
   isNotNull,
   lt,
   lte,
+  notExists,
   notInArray,
   or,
   SQL,
@@ -19,7 +22,9 @@ import { companies } from '../../../database/drizzle/schema/company.schema.js';
 import { leads } from '../../../database/drizzle/schema/lead.schema.js';
 import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { tasks } from '../../../database/drizzle/schema/task.schema.js';
+import { taskReminders } from '../../../database/drizzle/schema/task-reminder.schema.js';
 import { computeIsOverdue } from './task-overdue.js';
+import { fromApiReminderStatus } from './task-reminder.constants.js';
 import { TaskRecord, TaskPriority, TaskStatus } from './types/task.types.js';
 
 export type TaskListFilters = {
@@ -33,6 +38,10 @@ export type TaskListFilters = {
   dueFrom?: Date | string;
   dueTo?: Date | string;
   openOnly?: boolean;
+  reminderStatus?: string;
+  hasReminder?: boolean;
+  reminderFrom?: Date | string;
+  reminderTo?: Date | string;
 };
 
 type TaskCrmWrite = {
@@ -154,6 +163,48 @@ export class TaskRepository {
     if (filters?.dueTo) {
       clauses.push(isNotNull(tasks.dueAt));
       clauses.push(lte(tasks.dueAt, new Date(filters.dueTo)));
+    }
+
+    if (filters?.hasReminder === false) {
+      clauses.push(
+        notExists(
+          this.db
+            .select({ id: taskReminders.id })
+            .from(taskReminders)
+            .where(eq(taskReminders.taskId, tasks.id)),
+        ),
+      );
+    } else if (
+      filters?.hasReminder === true ||
+      filters?.reminderStatus ||
+      filters?.reminderFrom ||
+      filters?.reminderTo
+    ) {
+      const reminderClauses: SQL[] = [eq(taskReminders.taskId, tasks.id)];
+      if (filters.reminderStatus) {
+        const statuses = fromApiReminderStatus(filters.reminderStatus);
+        if (statuses.length > 0) {
+          reminderClauses.push(inArray(taskReminders.status, statuses));
+        }
+      }
+      if (filters.reminderFrom) {
+        reminderClauses.push(
+          gte(taskReminders.scheduledAt, new Date(filters.reminderFrom)),
+        );
+      }
+      if (filters.reminderTo) {
+        reminderClauses.push(
+          lte(taskReminders.scheduledAt, new Date(filters.reminderTo)),
+        );
+      }
+      clauses.push(
+        exists(
+          this.db
+            .select({ id: taskReminders.id })
+            .from(taskReminders)
+            .where(and(...reminderClauses)),
+        ),
+      );
     }
 
     const rows = await this.crmQuery()

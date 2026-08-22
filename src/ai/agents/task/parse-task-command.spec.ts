@@ -209,6 +209,53 @@ describe('parseTaskCommand', () => {
     );
   });
 
+  it('parses reminder management without treating remind-me-to as enable', () => {
+    expect(parseTaskCommand('Remind me about my Ahmed task.')).toEqual(
+      expect.objectContaining({
+        action: 'reminder_enable',
+        searchTerm: 'Ahmed',
+      }),
+    );
+    expect(parseTaskCommand('Disable reminders for my Ahmed task.')).toEqual(
+      expect.objectContaining({
+        action: 'reminder_disable',
+        searchTerm: 'Ahmed',
+      }),
+    );
+    expect(
+      parseTaskCommand('Turn off the reminder for my UniqueCall task.'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'reminder_disable',
+        searchTerm: 'UniqueCall',
+      }),
+    );
+    expect(parseTaskCommand('Enable reminders for my NimbusForge task.')).toEqual(
+      expect.objectContaining({
+        action: 'reminder_enable',
+        searchTerm: 'NimbusForge',
+      }),
+    );
+    expect(parseTaskCommand('Show reminders for my Ahmed task.')).toEqual(
+      expect.objectContaining({
+        action: 'reminder_list',
+        searchTerm: 'Ahmed',
+      }),
+    );
+    expect(parseTaskCommand('Did my Ahmed reminder get sent?')).toEqual(
+      expect.objectContaining({
+        action: 'reminder_list',
+        searchTerm: 'Ahmed',
+      }),
+    );
+    expect(parseTaskCommand('Remind me to call Ahmed tomorrow.', { now })).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        title: 'Call Ahmed',
+      }),
+    );
+  });
+
   it('ignores tenantId and createdBy in the text', () => {
     const command = parseTaskCommand(
       'Create a task to call Ahmed tomorrow tenantId=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb createdBy=attacker',

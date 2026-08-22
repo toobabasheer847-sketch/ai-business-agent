@@ -7,6 +7,7 @@ import type {
   TaskNaturalLanguageResponse,
   UpdateTaskRequest,
   TaskActivityResponse,
+  TaskReminderListResponse,
 } from '@/features/tasks/types/task.types'
 
 function toListParams(query?: TaskListQuery) {
@@ -23,6 +24,11 @@ function toListParams(query?: TaskListQuery) {
   if (query.dueFrom) params.dueFrom = query.dueFrom
   if (query.dueTo) params.dueTo = query.dueTo
   if (query.openOnly) params.openOnly = 'true'
+  if (query.reminderStatus) params.reminderStatus = query.reminderStatus
+  if (query.hasReminder) params.hasReminder = 'true'
+  if (query.hasReminder === false) params.hasReminder = 'false'
+  if (query.reminderFrom) params.reminderFrom = query.reminderFrom
+  if (query.reminderTo) params.reminderTo = query.reminderTo
 
   return Object.keys(params).length > 0 ? params : undefined
 }
@@ -77,6 +83,32 @@ export const tasksApi = {
   activity(taskId: string, params?: { page?: number; limit?: number }) {
     return apiClient
       .get<TaskActivityResponse>(`/ai/task/${taskId}/activity`, { params })
+      .then((r) => r.data)
+  },
+
+  reminders(taskId: string) {
+    return apiClient
+      .get<TaskReminderListResponse>(`/ai/task/${taskId}/reminders`)
+      .then((r) => r.data)
+  },
+
+  enableReminders(taskId: string) {
+    return apiClient
+      .post<TaskReminderListResponse>(`/ai/task/${taskId}/reminders/enable`)
+      .then((r) => r.data)
+  },
+
+  disableReminders(taskId: string) {
+    return apiClient
+      .post<TaskReminderListResponse>(`/ai/task/${taskId}/reminders/disable`)
+      .then((r) => r.data)
+  },
+
+  rescheduleReminders(taskId: string, scheduledAt: string) {
+    return apiClient
+      .post<TaskReminderListResponse>(`/ai/task/${taskId}/reminders/reschedule`, {
+        scheduledAt,
+      })
       .then((r) => r.data)
   },
 }

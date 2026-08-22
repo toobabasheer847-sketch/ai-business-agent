@@ -1,5 +1,9 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 
@@ -7,9 +11,15 @@ import { AppLogger } from '../../../infrastructure/logging/logger.service.js';
 import { QUEUE_NAMES } from '../../../infrastructure/queue/queue.module.js';
 import { GmailService } from '../communication/gmail/gmail.service.js';
 import { UserRepository } from '../../../modules/user/user.repository.js';
+import type { TaskActivityEventType } from './task-activity.constants.js';
 import {
+  ACTIVE_REMINDER_STATUSES,
   DEFAULT_TASK_REMINDER_MINUTES_BEFORE,
+  TASK_REMINDER_BACKOFF_MS,
+  TASK_REMINDER_JOB_ATTEMPTS,
   TASK_REMINDER_JOB_NAME,
+  toReminderApiItem,
+  type TaskReminderApiItem,
   type TaskReminderJobPayload,
   type TaskReminderType,
 } from './task-reminder.constants.js';
@@ -101,7 +111,153 @@ export class TaskReminderService {
     return { scanned: candidates.length, enqueued };
   }
 
-  async processReminder(payload: TaskReminderJobPayload): Promise<void> {
+  async listReminders(task: TaskRecord): Promise<{
+    taskId: string;
+    reminders: TaskReminderApiItem[];
+  }> {
+    const rows = await this.reminderRepository.findAllByTaskAndTenant(
+      task.id,
+      task.tenantId,
+    );
+
+    return {
+      taskId: task.id,
+      reminders: rows.map((row) =>
+        toReminderApiItem({
+          id: row.id,
+          reminderType: row.reminderType,
+          scheduledAt: row.scheduledAt,
+          status: row.status,
+          channel: row.channel,
+          processedAt: row.processedAt,
+          attemptCount: row.attemptCount,
+        }),
+      ),
+    };
+  }
+
+  async enableReminders(task: TaskRecord, actorUserId?: string | null): Promise<{
+    taskId: string;
+    reminders: TaskReminderApiItem[];
+  }> {
+    this.assertOpenTaskWithDueAt(task);
+    const enqueued = await this.scheduleForTask(task);
+    await this.recordActivity({
+      tenantId: task.tenantId,
+      taskId: task.id,
+      actorUserId: actorUserId ?? null,
+      eventType: 'REMINDER_ENABLED',
+      metadata: { enqueued },
+    });
+    return this.listReminders(task);
+  }
+
+  async disableReminders(
+    task: TaskRecord,
+    actorUserId?: string | null,
+    reason = 'disabled',
+  ): Promise<{
+    taskId: string;
+    reminders: TaskReminderApiItem[];
+  }> {
+    const active = await this.reminderRepository.findActiveByTaskAndTenant(
+      task.id,
+      task.tenantId,
+    );
+
+    for (const reminder of active) {
+      await this.reminderRepository.updateStatus(
+        reminder.id,
+        task.tenantId,
+        reason === 'cancelled' ? 'cancelled' : 'disabled',
+        { lastError: reason, processedAt: new Date() },
+      );
+      await this.removeReminderJob(task.id, reminder.reminderType, reminder.scheduledAt);
+    }
+
+    if (active.length > 0) {
+      await this.recordActivity({
+        tenantId: task.tenantId,
+        taskId: task.id,
+        actorUserId: actorUserId ?? null,
+        eventType: 'REMINDER_DISABLED',
+        metadata: { count: active.length, reason },
+      });
+    }
+
+    return this.listReminders(task);
+  }
+
+  async rescheduleUpcoming(
+    task: TaskRecord,
+    scheduledAtRaw: string,
+    actorUserId?: string | null,
+  ): Promise<{
+    taskId: string;
+    reminders: TaskReminderApiItem[];
+  }> {
+    this.assertOpenTaskWithDueAt(task);
+    const scheduledAt = new Date(scheduledAtRaw);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('scheduledAt must be a valid ISO datetime');
+    }
+
+    const dueAt = new Date(task.dueAt as Date | string);
+    if (!(scheduledAt.getTime() < dueAt.getTime())) {
+      throw new BadRequestException('scheduledAt must be before dueAt');
+    }
+
+    const recipientId = task.assignedTo || task.createdBy;
+    if (!recipientId) {
+      throw new BadRequestException('Task has no reminder recipient');
+    }
+
+    const previous = await this.reminderRepository.findActiveByTaskAndTenant(
+      task.id,
+      task.tenantId,
+    );
+    for (const reminder of previous.filter((row) => row.reminderType === 'upcoming')) {
+      await this.reminderRepository.updateStatus(
+        reminder.id,
+        task.tenantId,
+        'cancelled',
+        { lastError: 'rescheduled', processedAt: new Date() },
+      );
+      await this.removeReminderJob(task.id, reminder.reminderType, reminder.scheduledAt);
+    }
+
+    const now = new Date();
+    await this.enqueueType(
+      task,
+      recipientId,
+      'upcoming',
+      scheduledAt,
+      dueAt,
+      now,
+    );
+    await this.enqueueType(task, recipientId, 'overdue', dueAt, dueAt, now);
+
+    await this.recordActivity({
+      tenantId: task.tenantId,
+      taskId: task.id,
+      actorUserId: actorUserId ?? null,
+      eventType: 'REMINDER_RESCHEDULED',
+      metadata: {
+        scheduledAt: normalizeScheduledAt(scheduledAt).toISOString(),
+        dueAt: dueAt.toISOString(),
+      },
+    });
+
+    return this.listReminders(task);
+  }
+
+  async processReminder(
+    payload: TaskReminderJobPayload,
+    attempt: { current: number; max: number } = {
+      current: 1,
+      max: TASK_REMINDER_JOB_ATTEMPTS,
+    },
+  ): Promise<void> {
     if (!this.hasTrustedContext(payload)) {
       this.logger.error(
         'Task reminder job missing trusted worker context; failing closed',
@@ -109,6 +265,15 @@ export class TaskReminderService {
         { requestId: `task-reminder:${payload?.taskId ?? 'unknown'}` },
         { job: 'task-reminder-process', payloadKeys: Object.keys(payload ?? {}) },
       );
+      if (payload?.tenantId && payload.taskId) {
+        await this.recordActivity({
+          tenantId: payload.tenantId,
+          taskId: payload.taskId,
+          actorUserId: null,
+          eventType: 'REMINDER_FAILED',
+          metadata: { reason: 'missing_trusted_context' },
+        });
+      }
       return;
     }
 
@@ -117,23 +282,52 @@ export class TaskReminderService {
       payload.tenantId,
     );
 
-    if (!reminder) {
+    if (!reminder || reminder.taskId !== payload.taskId) {
       this.logger.warn(
         'Task reminder row was not found for trusted tenant; failing closed',
-        { tenantId: payload.tenantId, userId: payload.userId },
+        { tenantId: payload.tenantId },
         { taskId: payload.taskId, reminderId: payload.reminderId },
       );
       return;
     }
 
-    if (reminder.status === 'sent' || reminder.status === 'skipped') {
+    if (reminder.status === 'sent') {
       return;
     }
 
+    if (
+      reminder.status === 'disabled' ||
+      reminder.status === 'cancelled' ||
+      reminder.status === 'skipped'
+    ) {
+      return;
+    }
+
+    const claimed = await this.reminderRepository.claimForProcessing(
+      reminder.id,
+      payload.tenantId,
+    );
+
+    if (!claimed) {
+      return;
+    }
+
+    await this.recordActivity({
+      tenantId: payload.tenantId,
+      taskId: payload.taskId,
+      actorUserId: null,
+      eventType: 'REMINDER_PROCESSING',
+      metadata: {
+        reminderId: reminder.id,
+        attempt: claimed.attemptCount,
+      },
+    });
+
+    const recipientUserId = reminder.userId || payload.userId;
     const task = await this.taskRepository.findByIdAndTenantAndUser(
       payload.taskId,
       payload.tenantId,
-      payload.userId,
+      recipientUserId || reminder.userId,
     );
 
     if (!task || task.tenantId !== payload.tenantId) {
@@ -187,8 +381,9 @@ export class TaskReminderService {
       return;
     }
 
+    const reminderType = payload.reminderType ?? reminder.reminderType;
     const now = new Date();
-    if (payload.reminderType === 'upcoming' && computeIsOverdue(task.status, dueAt, now)) {
+    if (reminderType === 'upcoming' && computeIsOverdue(task.status, dueAt, now)) {
       await this.finish(
         reminder.id,
         payload.tenantId,
@@ -200,7 +395,7 @@ export class TaskReminderService {
       return;
     }
 
-    if (payload.reminderType === 'overdue' && !computeIsOverdue(task.status, dueAt, now)) {
+    if (reminderType === 'overdue' && !computeIsOverdue(task.status, dueAt, now)) {
       await this.finish(
         reminder.id,
         payload.tenantId,
@@ -230,24 +425,61 @@ export class TaskReminderService {
       return;
     }
 
-    const delivered = await this.deliver(task, recipient.email, payload);
+    const delivered = await this.deliver(task, recipient.email, {
+      ...payload,
+      reminderType,
+      userId: recipientId,
+    });
+
+    if (delivered.status === 'failed') {
+      const retryable = attempt.current < attempt.max;
+      if (retryable) {
+        await this.reminderRepository.updateStatus(
+          reminder.id,
+          payload.tenantId,
+          'failed',
+          {
+            lastError: delivered.error ?? 'communication_provider_failure',
+            channel: delivered.channel,
+            processedAt: new Date(),
+          },
+        );
+        await this.recordActivity({
+          tenantId: payload.tenantId,
+          taskId: payload.taskId,
+          actorUserId: null,
+          eventType: 'REMINDER_RETRY',
+          metadata: {
+            reminderId: reminder.id,
+            attempt: attempt.current,
+            maxAttempts: attempt.max,
+            channel: delivered.channel,
+          },
+        });
+        throw new Error(delivered.error ?? 'Task reminder delivery failed');
+      }
+
+      await this.finish(
+        reminder.id,
+        payload.tenantId,
+        'failed',
+        delivered.error,
+        payload,
+        task,
+        { channel: delivered.channel },
+      );
+      throw new Error(delivered.error ?? 'Task reminder delivery failed');
+    }
 
     await this.finish(
       reminder.id,
       payload.tenantId,
-      delivered.status,
-      delivered.error,
+      'sent',
+      null,
       payload,
       task,
-      {
-        recipientEmail: recipient.email,
-        channel: delivered.channel,
-      },
+      { channel: delivered.channel },
     );
-
-    if (delivered.status === 'failed') {
-      throw new Error(delivered.error ?? 'Task reminder delivery failed');
-    }
   }
 
   private async scheduleForTask(
@@ -297,7 +529,7 @@ export class TaskReminderService {
     now: Date,
   ): Promise<number> {
     const normalized = normalizeScheduledAt(scheduledAt);
-    const { reminder, inserted } = await this.reminderRepository.insertPending({
+    const { reminder: insertedRow, inserted } = await this.reminderRepository.insertPending({
       tenantId: task.tenantId,
       taskId: task.id,
       userId,
@@ -306,7 +538,26 @@ export class TaskReminderService {
       dueAtSnapshot: dueAt,
     });
 
-    if (inserted) {
+    let reminder = insertedRow;
+    let shouldEnqueue = inserted;
+
+    if (
+      !inserted &&
+      (reminder.status === 'disabled' ||
+        reminder.status === 'cancelled' ||
+        reminder.status === 'failed')
+    ) {
+      await this.reminderRepository.updateStatus(
+        reminder.id,
+        task.tenantId,
+        'pending',
+        { lastError: null, processedAt: null },
+      );
+      reminder = { ...reminder, status: 'pending', lastError: null };
+      shouldEnqueue = true;
+    }
+
+    if (inserted || shouldEnqueue) {
       await this.recordActivity({
         tenantId: task.tenantId,
         taskId: task.id,
@@ -324,6 +575,10 @@ export class TaskReminderService {
       return 0;
     }
 
+    if (!ACTIVE_REMINDER_STATUSES.includes(reminder.status) && reminder.status !== 'pending') {
+      return 0;
+    }
+
     if (!this.reminderQueue) {
       this.logger.warn(
         'Task reminder queue is unavailable; reminder stored as pending',
@@ -337,8 +592,8 @@ export class TaskReminderService {
     const payload: TaskReminderJobPayload = {
       tenantId: task.tenantId,
       taskId: task.id,
-      userId,
       reminderId: reminder.id,
+      userId,
       reminderType,
       scheduledAt: normalized.toISOString(),
     };
@@ -347,6 +602,11 @@ export class TaskReminderService {
       await this.reminderQueue.add(TASK_REMINDER_JOB_NAME, payload, {
         jobId: reminderJobId(task.id, reminderType, normalized),
         delay,
+        attempts: TASK_REMINDER_JOB_ATTEMPTS,
+        backoff: {
+          type: 'exponential',
+          delay: TASK_REMINDER_BACKOFF_MS,
+        },
       });
       return 1;
     } catch (error) {
@@ -367,11 +627,7 @@ export class TaskReminderService {
     payload: TaskReminderJobPayload | undefined,
   ): boolean {
     return Boolean(
-      payload?.tenantId &&
-        payload.taskId &&
-        payload.userId &&
-        payload.reminderId &&
-        payload.reminderType,
+      payload?.tenantId && payload.taskId && payload.reminderId,
     );
   }
 
@@ -539,7 +795,7 @@ export class TaskReminderService {
     tenantId: string;
     taskId: string;
     actorUserId: string | null;
-    eventType: 'REMINDER_SCHEDULED' | 'REMINDER_SENT' | 'REMINDER_FAILED';
+    eventType: TaskActivityEventType;
     metadata: Record<string, unknown>;
   }): Promise<void> {
     if (!this.activity) {
@@ -554,6 +810,45 @@ export class TaskReminderService {
         error instanceof Error ? error.stack : undefined,
         { tenantId: input.tenantId },
         { taskId: input.taskId, eventType: input.eventType },
+      );
+    }
+  }
+
+  private assertOpenTaskWithDueAt(task: TaskRecord): void {
+    if (isClosedTaskStatus(task.status)) {
+      throw new BadRequestException(
+        `Reminders cannot be active on a ${task.status} task`,
+      );
+    }
+    if (!task.dueAt) {
+      throw new BadRequestException('Task must have a due date to use reminders');
+    }
+  }
+
+  private async removeReminderJob(
+    taskId: string,
+    reminderType: TaskReminderType,
+    scheduledAt: Date,
+  ): Promise<void> {
+    if (!this.reminderQueue) {
+      return;
+    }
+
+    const jobId = reminderJobId(taskId, reminderType, scheduledAt);
+    try {
+      const job = await this.reminderQueue.getJob(jobId);
+      if (job) {
+        await job.remove();
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Failed to remove task reminder job (non-fatal)',
+        { requestId: `task-reminder-remove:${jobId}` },
+        {
+          taskId,
+          reminderType,
+          error: error instanceof Error ? error.message : String(error),
+        },
       );
     }
   }

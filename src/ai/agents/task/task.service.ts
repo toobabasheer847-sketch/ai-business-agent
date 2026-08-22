@@ -131,6 +131,10 @@ export class TaskService {
         dueFrom: dto.dueFrom,
         dueTo: dto.dueTo,
         openOnly: dto.openOnly,
+        reminderStatus: dto.reminderStatus,
+        hasReminder: dto.hasReminder,
+        reminderFrom: dto.reminderFrom,
+        reminderTo: dto.reminderTo,
       },
     );
 
@@ -172,6 +176,46 @@ export class TaskService {
         totalPages: Math.max(1, Math.ceil(result.total / limit)),
       },
     };
+  }
+
+  async getTaskReminders(taskId: string, context: TaskContext) {
+    this.requireAuthContext(context);
+    const task = await this.requireAccessibleTask(taskId, context);
+    if (!this.reminders) {
+      return { taskId, reminders: [] };
+    }
+    return this.reminders.listReminders(task);
+  }
+
+  async enableTaskReminders(taskId: string, context: TaskContext) {
+    this.requireAuthContext(context);
+    const task = await this.requireAccessibleTask(taskId, context);
+    if (!this.reminders) {
+      throw new InternalServerErrorException('Task reminders are unavailable');
+    }
+    return this.reminders.enableReminders(task, context.userId);
+  }
+
+  async disableTaskReminders(taskId: string, context: TaskContext) {
+    this.requireAuthContext(context);
+    const task = await this.requireAccessibleTask(taskId, context);
+    if (!this.reminders) {
+      throw new InternalServerErrorException('Task reminders are unavailable');
+    }
+    return this.reminders.disableReminders(task, context.userId);
+  }
+
+  async rescheduleTaskReminder(
+    taskId: string,
+    scheduledAt: string,
+    context: TaskContext,
+  ) {
+    this.requireAuthContext(context);
+    const task = await this.requireAccessibleTask(taskId, context);
+    if (!this.reminders) {
+      throw new InternalServerErrorException('Task reminders are unavailable');
+    }
+    return this.reminders.rescheduleUpcoming(task, scheduledAt, context.userId);
   }
 
   async getOverdueTasks(
@@ -273,6 +317,9 @@ export class TaskService {
       context.userId,
       buildUpdateActivities(existing, updated),
     );
+    await this.reminders
+      ?.disableReminders(updated, context.userId, `task_${updated.status}`)
+      .catch(() => undefined);
     return updated;
   }
 
@@ -299,6 +346,9 @@ export class TaskService {
       context.userId,
       buildUpdateActivities(existing, updated),
     );
+    await this.reminders
+      ?.disableReminders(updated, context.userId, `task_${updated.status}`)
+      .catch(() => undefined);
     return updated;
   }
 
@@ -438,6 +488,53 @@ export class TaskService {
         action: 'activity',
         data: resolved.task,
         message: formatActivityMessage(resolved.task.title, history.activities),
+      };
+    }
+
+    if (command.action === 'reminder_list') {
+      const listed = await this.getTaskReminders(resolved.task.id, context);
+      return {
+        action: 'reminder_list',
+        data: resolved.task,
+        message: formatReminderListMessage(resolved.task.title, listed.reminders),
+      };
+    }
+
+    if (command.action === 'reminder_enable') {
+      const listed = await this.enableTaskReminders(resolved.task.id, context);
+      return {
+        action: 'reminder_enable',
+        data: resolved.task,
+        message: `Reminders enabled for “${resolved.task.title}”. ${formatReminderListMessage(resolved.task.title, listed.reminders)}`,
+      };
+    }
+
+    if (command.action === 'reminder_disable') {
+      const listed = await this.disableTaskReminders(resolved.task.id, context);
+      return {
+        action: 'reminder_disable',
+        data: resolved.task,
+        message: `Reminders disabled for “${resolved.task.title}”. ${formatReminderListMessage(resolved.task.title, listed.reminders)}`,
+      };
+    }
+
+    if (command.action === 'reminder_reschedule') {
+      if (!command.dueAt) {
+        return {
+          action: 'clarify',
+          data: null,
+          message: 'When should I reschedule the reminder? Use a valid time such as 2 PM.',
+        };
+      }
+      const listed = await this.rescheduleTaskReminder(
+        resolved.task.id,
+        command.dueAt,
+        context,
+      );
+      return {
+        action: 'reminder_reschedule',
+        data: resolved.task,
+        message: `Reminder rescheduled for “${resolved.task.title}”. ${formatReminderListMessage(resolved.task.title, listed.reminders)}`,
       };
     }
 
@@ -924,6 +1021,26 @@ function formatActivityMessage(
   });
 
   return `Activity for “${title}”:\n${lines.join('\n')}`;
+}
+
+function formatReminderListMessage(
+  title: string,
+  reminders: Array<{
+    type: string;
+    status: string;
+    scheduledAt: string;
+    channel: string | null;
+  }>,
+): string {
+  if (reminders.length === 0) {
+    return `No reminders are recorded for “${title}”.`;
+  }
+
+  const lines = reminders.map(
+    (item) =>
+      `- ${item.type} ${item.status} at ${item.scheduledAt}${item.channel ? ` via ${item.channel}` : ''}`,
+  );
+  return `Reminders for “${title}”:\n${lines.join('\n')}`;
 }
 
 function crmPatch(

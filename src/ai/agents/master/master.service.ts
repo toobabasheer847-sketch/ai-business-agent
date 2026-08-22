@@ -544,6 +544,14 @@ export class MasterAgentService {
     if (result.action === 'activity') {
       return result.message || summary;
     }
+    if (
+      result.action === 'reminder_list' ||
+      result.action === 'reminder_enable' ||
+      result.action === 'reminder_disable' ||
+      result.action === 'reminder_reschedule'
+    ) {
+      return result.message || summary;
+    }
 
     return result.message || summary;
   }

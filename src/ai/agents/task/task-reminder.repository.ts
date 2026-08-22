@@ -1,14 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
 import { auditLogs } from '../../../database/drizzle/schema/audit-log.schema.js';
 import { taskReminders } from '../../../database/drizzle/schema/task-reminder.schema.js';
-import type {
-  TaskReminderStatus,
-  TaskReminderSummary,
-  TaskReminderType,
+import {
+  ACTIVE_REMINDER_STATUSES,
+  CLAIMABLE_REMINDER_STATUSES,
+  type TaskReminderStatus,
+  type TaskReminderSummary,
+  type TaskReminderType,
 } from './task-reminder.constants.js';
 
 export type TaskReminderRecord = {
@@ -21,6 +23,8 @@ export type TaskReminderRecord = {
   dueAtSnapshot: Date;
   status: TaskReminderStatus;
   lastError: string | null;
+  channel: string | null;
+  attemptCount: number;
   createdAt: Date;
   processedAt: Date | null;
 };
@@ -47,6 +51,7 @@ export class TaskReminderRepository {
         scheduledAt: input.scheduledAt,
         dueAtSnapshot: input.dueAtSnapshot,
         status: 'pending',
+        attemptCount: 0,
       })
       .onConflictDoNothing({
         target: [
@@ -109,6 +114,40 @@ export class TaskReminderRepository {
     return row ? this.mapRow(row) : null;
   }
 
+  async findAllByTaskAndTenant(
+    taskId: string,
+    tenantId: string,
+  ): Promise<TaskReminderRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(taskReminders)
+      .where(
+        and(eq(taskReminders.taskId, taskId), eq(taskReminders.tenantId, tenantId)),
+      )
+      .orderBy(desc(taskReminders.createdAt));
+
+    return rows.map((row) => this.mapRow(row));
+  }
+
+  async findActiveByTaskAndTenant(
+    taskId: string,
+    tenantId: string,
+  ): Promise<TaskReminderRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(taskReminders)
+      .where(
+        and(
+          eq(taskReminders.taskId, taskId),
+          eq(taskReminders.tenantId, tenantId),
+          inArray(taskReminders.status, ACTIVE_REMINDER_STATUSES),
+        ),
+      )
+      .orderBy(desc(taskReminders.createdAt));
+
+    return rows.map((row) => this.mapRow(row));
+  }
+
   async findLatestByTaskIds(
     taskIds: string[],
   ): Promise<Map<string, TaskReminderSummary>> {
@@ -123,21 +162,74 @@ export class TaskReminderRepository {
       .where(inArray(taskReminders.taskId, taskIds))
       .orderBy(desc(taskReminders.createdAt));
 
+    const rank: Record<string, number> = {
+      processing: 0,
+      pending: 1,
+      failed: 2,
+      disabled: 3,
+      cancelled: 4,
+      skipped: 5,
+      sent: 6,
+    };
+
     for (const row of rows) {
-      if (latest.has(row.taskId)) {
+      const mapped = this.mapRow(row);
+      const current = latest.get(row.taskId);
+      if (!current) {
+        latest.set(row.taskId, this.toSummary(mapped));
         continue;
       }
-
-      latest.set(row.taskId, {
-        id: row.id,
-        type: row.reminderType as TaskReminderType,
-        status: row.status as TaskReminderStatus,
-        scheduledAt: row.scheduledAt,
-        processedAt: row.processedAt,
-      });
+      if ((rank[mapped.status] ?? 99) < (rank[current.status] ?? 99)) {
+        latest.set(row.taskId, this.toSummary(mapped));
+      }
     }
 
     return latest;
+  }
+
+  async claimForProcessing(
+    reminderId: string,
+    tenantId: string,
+  ): Promise<TaskReminderRecord | null> {
+    const [row] = await this.db
+      .update(taskReminders)
+      .set({
+        status: 'processing',
+        attemptCount: sql`${taskReminders.attemptCount} + 1`,
+      })
+      .where(
+        and(
+          eq(taskReminders.id, reminderId),
+          eq(taskReminders.tenantId, tenantId),
+          inArray(taskReminders.status, CLAIMABLE_REMINDER_STATUSES),
+        ),
+      )
+      .returning();
+
+    return row ? this.mapRow(row) : null;
+  }
+
+  async updateStatus(
+    reminderId: string,
+    tenantId: string,
+    status: TaskReminderStatus,
+    extra?: {
+      lastError?: string | null;
+      channel?: string | null;
+      processedAt?: Date | null;
+    },
+  ): Promise<void> {
+    await this.db
+      .update(taskReminders)
+      .set({
+        status,
+        lastError: extra?.lastError ?? null,
+        ...(extra && 'channel' in extra ? { channel: extra.channel } : {}),
+        processedAt: extra?.processedAt === undefined ? new Date() : extra.processedAt,
+      })
+      .where(
+        and(eq(taskReminders.id, reminderId), eq(taskReminders.tenantId, tenantId)),
+      );
   }
 
   async markProcessed(
@@ -146,16 +238,9 @@ export class TaskReminderRepository {
     status: TaskReminderStatus,
     lastError?: string | null,
   ): Promise<void> {
-    await this.db
-      .update(taskReminders)
-      .set({
-        status,
-        lastError: lastError ?? null,
-        processedAt: new Date(),
-      })
-      .where(
-        and(eq(taskReminders.id, reminderId), eq(taskReminders.tenantId, tenantId)),
-      );
+    await this.updateStatus(reminderId, tenantId, status, {
+      lastError: lastError ?? null,
+    });
   }
 
   async writeAuditLog(input: {
@@ -177,6 +262,18 @@ export class TaskReminderRepository {
     });
   }
 
+  private toSummary(row: TaskReminderRecord): TaskReminderSummary {
+    return {
+      id: row.id,
+      type: row.reminderType,
+      status: row.status,
+      scheduledAt: row.scheduledAt,
+      processedAt: row.processedAt,
+      channel: row.channel === 'gmail' || row.channel === 'audit' ? row.channel : null,
+      attemptCount: row.attemptCount,
+    };
+  }
+
   private mapRow(row: typeof taskReminders.$inferSelect): TaskReminderRecord {
     return {
       id: row.id,
@@ -188,6 +285,8 @@ export class TaskReminderRepository {
       dueAtSnapshot: row.dueAtSnapshot,
       status: row.status as TaskReminderStatus,
       lastError: row.lastError ?? null,
+      channel: row.channel ?? null,
+      attemptCount: row.attemptCount ?? 0,
       createdAt: row.createdAt,
       processedAt: row.processedAt ?? null,
     };

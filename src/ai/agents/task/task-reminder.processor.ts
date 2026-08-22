@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../../../infrastructure/queue/queue.module.js';
 import { AppLogger } from '../../../infrastructure/logging/logger.service.js';
 import {
+  TASK_REMINDER_JOB_ATTEMPTS,
   TASK_REMINDER_JOB_NAME,
   type TaskReminderJobPayload,
 } from './task-reminder.constants.js';
@@ -24,7 +25,10 @@ export class TaskReminderProcessor extends WorkerHost {
     }
 
     try {
-      await this.reminderService.processReminder(job.data);
+      await this.reminderService.processReminder(job.data, {
+        current: (job.attemptsMade ?? 0) + 1,
+        max: job.opts.attempts ?? TASK_REMINDER_JOB_ATTEMPTS,
+      });
     } catch (error) {
       this.logger.error(
         'Task reminder worker failed',

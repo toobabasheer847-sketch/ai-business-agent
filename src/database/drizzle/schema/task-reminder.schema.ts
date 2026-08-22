@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -57,6 +58,12 @@ export const taskReminders = pgTable(
       .notNull(),
 
     lastError: text('last_error'),
+
+    channel: varchar('channel', {
+      length: 32,
+    }),
+
+    attemptCount: integer('attempt_count').default(0).notNull(),
 
     createdAt: timestamp('created_at', {
       withTimezone: true,

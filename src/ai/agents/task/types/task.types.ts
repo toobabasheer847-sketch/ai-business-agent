@@ -56,7 +56,11 @@ export interface TaskAgentResponse {
     | 'complete'
     | 'cancel'
     | 'clarify'
-    | 'activity';
+    | 'activity'
+    | 'reminder_list'
+    | 'reminder_enable'
+    | 'reminder_disable'
+    | 'reminder_reschedule';
   data: TaskRecord | TaskRecord[] | null;
   message?: string;
 }

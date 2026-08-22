@@ -22,6 +22,7 @@ import { TaskFilters } from '@/features/tasks/components/task-filters'
 import { TaskForm } from '@/features/tasks/components/task-form'
 import { TasksTable } from '@/features/tasks/components/tasks-table'
 import { TaskActivityDialog } from '@/features/tasks/components/task-activity-dialog'
+import { TaskReminderDialog } from '@/features/tasks/components/task-reminder-dialog'
 import {
   useCancelTask,
   useCompleteTask,
@@ -164,6 +165,7 @@ export function TasksPage() {
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
   const [activityTask, setActivityTask] = useState<Task | null>(null)
+  const [reminderTask, setReminderTask] = useState<Task | null>(null)
   const [confirming, setConfirming] = useState<{
     task: Task
     action: 'complete' | 'cancel'
@@ -417,6 +419,7 @@ export function TasksPage() {
           onCancel={(task) => setConfirming({ task, action: 'cancel' })}
           onDelete={setDeleting}
           onViewActivity={setActivityTask}
+          onManageReminders={setReminderTask}
         />
       )}
 
@@ -493,6 +496,12 @@ export function TasksPage() {
         task={activityTask}
         open={Boolean(activityTask)}
         onOpenChange={(open) => !open && setActivityTask(null)}
+      />
+
+      <TaskReminderDialog
+        task={reminderTask}
+        open={Boolean(reminderTask)}
+        onOpenChange={(open) => !open && setReminderTask(null)}
       />
     </div>
   )

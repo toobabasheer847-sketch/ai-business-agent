@@ -42,10 +42,19 @@ export type Task = {
   isOverdue?: boolean
   reminder?: {
     id: string
-    type: 'upcoming' | 'overdue'
-    status: 'pending' | 'sent' | 'skipped' | 'failed'
+    type: 'upcoming' | 'overdue' | 'before_due'
+    status:
+      | 'pending'
+      | 'processing'
+      | 'sent'
+      | 'skipped'
+      | 'failed'
+      | 'cancelled'
+      | 'disabled'
     scheduledAt: string
     processedAt?: string | null
+    channel?: 'gmail' | 'audit' | null
+    attemptCount?: number
   } | null
   company?: TaskCrmEntity | null
   prospect?: TaskCrmEntity | null
@@ -95,6 +104,10 @@ export type TaskListQuery = {
   dueFrom?: string
   dueTo?: string
   openOnly?: boolean
+  reminderStatus?: string
+  hasReminder?: boolean
+  reminderFrom?: string
+  reminderTo?: string
 }
 
 /** Matches POST /api/ai/task/natural-language response */
@@ -108,6 +121,10 @@ export type TaskNaturalLanguageResponse = {
     | 'cancel'
     | 'clarify'
     | 'activity'
+    | 'reminder_list'
+    | 'reminder_enable'
+    | 'reminder_disable'
+    | 'reminder_reschedule'
   data: Task | Task[] | null
   message?: string
 }
@@ -121,8 +138,13 @@ export const TASK_ACTIVITY_EVENTS = [
   'TASK_CRM_LINKED',
   'TASK_CRM_UNLINKED',
   'REMINDER_SCHEDULED',
+  'REMINDER_ENABLED',
+  'REMINDER_DISABLED',
+  'REMINDER_RESCHEDULED',
+  'REMINDER_PROCESSING',
   'REMINDER_SENT',
   'REMINDER_FAILED',
+  'REMINDER_RETRY',
 ] as const
 
 export type TaskActivityEventType = (typeof TASK_ACTIVITY_EVENTS)[number]
@@ -149,4 +171,28 @@ export type TaskActivityResponse = {
     total: number
     totalPages: number
   }
+}
+
+export type TaskReminderApiStatus =
+  | 'scheduled'
+  | 'processing'
+  | 'sent'
+  | 'failed'
+  | 'cancelled'
+  | 'disabled'
+
+export type TaskReminderItem = {
+  id: string
+  type: 'before_due' | 'overdue'
+  scheduledAt: string
+  status: TaskReminderApiStatus
+  channel: 'gmail' | 'audit' | null
+  sentAt: string | null
+  failedAt: string | null
+  attemptCount: number
+}
+
+export type TaskReminderListResponse = {
+  taskId: string
+  reminders: TaskReminderItem[]
 }

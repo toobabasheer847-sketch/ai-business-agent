@@ -40,6 +40,10 @@ describe('TaskController', () => {
     cancelTask: jest.Mock;
     deleteTask: jest.Mock;
     getTaskActivity: jest.Mock;
+    getTaskReminders: jest.Mock;
+    enableTaskReminders: jest.Mock;
+    disableTaskReminders: jest.Mock;
+    rescheduleTaskReminder: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -62,6 +66,22 @@ describe('TaskController', () => {
         taskId: TASK_ID,
         activities: [],
         meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      }),
+      getTaskReminders: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        reminders: [],
+      }),
+      enableTaskReminders: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        reminders: [],
+      }),
+      disableTaskReminders: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        reminders: [],
+      }),
+      rescheduleTaskReminder: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        reminders: [],
       }),
     };
 
@@ -363,5 +383,76 @@ describe('TaskController', () => {
       .expect(400);
 
     expect(taskService.getTaskActivity).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for reminders without a JWT', async () => {
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/reminders`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/reminders/enable`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/reminders/disable`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/reminders/reschedule`)
+      .send({ scheduledAt: '2026-08-22T04:30:00.000Z' })
+      .expect(401);
+
+    expect(taskService.getTaskReminders).not.toHaveBeenCalled();
+    expect(taskService.enableTaskReminders).not.toHaveBeenCalled();
+  });
+
+  it('loads reminders with JWT tenant and user', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/reminders`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.getTaskReminders).toHaveBeenCalledWith(
+      TASK_ID,
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+  });
+
+  it('rejects tenantId and createdBy on reminder queries and bodies', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/reminders`)
+      .query({ tenantId: 'other-tenant', createdBy: 'other-user' })
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/reminders/reschedule`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        scheduledAt: '2026-08-22T04:30:00.000Z',
+        tenantId: 'other-tenant',
+        createdBy: 'spoof',
+      })
+      .expect(400);
+
+    expect(taskService.getTaskReminders).not.toHaveBeenCalled();
+    expect(taskService.rescheduleTaskReminder).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid reminder datetime', async () => {
+    const token = signTestJwt(app);
+
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/reminders/reschedule`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ scheduledAt: 'tomorrow' })
+      .expect(400);
+
+    expect(taskService.rescheduleTaskReminder).not.toHaveBeenCalled();
   });
 });

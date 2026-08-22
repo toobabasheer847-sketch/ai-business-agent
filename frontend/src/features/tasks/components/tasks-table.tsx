@@ -31,6 +31,7 @@ type TasksTableProps = {
   onCancel: (item: Task) => void
   onDelete: (item: Task) => void
   onViewActivity: (item: Task) => void
+  onManageReminders: (item: Task) => void
 }
 
 function crmHasLinks(item: Task) {
@@ -108,8 +109,15 @@ function formatDateTime(value: string | null) {
 }
 
 function reminderLabel(item: Task) {
-  if (!item.reminder?.status) return '—'
-  return item.reminder.status.replaceAll('_', ' ')
+  const status = item.reminder?.status
+  if (!status) return 'No reminder'
+  if (status === 'pending' || status === 'processing') return 'Scheduled'
+  if (status === 'sent') return 'Sent'
+  if (status === 'failed') return 'Failed'
+  if (status === 'disabled' || status === 'cancelled' || status === 'skipped') {
+    return 'Disabled'
+  }
+  return 'No reminder'
 }
 
 function DueCell({ item }: { item: Task }) {
@@ -133,6 +141,7 @@ export function TasksTable({
   onCancel,
   onDelete,
   onViewActivity,
+  onManageReminders,
 }: TasksTableProps) {
   return (
     <motion.div
@@ -221,6 +230,18 @@ export function TasksTable({
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onViewActivity(item)}>
                         View activity
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onManageReminders(item)}>
+                        View reminder details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onManageReminders(item)}>
+                        Enable reminder
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onManageReminders(item)}>
+                        Disable reminder
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onManageReminders(item)}>
+                        Reschedule reminder
                       </DropdownMenuItem>
                       {canComplete ? (
                         <DropdownMenuItem onClick={() => onComplete(item)}>

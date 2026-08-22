@@ -18,7 +18,9 @@ import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard.js';
 import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types.js';
 import { PaginationDto } from '../../../common/dto/pagination.dto.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
+import { ForbidUnknownDto } from './dto/forbid-unknown.dto.js';
 import { ProcessNaturalLanguageDto } from './dto/process-natural-language.dto.js';
+import { RescheduleTaskReminderDto } from './dto/reschedule-task-reminder.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskService } from './task.service.js';
@@ -57,6 +59,50 @@ export class TaskController {
   ) {
     const context = this.buildContext(req);
     return this.taskService.getTaskActivity(taskId, query, context);
+  }
+
+  @Get(':taskId/reminders')
+  async reminders(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Query() _query: ForbidUnknownDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getTaskReminders(taskId, context);
+  }
+
+  @Post(':taskId/reminders/enable')
+  async enableReminders(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() _body: ForbidUnknownDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.enableTaskReminders(taskId, context);
+  }
+
+  @Post(':taskId/reminders/disable')
+  async disableReminders(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() _body: ForbidUnknownDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.disableTaskReminders(taskId, context);
+  }
+
+  @Post(':taskId/reminders/reschedule')
+  async rescheduleReminders(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: RescheduleTaskReminderDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.rescheduleTaskReminder(
+      taskId,
+      dto.scheduledAt,
+      context,
+    );
   }
 
   @Get(':taskId')

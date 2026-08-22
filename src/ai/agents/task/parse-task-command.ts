@@ -18,7 +18,11 @@ export type TaskNlAction =
   | 'cancel'
   | 'update'
   | 'clarify'
-  | 'activity';
+  | 'activity'
+  | 'reminder_list'
+  | 'reminder_enable'
+  | 'reminder_disable'
+  | 'reminder_reschedule';
 
 export interface TaskNlCommand {
   action: TaskNlAction;
@@ -82,7 +86,9 @@ export function parseTaskCommand(
   const lower = text.toLowerCase();
   let command: TaskNlCommand;
 
-  if (isCreateIntent(lower)) {
+  if (isReminderManageIntent(lower)) {
+    command = parseReminderCommand(text, now);
+  } else if (isCreateIntent(lower)) {
     command = parseCreate(text, now);
   } else if (isCompleteIntent(lower)) {
     command = parseTargetedAction(text, 'complete', [
@@ -331,7 +337,7 @@ function parseStatusUpdate(text: string): TaskNlCommand | null {
 
 function parseTargetedAction(
   text: string,
-  action: 'get' | 'complete' | 'cancel' | 'activity',
+  action: 'get' | 'complete' | 'cancel' | 'activity' | 'reminder_list' | 'reminder_enable' | 'reminder_disable',
   extraStops: string[],
 ): TaskNlCommand {
   return {
@@ -455,9 +461,88 @@ function isCreateIntent(lower: string): boolean {
   return (
     /^(?:please\s+)?(?:create|add|new)\b/.test(lower) ||
     /\bnew\s+task\b/.test(lower) ||
-    /^(?:please\s+)?remind\s+me\b/.test(lower) ||
     /\bremind me to\b/.test(lower)
   );
+}
+
+function isReminderManageIntent(lower: string): boolean {
+  if (/\bremind me to\b/.test(lower)) {
+    return false;
+  }
+  return (
+    /\b(disable|enable|turn off|turn on)\b.+\breminders?\b/.test(lower) ||
+    /\breminders?\b.+\b(disable|enable|turn off|turn on)\b/.test(lower) ||
+    /\bcancel\b.+\breminders?\b/.test(lower) ||
+    /\breschedule\b.+\breminders?\b/.test(lower) ||
+    /\bshow reminders\b|\breminders for\b/.test(lower) ||
+    /\bdid\b.+\breminder\b.+\bsent\b/.test(lower) ||
+    /\bwhy\b.+\breminder\b.+\bfail/.test(lower) ||
+    /\bremind me about\b/.test(lower)
+  );
+}
+
+function parseReminderCommand(text: string, now: Date): TaskNlCommand {
+  const lower = text.toLowerCase();
+  const extraStops = [
+    'show',
+    'get',
+    'display',
+    'the',
+    'of',
+    'reminder',
+    'reminders',
+    'remind',
+    'enable',
+    'disable',
+    'turn',
+    'off',
+    'on',
+    'reschedule',
+    'about',
+    'did',
+    'get',
+    'sent',
+    'why',
+    'fail',
+    'failed',
+  ];
+
+  if (/\b(disable|turn off|cancel)\b/.test(lower) && /\breminders?\b/.test(lower)) {
+    return parseTargetedAction(text, 'reminder_disable', extraStops);
+  }
+  if (/\breschedule\b/.test(lower)) {
+    const due = parseTaskDueAt(text, now);
+    const target = extractTarget(text, extraStops);
+    if (due.status === 'invalid') {
+      return { action: 'clarify', message: due.message, ...target };
+    }
+    if (due.status === 'none') {
+      return {
+        action: 'clarify',
+        message:
+          'When should I reschedule the reminder? Use a valid time such as 2 PM.',
+        ...target,
+      };
+    }
+    return {
+      action: 'reminder_reschedule',
+      dueAt: due.dueAt.toISOString(),
+      ...target,
+    };
+  }
+  if (/\b(enable|turn on|remind me about)\b/.test(lower)) {
+    return parseTargetedAction(text, 'reminder_enable', extraStops);
+  }
+  if (
+    /\bshow reminders\b|\blist reminders\b/.test(lower) ||
+    /\bdid\b.+\breminder\b.+\bsent\b/.test(lower) ||
+    /\bwhy\b.+\breminder\b.+\bfail/.test(lower) ||
+    (/\breminders for\b/.test(lower) && !/\b(enable|disable|turn)\b/.test(lower))
+  ) {
+    return parseTargetedAction(text, 'reminder_list', extraStops);
+  }
+
+  return parseTargetedAction(text, 'reminder_enable', extraStops);
 }
 
 function isCompleteIntent(lower: string): boolean {

@@ -38,6 +38,7 @@ describe('TaskReminderService', () => {
     scheduledAt: new Date(payload.scheduledAt),
     dueAtSnapshot: dueAt,
     status: 'pending' as const,
+    attemptCount: 0,
   };
 
   let service: TaskReminderService;
@@ -49,11 +50,15 @@ describe('TaskReminderService', () => {
     insertPending: jest.Mock;
     findByIdAndTenant: jest.Mock;
     findLatestByTaskIds: jest.Mock;
+    findAllByTaskAndTenant: jest.Mock;
+    findActiveByTaskAndTenant: jest.Mock;
+    claimForProcessing: jest.Mock;
+    updateStatus: jest.Mock;
     markProcessed: jest.Mock;
     writeAuditLog: jest.Mock;
   };
   let userRepository: { findByIdAndTenant: jest.Mock };
-  let reminderQueue: { add: jest.Mock };
+  let reminderQueue: { add: jest.Mock; getJob: jest.Mock };
   let activity: { record: jest.Mock };
   let gmailService: {
     findActiveCredentialsForTenant: jest.Mock;
@@ -82,6 +87,14 @@ describe('TaskReminderService', () => {
         status: 'pending',
       }),
       findLatestByTaskIds: jest.fn().mockResolvedValue(new Map()),
+      findAllByTaskAndTenant: jest.fn().mockResolvedValue([pendingReminderRow]),
+      findActiveByTaskAndTenant: jest.fn().mockResolvedValue([pendingReminderRow]),
+      claimForProcessing: jest.fn().mockResolvedValue({
+        ...pendingReminderRow,
+        status: 'processing',
+        attemptCount: 1,
+      }),
+      updateStatus: jest.fn().mockResolvedValue(undefined),
       markProcessed: jest.fn().mockResolvedValue(undefined),
       writeAuditLog: jest.fn().mockResolvedValue(undefined),
     };
@@ -94,6 +107,7 @@ describe('TaskReminderService', () => {
     };
     reminderQueue = {
       add: jest.fn().mockResolvedValue({ id: 'job-1' }),
+      getJob: jest.fn().mockResolvedValue(null),
     };
     activity = { record: jest.fn().mockResolvedValue(undefined) };
     gmailService = {
@@ -276,23 +290,94 @@ describe('TaskReminderService', () => {
     );
   });
 
-  it('records REMINDER_FAILED when Gmail delivery throws', async () => {
+  it('records REMINDER_RETRY for a transient Gmail failure', async () => {
     gmailService.findActiveCredentialsForTenant.mockResolvedValue({
       accessToken: 'token',
       refreshToken: 'refresh',
     });
     gmailService.mailOperations.sendEmail.mockRejectedValue(new Error('gmail_down'));
 
-    await expect(service.processReminder(payload)).rejects.toThrow('gmail_down');
+    await expect(
+      service.processReminder(payload, { current: 1, max: 3 }),
+    ).rejects.toThrow('gmail_down');
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'REMINDER_RETRY' }),
+    );
+    expect(reminderRepository.updateStatus).toHaveBeenCalledWith(
+      reminderId,
+      tenantA,
+      'failed',
+      expect.objectContaining({ channel: 'gmail' }),
+    );
+    expect(JSON.stringify(activity.record.mock.calls)).not.toMatch(/token|refresh/i);
+  });
+
+  it('records REMINDER_FAILED on the last retry attempt', async () => {
+    gmailService.findActiveCredentialsForTenant.mockResolvedValue({
+      accessToken: 'token',
+      refreshToken: 'refresh',
+    });
+    gmailService.mailOperations.sendEmail.mockRejectedValue(new Error('gmail_down'));
+
+    await expect(
+      service.processReminder(payload, { current: 3, max: 3 }),
+    ).rejects.toThrow('gmail_down');
     expect(activity.record).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'REMINDER_FAILED',
-        metadata: expect.objectContaining({
-          channel: 'gmail',
-          recipientUserId: userB,
-        }),
+        metadata: expect.objectContaining({ channel: 'gmail' }),
       }),
     );
-    expect(activity.record.mock.calls.flat().join(' ')).not.toMatch(/token|refresh/i);
+  });
+
+  it('does not execute a disabled reminder', async () => {
+    reminderRepository.findByIdAndTenant.mockResolvedValue({
+      ...pendingReminderRow,
+      status: 'disabled',
+    });
+
+    await service.processReminder(payload);
+
+    expect(reminderRepository.claimForProcessing).not.toHaveBeenCalled();
+    expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
+    expect(reminderRepository.markProcessed).not.toHaveBeenCalled();
+  });
+
+  it('does not send a reminder twice after it was already sent', async () => {
+    reminderRepository.findByIdAndTenant.mockResolvedValue({
+      ...pendingReminderRow,
+      status: 'sent',
+    });
+
+    await service.processReminder(payload);
+    await service.processReminder(payload);
+
+    expect(reminderRepository.claimForProcessing).not.toHaveBeenCalled();
+    expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects enabling reminders on a completed task', async () => {
+    await expect(
+      service.enableReminders({ ...pendingTask, status: 'completed' } as any),
+    ).rejects.toThrow(/completed/);
+    expect(reminderRepository.insertPending).not.toHaveBeenCalled();
+  });
+
+  it('rejects enabling reminders on a cancelled task', async () => {
+    await expect(
+      service.enableReminders({ ...pendingTask, status: 'cancelled' } as any),
+    ).rejects.toThrow(/cancelled/);
+  });
+
+  it('rejects a reminder scheduled at or after dueAt', async () => {
+    await expect(
+      service.rescheduleUpcoming(pendingTask as any, dueAt.toISOString()),
+    ).rejects.toThrow(/before dueAt/);
+  });
+
+  it('rejects an invalid reminder datetime', async () => {
+    await expect(
+      service.rescheduleUpcoming(pendingTask as any, 'tomorrow'),
+    ).rejects.toThrow(/ISO datetime/);
   });
 });

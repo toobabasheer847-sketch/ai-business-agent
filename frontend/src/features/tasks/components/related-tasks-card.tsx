@@ -140,6 +140,19 @@ export function RelatedTasksCard({
                       : 'Unassigned'}
                   </span>
                   <span>Created {formatDate(item.createdAt)}</span>
+                  {item.reminder?.status ? (
+                    <span>
+                      Reminder{' '}
+                      {item.reminder.status === 'pending' ||
+                      item.reminder.status === 'processing'
+                        ? 'scheduled'
+                        : item.reminder.status === 'sent'
+                          ? 'sent'
+                          : item.reminder.status === 'failed'
+                            ? 'failed'
+                            : 'disabled'}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className="text-foreground underline-offset-4 hover:underline"

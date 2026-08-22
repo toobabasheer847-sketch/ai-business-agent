@@ -31,8 +31,13 @@ const EVENT_LABELS: Record<TaskActivityEventType, string> = {
   TASK_CRM_LINKED: 'CRM linked',
   TASK_CRM_UNLINKED: 'CRM unlinked',
   REMINDER_SCHEDULED: 'Reminder scheduled',
+  REMINDER_ENABLED: 'Reminder enabled',
+  REMINDER_DISABLED: 'Reminder disabled',
+  REMINDER_RESCHEDULED: 'Reminder rescheduled',
+  REMINDER_PROCESSING: 'Reminder processing',
   REMINDER_SENT: 'Reminder sent',
   REMINDER_FAILED: 'Reminder failed',
+  REMINDER_RETRY: 'Reminder retry',
 }
 
 function formatWhen(value: string) {
@@ -94,6 +99,21 @@ function summarizeActivity(item: TaskActivityItem): string {
   }
   if (item.eventType === 'REMINDER_SCHEDULED') {
     return 'Reminder scheduled'
+  }
+  if (item.eventType === 'REMINDER_ENABLED') {
+    return 'Reminders enabled'
+  }
+  if (item.eventType === 'REMINDER_DISABLED') {
+    return 'Reminders disabled'
+  }
+  if (item.eventType === 'REMINDER_RESCHEDULED') {
+    return 'Reminder rescheduled'
+  }
+  if (item.eventType === 'REMINDER_PROCESSING') {
+    return 'Reminder is being processed'
+  }
+  if (item.eventType === 'REMINDER_RETRY') {
+    return 'Reminder delivery will be retried'
   }
   if (item.eventType === 'TASK_CREATED') {
     return 'Task created'

@@ -26,6 +26,10 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     dueFrom: query.dueFrom || undefined,
     dueTo: query.dueTo || undefined,
     openOnly: query.openOnly || undefined,
+    reminderStatus: query.reminderStatus || undefined,
+    hasReminder: query.hasReminder || undefined,
+    reminderFrom: query.reminderFrom || undefined,
+    reminderTo: query.reminderTo || undefined,
   }
 
   if (
@@ -38,7 +42,11 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     !normalized.overdue &&
     !normalized.dueFrom &&
     !normalized.dueTo &&
-    !normalized.openOnly
+    !normalized.openOnly &&
+    !normalized.reminderStatus &&
+    normalized.hasReminder == null &&
+    !normalized.reminderFrom &&
+    !normalized.reminderTo
   ) {
     return undefined
   }
@@ -54,6 +62,7 @@ export const taskKeys = {
   details: () => [...taskKeys.all, 'detail'] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
   activities: (id: string) => [...taskKeys.all, 'activity', id] as const,
+  reminders: (id: string) => [...taskKeys.all, 'reminders', id] as const,
 }
 
 async function invalidateTaskQueries(queryClient: QueryClient, taskId?: string) {
@@ -61,6 +70,7 @@ async function invalidateTaskQueries(queryClient: QueryClient, taskId?: string) 
   if (taskId) {
     await queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
     await queryClient.invalidateQueries({ queryKey: taskKeys.activities(taskId) })
+    await queryClient.invalidateQueries({ queryKey: taskKeys.reminders(taskId) })
   }
 }
 
@@ -152,5 +162,49 @@ export function useTaskActivity(taskId: string | undefined, enabled = true) {
     queryKey: taskKeys.activities(taskId ?? ''),
     queryFn: () => tasksApi.activity(taskId!, { limit: 50 }),
     enabled: Boolean(taskId) && enabled,
+  })
+}
+
+export function useTaskReminders(taskId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: taskKeys.reminders(taskId ?? ''),
+    queryFn: () => tasksApi.reminders(taskId!),
+    enabled: Boolean(taskId) && enabled,
+  })
+}
+
+export function useEnableTaskReminders() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => tasksApi.enableReminders(taskId),
+    onSuccess: async (data) => {
+      await invalidateTaskQueries(queryClient, data.taskId)
+    },
+  })
+}
+
+export function useDisableTaskReminders() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => tasksApi.disableReminders(taskId),
+    onSuccess: async (data) => {
+      await invalidateTaskQueries(queryClient, data.taskId)
+    },
+  })
+}
+
+export function useRescheduleTaskReminders() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      scheduledAt,
+    }: {
+      taskId: string
+      scheduledAt: string
+    }) => tasksApi.rescheduleReminders(taskId, scheduledAt),
+    onSuccess: async (data) => {
+      await invalidateTaskQueries(queryClient, data.taskId)
+    },
   })
 }

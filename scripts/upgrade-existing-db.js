@@ -168,6 +168,8 @@ async function main() {
         "due_at_snapshot" timestamp with time zone NOT NULL,
         "status" varchar(32) DEFAULT 'pending' NOT NULL,
         "last_error" text,
+        "channel" varchar(32),
+        "attempt_count" integer DEFAULT 0 NOT NULL,
         "created_at" timestamp with time zone DEFAULT now() NOT NULL,
         "processed_at" timestamp with time zone
       );
@@ -203,6 +205,12 @@ async function main() {
     );
     await client.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "task_reminders_task_type_scheduled_unique" ON "task_reminders" USING btree ("task_id", "reminder_type", "scheduled_at")`,
+    );
+    await client.query(
+      `ALTER TABLE "task_reminders" ADD COLUMN IF NOT EXISTS "channel" varchar(32)`,
+    );
+    await client.query(
+      `ALTER TABLE "task_reminders" ADD COLUMN IF NOT EXISTS "attempt_count" integer DEFAULT 0 NOT NULL`,
     );
 
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);

@@ -1032,4 +1032,14 @@ describe('TaskService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(activity.listForTask).not.toHaveBeenCalled();
   });
+
+  it('lists reminders only for an accessible task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(null);
+    await expect(service.getTaskReminders(taskId, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.enableTaskReminders(taskId, otherTenant)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
 });
