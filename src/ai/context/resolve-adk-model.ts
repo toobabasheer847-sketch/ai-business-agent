@@ -1,5 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 
+import { getTrustedAiContext } from './ai-request-context.js';
+
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
 
 /**
@@ -16,4 +18,11 @@ export function resolveAdkModelName(
   }
 
   return configService.get<string>('GEMINI_MODEL', DEFAULT_GEMINI_MODEL);
+}
+
+export function resolveAdkModelFromContext(
+  configService: ConfigService,
+): string {
+  const context = getTrustedAiContext();
+  return resolveAdkModelName(configService, context.aiModel);
 }

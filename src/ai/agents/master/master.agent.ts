@@ -139,23 +139,25 @@ export async function resolveMasterRoute(
 }
 
 export function createMasterAgent(options: {
+  modelName?: string;
   communicationAgent?: any;
   ragAgent?: any;
   taskAgent?: any;
   proposalAgent?: any;
 }) {
+  const modelName = options.modelName ?? 'gemini-2.0-flash';
   const availableAgents: any[] = [];
 
   const statusAgent = new LlmAgent({
     name: 'master_status_agent',
-    model: 'gemini-3.6-flash',
+    model: modelName,
     instruction: `You are the Master Agent status responder. Answer system health and status requests clearly and use the provided system status tool when appropriate.`,
     tools: [getSystemStatusTool],
   });
 
   const chatAgent = new LlmAgent({
     name: 'master_chat_agent',
-    model: 'gemini-3.6-flash',
+    model: modelName,
     instruction: `You are a friendly AI business assistant. Handle greetings and casual conversation naturally with brief, professional replies. Do not mention knowledge bases, uploaded documents, profiles, skills, experience, projects, or retrieved context unless the user explicitly asks a knowledge-related question.`,
     tools: [],
   });

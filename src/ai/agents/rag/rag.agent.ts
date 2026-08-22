@@ -4,7 +4,13 @@ import { Gemini, FunctionTool, LlmAgent } from '@google/adk';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 
+import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
 import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
+import {
+  consumeRagSearchChunks,
+  recordRagSearchChunks,
+  runWithRagDelegationState,
+} from '../../context/rag-delegation-context.js';
 import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { RagTools } from './rag.tools';
 import {
@@ -36,8 +42,12 @@ export class RagAgent {
       throw new Error('GOOGLE_GENAI_API_KEY is not configured');
     }
 
+    this.agent = this.buildLlmAgent(this.modelName);
+  }
+
+  buildLlmAgent(modelName: string): LlmAgent {
     const geminiModel = new Gemini({
-      model: this.modelName,
+      model: modelName,
       apiKey: this.apiKey,
     });
 
@@ -57,6 +67,7 @@ export class RagAgent {
           input.query,
           input.topK ?? 5,
         );
+        recordRagSearchChunks(chunks);
 
         return {
           chunks,
@@ -64,7 +75,7 @@ export class RagAgent {
       },
     });
 
-    this.agent = new LlmAgent({
+    return new LlmAgent({
       name: 'rag_agent',
       model: geminiModel,
       instruction: `You are a tenant-aware RAG assistant. Use the provided knowledge tool to search tenant-specific knowledge before answering. Do not hallucinate company facts. If the available knowledge is insufficient, say so clearly and avoid inventing details. Include source information when available.`,
@@ -77,8 +88,7 @@ export class RagAgent {
   }
 
   /**
-   * Master delegation entry point. Retrieval and generation stay in RagAgent;
-   * tenant scope comes from trusted JWT context, never from model arguments.
+   * Deterministic retrieval + grounded generation fallback.
    */
   async delegateQuery(
     tenantId: string,
@@ -88,6 +98,55 @@ export class RagAgent {
   ): Promise<RagResponse> {
     return runWithAiContext({ tenantId, userId }, () =>
       this.answerQuery(tenantId, query, options),
+    );
+  }
+
+  /**
+   * ADK tool-calling loop with deterministic fallback when the model path fails.
+   */
+  async delegateAdkQuery(
+    tenantId: string,
+    userId: string,
+    query: string,
+    agent: LlmAgent,
+    options: RagQueryOptions = {},
+  ): Promise<RagResponse> {
+    return runWithAiContext({ tenantId, userId }, () =>
+      runWithRagDelegationState(async () => {
+        try {
+          const adkResult = await runAdkEphemeral({
+            appName: 'rag-agent',
+            agent,
+            userId,
+            message: query,
+          });
+
+          const answer = adkResult.finalText.trim();
+          const chunks = consumeRagSearchChunks();
+          const relevantChunks = this.filterRelevantChunks(chunks);
+
+          if (answer && relevantChunks.length) {
+            if (this.indicatesNoKnowledge(answer)) {
+              return {
+                answer: NO_KNOWLEDGE_ANSWER,
+                sources: [],
+                usedKnowledge: false,
+                message: 'No relevant chunks were found.',
+              };
+            }
+
+            return {
+              answer,
+              sources: this.mapSources(relevantChunks),
+              usedKnowledge: true,
+            };
+          }
+        } catch {
+          // Fall back to deterministic grounded answer path.
+        }
+
+        return this.answerQuery(tenantId, query, options);
+      }),
     );
   }
 
@@ -104,12 +163,7 @@ export class RagAgent {
       options.knowledgeBaseId,
     );
 
-    const answerMinSimilarity = this.getAnswerMinSimilarity();
-    const relevantChunks = chunks.filter(
-      (chunk) =>
-        Number.isFinite(chunk.similarity) &&
-        chunk.similarity >= answerMinSimilarity,
-    );
+    const relevantChunks = this.filterRelevantChunks(chunks);
 
     if (!relevantChunks.length) {
       return {
@@ -167,6 +221,15 @@ export class RagAgent {
       usedKnowledge: true,
       message: modelError ? `Model generation failed: ${modelError}` : undefined,
     };
+  }
+
+  private filterRelevantChunks(chunks: RetrievedChunk[]): RetrievedChunk[] {
+    const answerMinSimilarity = this.getAnswerMinSimilarity();
+    return chunks.filter(
+      (chunk) =>
+        Number.isFinite(chunk.similarity) &&
+        chunk.similarity >= answerMinSimilarity,
+    );
   }
 
   private async generateGroundedAnswer(prompt: string): Promise<string> {

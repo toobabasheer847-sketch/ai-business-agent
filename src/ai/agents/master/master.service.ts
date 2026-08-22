@@ -10,7 +10,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
-import { runWithAiContext } from '../../context/ai-request-context.js';
+import { AdkAgentFactoryService } from '../../adk/adk-agent.factory.js';
+import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
 
 import {
   DEFAULT_AI_CHAT_HISTORY_LIMIT,
@@ -21,6 +22,7 @@ import {
   ASSISTANT_CONVERSATION_CHANNEL,
   ConversationRepository,
 } from '../../../modules/conversation/conversation.repository';
+import { MasterSettingsService } from '../../../modules/master-settings/master-settings.service';
 import { createMasterAgent, resolveMasterRoute } from './master.agent.js';
 import { CommunicationAgentService } from '../communication/communication.service.js';
 import { RagAgent } from '../rag/rag.agent.js';
@@ -71,6 +73,8 @@ export class MasterAgentService {
     private readonly proposalAgent: ProposalAgent,
     private readonly conversationRepository: ConversationRepository,
     private readonly configService: ConfigService,
+    private readonly masterSettingsService: MasterSettingsService,
+    private readonly adkAgentFactory: AdkAgentFactoryService,
   ) {
     const communicationAgent = this.communicationAgentService.getAgent();
     const ragAgentInstance = this.ragAgent.getAgentInstance?.();
@@ -154,8 +158,12 @@ export class MasterAgentService {
       trimmedMessage,
     );
 
-    const aiResult = await runWithAiContext({ tenantId, userId }, () =>
-      this.executeExistingAi(tenantId, userId, trimmedMessage, history),
+    const settings = await this.masterSettingsService.getOrCreate(tenantId);
+
+    const aiResult = await runWithAiContext(
+      { tenantId, userId, aiModel: settings.aiModel },
+      () =>
+        this.executeExistingAi(tenantId, userId, trimmedMessage, history),
     );
 
     await this.persistAssistantMessage(tenantId, conversation.id, aiResult);
@@ -372,10 +380,15 @@ export class MasterAgentService {
 
     if (routeTarget === 'rag_agent' && this.routeAgents.rag_agent) {
       try {
-        const ragResult = await this.ragAgent.delegateQuery(
+        const { aiModel } = getTrustedAiContext();
+        const ragAgentInstance = this.adkAgentFactory.getRagAgent(
+          aiModel,
+        ) as any;
+        const ragResult = await this.ragAgent.delegateAdkQuery(
           tenantId,
           userId,
           trimmedMessage,
+          ragAgentInstance,
         );
 
         return {
@@ -394,6 +407,8 @@ export class MasterAgentService {
     }
 
     const modelInput = this.formatHistoryForModel(history, trimmedMessage);
+    const { aiModel } = getTrustedAiContext();
+    const masterAgent = this.adkAgentFactory.getMasterAgent(aiModel);
 
     let finalText = '';
     const branches = new Set<string>();
@@ -402,7 +417,7 @@ export class MasterAgentService {
     try {
       const adkResult = await runAdkEphemeral({
         appName: 'master-agent',
-        agent: this.masterAgent,
+        agent: masterAgent,
         userId,
         message: modelInput,
       });

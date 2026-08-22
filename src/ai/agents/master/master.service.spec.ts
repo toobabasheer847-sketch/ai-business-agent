@@ -82,7 +82,7 @@ describe('MasterAgentService', () => {
   };
   const ragAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'rag_agent' }),
-    delegateQuery: jest.fn(),
+    delegateAdkQuery: jest.fn(),
   };
   const taskAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'task_agent' }),
@@ -90,6 +90,13 @@ describe('MasterAgentService', () => {
   };
   const proposalAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
+  };
+  const masterSettingsService = {
+    getOrCreate: jest.fn().mockResolvedValue({ aiModel: null }),
+  };
+  const adkAgentFactory = {
+    getMasterAgent: jest.fn().mockReturnValue({ name: 'master_agent' }),
+    getRagAgent: jest.fn().mockReturnValue({ name: 'rag_agent' }),
   };
 
   const ownedConversation = {
@@ -114,7 +121,13 @@ describe('MasterAgentService', () => {
 
   beforeEach(() => {
     mockRunEphemeral.mockReset();
-    ragAgent.delegateQuery.mockReset();
+    ragAgent.delegateAdkQuery.mockReset();
+    masterSettingsService.getOrCreate.mockReset();
+    masterSettingsService.getOrCreate.mockResolvedValue({ aiModel: null });
+    adkAgentFactory.getMasterAgent.mockReset();
+    adkAgentFactory.getMasterAgent.mockReturnValue({ name: 'master_agent' });
+    adkAgentFactory.getRagAgent.mockReset();
+    adkAgentFactory.getRagAgent.mockReturnValue({ name: 'rag_agent' });
     taskAgent.delegateNaturalLanguage.mockReset();
     (InMemoryRunner as any).lastOptions = null;
 
@@ -138,6 +151,8 @@ describe('MasterAgentService', () => {
       proposalAgent as any,
       conversationRepository as any,
       configService as any,
+      masterSettingsService as any,
+      adkAgentFactory as any,
     );
   });
 
@@ -309,7 +324,7 @@ describe('MasterAgentService', () => {
   });
 
   it('stores delegation, sources, and usedKnowledge in assistant metadata', async () => {
-    ragAgent.delegateQuery.mockResolvedValue({
+    ragAgent.delegateAdkQuery.mockResolvedValue({
       answer: 'The uploaded document contains a dummy PDF file.',
       sources: [
         {
@@ -372,7 +387,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes knowledge questions through RagAgent.answerQuery with the current user query', async () => {
-    ragAgent.delegateQuery.mockResolvedValue({
+    ragAgent.delegateAdkQuery.mockResolvedValue({
       answer: 'The uploaded document contains a dummy PDF file.',
       sources: [
         {
@@ -391,7 +406,13 @@ describe('MasterAgentService', () => {
     const query = 'What information is contained in the uploaded document?';
     const result = await service.invoke(tenantId, userId, query, conversationId);
 
-    expect(ragAgent.delegateQuery).toHaveBeenCalledWith(tenantId, userId, query);
+    expect(ragAgent.delegateAdkQuery).toHaveBeenCalledWith(
+      tenantId,
+      userId,
+      query,
+      { name: 'rag_agent' },
+    );
+    expect(adkAgentFactory.getRagAgent).toHaveBeenCalledWith(null);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
     expect(result).toEqual({
       conversationId,
@@ -410,7 +431,7 @@ describe('MasterAgentService', () => {
   });
 
   it('keeps RAG tenant isolation unchanged', async () => {
-    ragAgent.delegateQuery.mockResolvedValue({
+    ragAgent.delegateAdkQuery.mockResolvedValue({
       answer: 'Tenant scoped answer',
       sources: [],
       usedKnowledge: true,
@@ -422,10 +443,10 @@ describe('MasterAgentService', () => {
       'What information is contained in the uploaded document?',
     );
 
-    expect(ragAgent.delegateQuery).toHaveBeenCalledTimes(1);
-    expect(ragAgent.delegateQuery.mock.calls[0][0]).toBe(tenantId);
-    expect(ragAgent.delegateQuery.mock.calls[0][1]).toBe(userId);
-    expect(ragAgent.delegateQuery.mock.calls[0][0]).not.toBe(otherTenantId);
+    expect(ragAgent.delegateAdkQuery).toHaveBeenCalledTimes(1);
+    expect(ragAgent.delegateAdkQuery.mock.calls[0][0]).toBe(tenantId);
+    expect(ragAgent.delegateAdkQuery.mock.calls[0][1]).toBe(userId);
+    expect(ragAgent.delegateAdkQuery.mock.calls[0][0]).not.toBe(otherTenantId);
   });
 
   it('caps history loading at the maximum of 50', async () => {
@@ -443,7 +464,7 @@ describe('MasterAgentService', () => {
   });
 
   it('returns usedKnowledge=false for unknown knowledge questions', async () => {
-    ragAgent.delegateQuery.mockResolvedValue({
+    ragAgent.delegateAdkQuery.mockResolvedValue({
       answer:
         "I couldn't find enough relevant information in the knowledge base to answer that question.",
       sources: [],
@@ -481,7 +502,7 @@ describe('MasterAgentService', () => {
 
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
     expect(taskAgent.delegateNaturalLanguage).not.toHaveBeenCalled();
-    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateAdkQuery).not.toHaveBeenCalled();
     expect(result).toEqual({
       conversationId,
       response: 'I can help draft that email.',
@@ -494,7 +515,7 @@ describe('MasterAgentService', () => {
       service.invoke('', userId, 'Show me my tasks'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
-    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateAdkQuery).not.toHaveBeenCalled();
   });
 
   it('rejects a missing user context', async () => {
@@ -508,7 +529,7 @@ describe('MasterAgentService', () => {
       service.invoke(tenantId, userId, '   '),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
-    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateAdkQuery).not.toHaveBeenCalled();
   });
 
   it('routes greetings through the Master RoutedAgent instead of RAG', async () => {
@@ -516,7 +537,7 @@ describe('MasterAgentService', () => {
 
     const result = await service.invoke(tenantId, userId, 'hello');
 
-    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateAdkQuery).not.toHaveBeenCalled();
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       conversationId,
@@ -526,7 +547,7 @@ describe('MasterAgentService', () => {
   });
 
   it('hides RAG execution errors from the client', async () => {
-    ragAgent.delegateQuery.mockRejectedValue(
+    ragAgent.delegateAdkQuery.mockRejectedValue(
       new Error('DATABASE_URL contains secret'),
     );
 
@@ -736,6 +757,18 @@ describe('MasterAgentService', () => {
       service.invoke(tenantId, userId, 'Show my pending tasks.'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('loads tenant master settings and uses tenant aiModel for ADK agents', async () => {
+    mockChatEvents();
+    masterSettingsService.getOrCreate.mockResolvedValue({
+      aiModel: 'gemini-2.5-pro',
+    });
+
+    await service.invoke(tenantId, userId, 'hello');
+
+    expect(masterSettingsService.getOrCreate).toHaveBeenCalledWith(tenantId);
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith('gemini-2.5-pro');
   });
 
   it('still routes greetings through ADK chat, not TaskService', async () => {
