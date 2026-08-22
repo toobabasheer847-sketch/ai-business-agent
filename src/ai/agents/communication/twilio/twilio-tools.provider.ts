@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { SmsManagementService } from '../../../../integrations/twilio/sms-management';
 import { CallManagementService } from '../../../../integrations/twilio/call-management';
 
@@ -10,10 +11,6 @@ import { CallManagementService } from '../../../../integrations/twilio/call-mana
 // ---------------------------------------------------------------------------
 
 const SEND_SMS_SCHEMA = z.object({
-  tenantId: z
-    .string()
-    .uuid()
-    .describe('Tenant ID — required to scope the operation to the correct tenant.'),
   to: z
     .string()
     .min(1)
@@ -23,7 +20,7 @@ const SEND_SMS_SCHEMA = z.object({
     .string()
     .uuid()
     .describe(
-      'UUID of the phone_numbers record to send from. Must belong to the tenant.',
+      'UUID of the phone_numbers record to send from. Must belong to the authenticated tenant.',
     ),
   statusCallback: z
     .string()
@@ -33,10 +30,6 @@ const SEND_SMS_SCHEMA = z.object({
 });
 
 const INITIATE_CALL_SCHEMA = z.object({
-  tenantId: z
-    .string()
-    .uuid()
-    .describe('Tenant ID — required to scope the operation to the correct tenant.'),
   to: z
     .string()
     .min(1)
@@ -45,7 +38,7 @@ const INITIATE_CALL_SCHEMA = z.object({
     .string()
     .uuid()
     .describe(
-      'UUID of the phone_numbers record to call from. Must belong to the tenant.',
+      'UUID of the phone_numbers record to call from. Must belong to the authenticated tenant.',
     ),
   twiml: z
     .string()
@@ -100,9 +93,8 @@ export interface CallInitiateResult {
  * Architecture:
  *   FunctionTool → TwilioToolsProvider → SmsManagementService / CallManagementService → Twilio SDK
  *
- * Every tool requires a tenantId — the underlying services enforce tenant
- * isolation at the phone-number and credential level.  No Twilio SDK logic
- * lives inside the tool execute callbacks.
+ * Every tool uses trusted JWT tenant context. The underlying services enforce tenant
+ * isolation at the phone-number and credential level.
  */
 @Injectable()
 export class TwilioToolsProvider {
@@ -121,10 +113,10 @@ export class TwilioToolsProvider {
     return new FunctionTool({
       name: 'send_sms',
       description:
-        'Sends an SMS message to a specified phone number using the tenant Twilio configuration. ' +
-        'Requires tenantId to ensure only phone numbers belonging to this tenant are used.',
+        'Sends an SMS message to a specified phone number using the authenticated tenant Twilio configuration.',
       parameters: SEND_SMS_SCHEMA,
-      execute: async ({ tenantId, to, body, fromPhoneNumberId, statusCallback }) => {
+      execute: async ({ to, body, fromPhoneNumberId, statusCallback }) => {
+        const { tenantId } = getTrustedAiContext();
         const result = await provider.smsService.sendSms({
           tenantId,
           to,
@@ -158,10 +150,10 @@ export class TwilioToolsProvider {
     return new FunctionTool({
       name: 'initiate_call',
       description:
-        'Initiates an outbound phone call to a specified number using the tenant Twilio configuration. ' +
-        'Requires tenantId to ensure only phone numbers belonging to this tenant are used.',
+        'Initiates an outbound phone call using the authenticated tenant Twilio configuration.',
       parameters: INITIATE_CALL_SCHEMA,
-      execute: async ({ tenantId, to, fromPhoneNumberId, twiml, callbackUrl, statusCallback }) => {
+      execute: async ({ to, fromPhoneNumberId, twiml, callbackUrl, statusCallback }) => {
+        const { tenantId } = getTrustedAiContext();
         const result = await provider.callService.initiateOutboundCall({
           tenantId,
           to,

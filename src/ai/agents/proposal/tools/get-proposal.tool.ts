@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -12,10 +13,11 @@ export class GetProposalTool extends FunctionTool<any> {
       description: 'Fetch a single tenant-scoped proposal by id.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
       }),
-      execute: async (input: any) =>
-        this.proposalRepository.getProposal(input.proposalId, input.tenantId),
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        return this.proposalRepository.getProposal(input.proposalId, tenantId);
+      },
     });
   }
 }

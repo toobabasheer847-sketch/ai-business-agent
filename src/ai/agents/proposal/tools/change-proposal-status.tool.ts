@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { ProposalRepository } from '../proposal.repository.js';
 import { ProposalStatus } from '../types/proposal.types.js';
 
@@ -16,10 +17,10 @@ export class ChangeProposalStatusTool extends FunctionTool<any> {
         'Transition a proposal to a new status. Automatically sets sentAt/viewedAt/acceptedAt/rejectedAt timestamps when relevant.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         status: z.enum(STATUSES),
       }),
       execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
         const status: ProposalStatus = input.status;
         const update: any = { status };
         const now = new Date().toISOString();
@@ -27,7 +28,7 @@ export class ChangeProposalStatusTool extends FunctionTool<any> {
         if (status === 'viewed') update.viewedAt = now;
         if (status === 'accepted') update.acceptedAt = now;
         if (status === 'rejected') update.rejectedAt = now;
-        return this.proposalRepository.updateProposal(input.proposalId, input.tenantId, update);
+        return this.proposalRepository.updateProposal(input.proposalId, tenantId, update);
       },
     });
   }

@@ -8,7 +8,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InMemoryRunner } from '@google/adk';
+
+import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
+import { runWithAiContext } from '../../context/ai-request-context.js';
 
 import {
   DEFAULT_AI_CHAT_HISTORY_LIMIT,
@@ -24,7 +26,6 @@ import { CommunicationAgentService } from '../communication/communication.servic
 import { RagAgent } from '../rag/rag.agent.js';
 import { RagSourceMetadata } from '../rag/types/rag.types.js';
 import { TaskAgent } from '../task/task.agent.js';
-import { TaskService } from '../task/task.service.js';
 import {
   TaskAgentResponse,
   TaskRecord,
@@ -67,7 +68,6 @@ export class MasterAgentService {
     private readonly communicationAgentService: CommunicationAgentService,
     private readonly ragAgent: RagAgent,
     private readonly taskAgent: TaskAgent,
-    private readonly taskService: TaskService,
     private readonly proposalAgent: ProposalAgent,
     private readonly conversationRepository: ConversationRepository,
     private readonly configService: ConfigService,
@@ -154,11 +154,8 @@ export class MasterAgentService {
       trimmedMessage,
     );
 
-    const aiResult = await this.executeExistingAi(
-      tenantId,
-      userId,
-      trimmedMessage,
-      history,
+    const aiResult = await runWithAiContext({ tenantId, userId }, () =>
+      this.executeExistingAi(tenantId, userId, trimmedMessage, history),
     );
 
     await this.persistAssistantMessage(tenantId, conversation.id, aiResult);
@@ -352,7 +349,7 @@ export class MasterAgentService {
 
     if (routeTarget === 'task_agent') {
       try {
-        const taskResult = await this.taskService.processNaturalLanguage(
+        const taskResult = await this.taskAgent.delegateNaturalLanguage(
           trimmedMessage,
           { tenantId, userId },
         );
@@ -375,8 +372,9 @@ export class MasterAgentService {
 
     if (routeTarget === 'rag_agent' && this.routeAgents.rag_agent) {
       try {
-        const ragResult = await this.ragAgent.answerQuery(
+        const ragResult = await this.ragAgent.delegateQuery(
           tenantId,
+          userId,
           trimmedMessage,
         );
 
@@ -396,41 +394,21 @@ export class MasterAgentService {
     }
 
     const modelInput = this.formatHistoryForModel(history, trimmedMessage);
-    const runner = new InMemoryRunner({
-      appName: 'master-agent',
-      agent: this.masterAgent,
-    });
 
     let finalText = '';
     const branches = new Set<string>();
     const authors = new Set<string>();
 
     try {
-      for await (const event of runner.runEphemeral({
-        userId: tenantId,
-        newMessage: {
-          parts: [{ text: modelInput }],
-        },
-      })) {
-        if (event.branch) {
-          branches.add(event.branch);
-        }
-
-        if (event.author) {
-          authors.add(event.author);
-        }
-
-        if (event.content?.parts?.length) {
-          const text = event.content.parts
-            .filter((part: any) => part?.text)
-            .map((part: any) => part.text)
-            .join('');
-
-          if (text.trim()) {
-            finalText = text;
-          }
-        }
-      }
+      const adkResult = await runAdkEphemeral({
+        appName: 'master-agent',
+        agent: this.masterAgent,
+        userId,
+        message: modelInput,
+      });
+      finalText = adkResult.finalText;
+      adkResult.authors.forEach((author) => authors.add(author));
+      adkResult.branches.forEach((branch) => branches.add(branch));
     } catch (error) {
       this.logger.error('MasterAgent invoke error', error as Error);
       throw new InternalServerErrorException(

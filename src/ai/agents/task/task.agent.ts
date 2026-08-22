@@ -2,10 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import { UserRepository } from '../../../modules/user/user.repository';
+import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
 import { TaskCrmResolver } from './resolve-crm-entities.js';
-import { getTrustedTaskContext } from './task-request-context.js';
+import { getTrustedTaskContext, runWithTaskContext } from './task-request-context.js';
 import { TaskRepository } from './task.repository.js';
+import { TaskService } from './task.service.js';
+import type { TaskAgentResponse, TaskContext } from './types/task.types.js';
 
 @Injectable()
 export class TaskAgent {
@@ -13,14 +16,12 @@ export class TaskAgent {
 
   constructor(
     private readonly taskRepository: TaskRepository,
+    private readonly taskService: TaskService,
     private readonly configService: ConfigService,
     private readonly userRepository: UserRepository,
     private readonly crmResolver: TaskCrmResolver,
   ) {
-    const modelName = this.configService.get<string>(
-      'GEMINI_MODEL',
-      'gemini-2.0-flash',
-    );
+    const modelName = resolveAdkModelName(this.configService);
     const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
 
     if (!apiKey) {
@@ -227,5 +228,18 @@ export class TaskAgent {
 
   getAgentInstance() {
     return this.agent;
+  }
+
+  /**
+   * Master delegation entry point. Deterministic NL parsing stays in TaskService;
+   * trusted tenant/user identity is bound server-side before any tool or service call.
+   */
+  async delegateNaturalLanguage(
+    message: string,
+    context: TaskContext,
+  ): Promise<TaskAgentResponse> {
+    return runWithTaskContext(context, () =>
+      this.taskService.processNaturalLanguage(message, context),
+    );
   }
 }

@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../context/ai-request-context.js';
+import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { ProposalRepository } from './proposal.repository.js';
 import {
   ProposalAgentResponse,
@@ -19,7 +21,7 @@ export class ProposalAgent {
     private readonly proposalRepository: ProposalRepository,
     private readonly configService: ConfigService,
   ) {
-    const modelName = this.configService.get<string>('GEMINI_MODEL', 'gemini-2.0-flash');
+    const modelName = resolveAdkModelName(this.configService);
     const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
 
     if (!apiKey) {
@@ -34,8 +36,6 @@ export class ProposalAgent {
       description:
         'Create a tenant-scoped business proposal linked to a prospect. Always require prospectId and title.',
       parameters: z.object({
-        tenantId: z.string(),
-        createdBy: z.string(),
         prospectId: z.string(),
         title: z.string().min(3),
         description: z.string().optional(),
@@ -44,7 +44,27 @@ export class ProposalAgent {
         currency: z.string().length(3).optional(),
         validUntil: z.string().optional(),
       }),
-      execute: async (input: any) => this.proposalRepository.createProposal(input),
+      execute: async (input: any) => {
+        const context = getTrustedAiContext();
+        const prospect = await this.proposalRepository.getProspect(
+          input.prospectId,
+          context.tenantId,
+        );
+        if (!prospect) {
+          throw new BadRequestException('Prospect not found for this tenant');
+        }
+        return this.proposalRepository.createProposal({
+          tenantId: context.tenantId,
+          createdBy: context.userId,
+          prospectId: input.prospectId,
+          title: input.title,
+          description: input.description,
+          requirements: input.requirements,
+          price: input.price,
+          currency: input.currency,
+          validUntil: input.validUntil,
+        });
+      },
     });
 
     const getProposalTool = new FunctionTool({
@@ -52,10 +72,11 @@ export class ProposalAgent {
       description: 'Fetch a single tenant-scoped proposal by id.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
       }),
-      execute: async (input: any) =>
-        this.proposalRepository.getProposal(input.proposalId, input.tenantId),
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        return this.proposalRepository.getProposal(input.proposalId, tenantId);
+      },
     });
 
     const listProposalsTool = new FunctionTool({
@@ -63,19 +84,20 @@ export class ProposalAgent {
       description:
         'List tenant-scoped proposals. Optionally filter by status, prospectId, or search by title/description.',
       parameters: z.object({
-        tenantId: z.string(),
         status: z
           .enum(['draft', 'generated', 'sent', 'viewed', 'accepted', 'rejected', 'expired', 'cancelled'])
           .optional(),
         prospectId: z.string().optional(),
         search: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.proposalRepository.listProposals(input.tenantId, {
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        return this.proposalRepository.listProposals(tenantId, {
           status: input.status,
           prospectId: input.prospectId,
           search: input.search,
-        }),
+        });
+      },
     });
 
     const updateProposalTool = new FunctionTool({
@@ -84,7 +106,6 @@ export class ProposalAgent {
         'Update a tenant-scoped proposal (title, description, requirements, price, currency, validUntil, content, status).',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         prospectId: z.string().optional(),
         title: z.string().min(3).optional(),
         description: z.string().optional(),
@@ -97,8 +118,11 @@ export class ProposalAgent {
         validUntil: z.string().optional(),
         content: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.proposalRepository.updateProposal(input.proposalId, input.tenantId, input),
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        const { proposalId, ...patch } = input;
+        return this.proposalRepository.updateProposal(proposalId, tenantId, patch);
+      },
     });
 
     const generateProposalTool = new FunctionTool({
@@ -107,21 +131,22 @@ export class ProposalAgent {
         'AI-generate the full professional proposal content using prospect/company/brand/knowledge context and update the proposal record.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         prospectId: z.string().optional(),
         instructions: z.string().optional(),
         tone: z.enum(['professional', 'friendly', 'formal', 'concise', 'persuasive']).optional(),
         length: z.enum(['short', 'medium', 'detailed']).optional(),
       }),
-      execute: async (input: any) =>
-        this.generateWithGemini(
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        return this.generateWithGemini(
           input.proposalId,
-          input.tenantId,
+          tenantId,
           input.prospectId,
           input.instructions,
           input.tone,
           input.length,
-        ),
+        );
+      },
     });
 
     const changeProposalStatusTool = new FunctionTool({
@@ -130,10 +155,10 @@ export class ProposalAgent {
         'Transition a proposal to a new status. Sets sentAt/viewedAt/acceptedAt/rejectedAt timestamps automatically when applicable.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         status: z.enum(['draft', 'generated', 'sent', 'viewed', 'accepted', 'rejected', 'expired', 'cancelled']),
       }),
       execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
         const status: ProposalStatus = input.status;
         const update: any = { status };
         const now = new Date().toISOString();
@@ -141,7 +166,7 @@ export class ProposalAgent {
         if (status === 'viewed') update.viewedAt = now;
         if (status === 'accepted') update.acceptedAt = now;
         if (status === 'rejected') update.rejectedAt = now;
-        return this.proposalRepository.updateProposal(input.proposalId, input.tenantId, update);
+        return this.proposalRepository.updateProposal(input.proposalId, tenantId, update);
       },
     });
 
@@ -165,7 +190,7 @@ export class ProposalAgent {
         apiKey,
       }),
       instruction:
-        "You are a professional, tenant-aware business proposal assistant for a B2B AI Business Agent platform. Use the provided tools to create, read, list, update, AI-generate, and transition proposals. CRITICAL SECURITY: Never cross tenant boundaries — every tool call must include the provided tenantId. When a user says 'create a proposal' without full details, prefer to: 1) extract prospect/company names, 2) if no prospect id given, politely ask for a valid prospectId (do not guess or fabricate IDs), 3) always populate title, requirements, and price from the user's wording. When the user asks to 'generate' a proposal, call generate_proposal (not update) so context gathering + LLM content creation run. Mark proposals generated after AI fills content, not before. Do not hallucinate pricing, company facts, or service lists — rely on provided context from knowledge bases, brand, company, prospect, and lead records. If facts are missing, flag them clearly in the generated content with [TBD] markers and state which data is missing so the user can fill it in.",
+        "You are a professional, tenant-aware business proposal assistant for a B2B AI Business Agent platform. Use the provided tools to create, read, list, update, AI-generate, and transition proposals. CRITICAL SECURITY: Never cross tenant boundaries — tenant and user identity are enforced server-side from the authenticated session, not from tool arguments. When a user says 'create a proposal' without full details, prefer to: 1) extract prospect/company names, 2) if no prospect id given, politely ask for a valid prospectId (do not guess or fabricate IDs), 3) always populate title, requirements, and price from the user's wording. When the user asks to 'generate' a proposal, call generate_proposal (not update) so context gathering + LLM content creation run. Mark proposals generated after AI fills content, not before. Do not hallucinate pricing, company facts, or service lists — rely on provided context from knowledge bases, brand, company, prospect, and lead records. If facts are missing, flag them clearly in the generated content with [TBD] markers and state which data is missing so the user can fill it in.",
       tools,
     });
   }

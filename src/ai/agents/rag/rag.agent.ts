@@ -4,6 +4,8 @@ import { Gemini, FunctionTool, LlmAgent } from '@google/adk';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 
+import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
+import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { RagTools } from './rag.tools';
 import {
   RagQueryOptions,
@@ -27,10 +29,7 @@ export class RagAgent {
     private readonly ragTools: RagTools,
     private readonly configService: ConfigService,
   ) {
-    this.modelName = this.configService.get<string>(
-      'GEMINI_MODEL',
-      'gemini-2.0-flash',
-    );
+    this.modelName = resolveAdkModelName(this.configService);
     this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? '';
 
     if (!this.apiKey) {
@@ -50,15 +49,8 @@ export class RagAgent {
         query: z.string(),
         topK: z.number().int().min(1).max(10).optional(),
       }),
-      execute: async (input, context: any) => {
-        const tenantId =
-          context?.userId ||
-          context?.session?.userId ||
-          context?.invocationContext?.userId;
-
-        if (!tenantId || typeof tenantId !== 'string') {
-          throw new Error('Tenant context is required for knowledge search');
-        }
+      execute: async (input) => {
+        const { tenantId } = getTrustedAiContext();
 
         const chunks = await this.ragTools.searchKnowledge(
           tenantId,
@@ -82,6 +74,21 @@ export class RagAgent {
 
   getAgentInstance() {
     return this.agent;
+  }
+
+  /**
+   * Master delegation entry point. Retrieval and generation stay in RagAgent;
+   * tenant scope comes from trusted JWT context, never from model arguments.
+   */
+  async delegateQuery(
+    tenantId: string,
+    userId: string,
+    query: string,
+    options: RagQueryOptions = {},
+  ): Promise<RagResponse> {
+    return runWithAiContext({ tenantId, userId }, () =>
+      this.answerQuery(tenantId, query, options),
+    );
   }
 
   async answerQuery(

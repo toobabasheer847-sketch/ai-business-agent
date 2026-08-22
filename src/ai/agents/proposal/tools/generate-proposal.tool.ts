@@ -3,6 +3,7 @@ import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -17,21 +18,22 @@ export class GenerateProposalTool extends FunctionTool<any> {
         'Gather prospect, company, lead, brand and knowledge-base context, then AI-generate the professional proposal content and store it. Set status to generated.',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         prospectId: z.string().optional(),
         instructions: z.string().optional(),
         tone: z.enum(['professional', 'friendly', 'formal', 'concise', 'persuasive']).optional(),
         length: z.enum(['short', 'medium', 'detailed']).optional(),
       }),
-      execute: async (input: any) =>
-        this.generateWithGemini(
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        return this.generateWithGemini(
           input.proposalId,
-          input.tenantId,
+          tenantId,
           input.prospectId,
           input.instructions,
           input.tone,
           input.length,
-        ),
+        );
+      },
     });
   }
 

@@ -82,13 +82,11 @@ describe('MasterAgentService', () => {
   };
   const ragAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'rag_agent' }),
-    answerQuery: jest.fn(),
+    delegateQuery: jest.fn(),
   };
   const taskAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'task_agent' }),
-  };
-  const taskService = {
-    processNaturalLanguage: jest.fn(),
+    delegateNaturalLanguage: jest.fn(),
   };
   const proposalAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
@@ -116,8 +114,8 @@ describe('MasterAgentService', () => {
 
   beforeEach(() => {
     mockRunEphemeral.mockReset();
-    ragAgent.answerQuery.mockReset();
-    taskService.processNaturalLanguage.mockReset();
+    ragAgent.delegateQuery.mockReset();
+    taskAgent.delegateNaturalLanguage.mockReset();
     (InMemoryRunner as any).lastOptions = null;
 
     conversationRepository = {
@@ -137,7 +135,6 @@ describe('MasterAgentService', () => {
       communicationAgentService as any,
       ragAgent as any,
       taskAgent as any,
-      taskService as any,
       proposalAgent as any,
       conversationRepository as any,
       configService as any,
@@ -277,7 +274,7 @@ describe('MasterAgentService', () => {
   });
 
   it('persists the assistant message and returns conversationId', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'create',
       message: 'Task created successfully.',
       data: {
@@ -312,7 +309,7 @@ describe('MasterAgentService', () => {
   });
 
   it('stores delegation, sources, and usedKnowledge in assistant metadata', async () => {
-    ragAgent.answerQuery.mockResolvedValue({
+    ragAgent.delegateQuery.mockResolvedValue({
       answer: 'The uploaded document contains a dummy PDF file.',
       sources: [
         {
@@ -375,7 +372,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes knowledge questions through RagAgent.answerQuery with the current user query', async () => {
-    ragAgent.answerQuery.mockResolvedValue({
+    ragAgent.delegateQuery.mockResolvedValue({
       answer: 'The uploaded document contains a dummy PDF file.',
       sources: [
         {
@@ -394,7 +391,7 @@ describe('MasterAgentService', () => {
     const query = 'What information is contained in the uploaded document?';
     const result = await service.invoke(tenantId, userId, query, conversationId);
 
-    expect(ragAgent.answerQuery).toHaveBeenCalledWith(tenantId, query);
+    expect(ragAgent.delegateQuery).toHaveBeenCalledWith(tenantId, userId, query);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
     expect(result).toEqual({
       conversationId,
@@ -413,7 +410,7 @@ describe('MasterAgentService', () => {
   });
 
   it('keeps RAG tenant isolation unchanged', async () => {
-    ragAgent.answerQuery.mockResolvedValue({
+    ragAgent.delegateQuery.mockResolvedValue({
       answer: 'Tenant scoped answer',
       sources: [],
       usedKnowledge: true,
@@ -425,9 +422,10 @@ describe('MasterAgentService', () => {
       'What information is contained in the uploaded document?',
     );
 
-    expect(ragAgent.answerQuery).toHaveBeenCalledTimes(1);
-    expect(ragAgent.answerQuery.mock.calls[0][0]).toBe(tenantId);
-    expect(ragAgent.answerQuery.mock.calls[0][0]).not.toBe(otherTenantId);
+    expect(ragAgent.delegateQuery).toHaveBeenCalledTimes(1);
+    expect(ragAgent.delegateQuery.mock.calls[0][0]).toBe(tenantId);
+    expect(ragAgent.delegateQuery.mock.calls[0][1]).toBe(userId);
+    expect(ragAgent.delegateQuery.mock.calls[0][0]).not.toBe(otherTenantId);
   });
 
   it('caps history loading at the maximum of 50', async () => {
@@ -445,7 +443,7 @@ describe('MasterAgentService', () => {
   });
 
   it('returns usedKnowledge=false for unknown knowledge questions', async () => {
-    ragAgent.answerQuery.mockResolvedValue({
+    ragAgent.delegateQuery.mockResolvedValue({
       answer:
         "I couldn't find enough relevant information in the knowledge base to answer that question.",
       sources: [],
@@ -482,8 +480,8 @@ describe('MasterAgentService', () => {
     );
 
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
-    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
-    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+    expect(taskAgent.delegateNaturalLanguage).not.toHaveBeenCalled();
+    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
     expect(result).toEqual({
       conversationId,
       response: 'I can help draft that email.',
@@ -496,7 +494,7 @@ describe('MasterAgentService', () => {
       service.invoke('', userId, 'Show me my tasks'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
-    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
   });
 
   it('rejects a missing user context', async () => {
@@ -510,7 +508,7 @@ describe('MasterAgentService', () => {
       service.invoke(tenantId, userId, '   '),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
-    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
   });
 
   it('routes greetings through the Master RoutedAgent instead of RAG', async () => {
@@ -518,7 +516,7 @@ describe('MasterAgentService', () => {
 
     const result = await service.invoke(tenantId, userId, 'hello');
 
-    expect(ragAgent.answerQuery).not.toHaveBeenCalled();
+    expect(ragAgent.delegateQuery).not.toHaveBeenCalled();
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       conversationId,
@@ -528,7 +526,7 @@ describe('MasterAgentService', () => {
   });
 
   it('hides RAG execution errors from the client', async () => {
-    ragAgent.answerQuery.mockRejectedValue(
+    ragAgent.delegateQuery.mockRejectedValue(
       new Error('DATABASE_URL contains secret'),
     );
 
@@ -559,11 +557,11 @@ describe('MasterAgentService', () => {
     await expect(
       service.invoke(tenantId, userId, 'hello'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
-    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+    expect(taskAgent.delegateNaturalLanguage).not.toHaveBeenCalled();
   });
 
   it('routes task create through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'create',
       message: 'Task created successfully.',
       data: {
@@ -582,12 +580,12 @@ describe('MasterAgentService', () => {
 
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('Call Ahmed');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledTimes(1);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
   });
 
   it('routes task list through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'list',
       message: 'Tasks retrieved.',
       data: [
@@ -607,7 +605,7 @@ describe('MasterAgentService', () => {
 
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('Call Ahmed');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Show my pending tasks.',
       { tenantId, userId },
     );
@@ -615,7 +613,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes CRM-aware task list through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'list',
       message: 'Tasks retrieved for ABC Technologies.',
       data: [
@@ -637,7 +635,7 @@ describe('MasterAgentService', () => {
 
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('ABC Technologies');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Show my tasks for ABC',
       { tenantId, userId },
     );
@@ -645,7 +643,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes task complete through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'complete',
       message: 'Task completed.',
       data: { title: 'ABC follow-up', status: 'completed', priority: 'medium' },
@@ -659,12 +657,12 @@ describe('MasterAgentService', () => {
 
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('completed');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledTimes(1);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
   });
 
   it('routes task priority updates through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'update',
       message: 'Task updated.',
       data: { title: 'ABC', priority: 'high', status: 'pending' },
@@ -678,12 +676,12 @@ describe('MasterAgentService', () => {
 
     expect(result.delegation).toBe('task');
     expect(result.response).toContain('high');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledTimes(1);
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledTimes(1);
     expect(mockRunEphemeral).not.toHaveBeenCalled();
   });
 
   it('passes JWT tenant and user to TaskService, not identity from the message', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'create',
       message: 'Task created successfully.',
       data: { title: 'Call Ahmed', priority: 'medium', status: 'pending' },
@@ -695,11 +693,11 @@ describe('MasterAgentService', () => {
       'Create a task for tenant-B createdBy attacker-user',
     );
 
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Create a task for tenant-B createdBy attacker-user',
       { tenantId, userId },
     );
-    const context = taskService.processNaturalLanguage.mock.calls[0][1];
+    const context = taskAgent.delegateNaturalLanguage.mock.calls[0][1];
     expect(context.tenantId).toBe(tenantId);
     expect(context.tenantId).not.toBe('tenant-B');
     expect(context.userId).toBe(userId);
@@ -708,7 +706,7 @@ describe('MasterAgentService', () => {
   });
 
   it('returns TaskService clarification without guessing or calling ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'clarify',
       message: 'I found 2 matching tasks. Which one do you mean?',
       data: [
@@ -730,7 +728,7 @@ describe('MasterAgentService', () => {
   });
 
   it('does not fall back to ADK when TaskService fails', async () => {
-    taskService.processNaturalLanguage.mockRejectedValue(
+    taskAgent.delegateNaturalLanguage.mockRejectedValue(
       new Error('database unavailable'),
     );
 
@@ -745,12 +743,30 @@ describe('MasterAgentService', () => {
 
     await service.invoke(tenantId, userId, 'hello');
 
-    expect(taskService.processNaturalLanguage).not.toHaveBeenCalled();
+    expect(taskAgent.delegateNaturalLanguage).not.toHaveBeenCalled();
     expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
+    expect(mockRunEphemeral).toHaveBeenCalledWith(
+      expect.objectContaining({ userId }),
+    );
+    expect(mockRunEphemeral.mock.calls[0][0].userId).not.toBe(tenantId);
+  });
+
+  it('distinguishes tenant A user A from tenant A user B in ADK runner identity', async () => {
+    mockChatEvents();
+
+    await service.invoke(tenantId, userId, 'hello');
+    expect(mockRunEphemeral.mock.calls[0][0].userId).toBe(userId);
+
+    mockRunEphemeral.mockClear();
+    mockChatEvents();
+
+    await service.invoke(tenantId, otherUserId, 'hello');
+    expect(mockRunEphemeral.mock.calls[0][0].userId).toBe(otherUserId);
+    expect(mockRunEphemeral.mock.calls[0][0].userId).not.toBe(userId);
   });
 
   it('routes a company follow-up through TaskService with JWT identity', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'create',
       message: 'Task created: Follow up with ABC Technologies — due 2026-08-21.',
       data: {
@@ -768,7 +784,7 @@ describe('MasterAgentService', () => {
       'Create a task to follow up with ABC company tomorrow.',
     );
 
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Create a task to follow up with ABC company tomorrow.',
       { tenantId, userId },
     );
@@ -778,20 +794,20 @@ describe('MasterAgentService', () => {
   });
 
   it('routes overdue and remind-me task phrasing through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'list',
       message: 'Tasks retrieved.',
       data: [{ title: 'Follow up', status: 'pending', priority: 'medium' }],
     });
 
     await service.invoke(tenantId, userId, 'Show my overdue tasks');
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Show my overdue tasks',
       { tenantId, userId },
     );
     expect(mockRunEphemeral).not.toHaveBeenCalled();
 
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'create',
       message: 'Task created successfully.',
       data: { title: 'Call Ahmed', status: 'pending', priority: 'medium' },
@@ -802,7 +818,7 @@ describe('MasterAgentService', () => {
       userId,
       'Remind me to call Ahmed tomorrow at 3 PM',
     );
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Remind me to call Ahmed tomorrow at 3 PM',
       { tenantId, userId },
     );
@@ -810,7 +826,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes task analytics phrasing through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'analytics',
       message: 'You have 4 overdue tasks.',
       data: { summary: { total: 20, overdue: 4 }, completionRate: 35 },
@@ -822,7 +838,7 @@ describe('MasterAgentService', () => {
       'How many tasks are overdue?',
     );
 
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'How many tasks are overdue?',
       { tenantId, userId },
     );
@@ -832,7 +848,7 @@ describe('MasterAgentService', () => {
   });
 
   it('routes task report phrasing through TaskService and skips ADK', async () => {
-    taskService.processNaturalLanguage.mockResolvedValue({
+    taskAgent.delegateNaturalLanguage.mockResolvedValue({
       action: 'analytics',
       message: 'Task report: 20 total.',
       data: { summary: { total: 20 } },
@@ -844,7 +860,7 @@ describe('MasterAgentService', () => {
       'Give me a report of my tasks.',
     );
 
-    expect(taskService.processNaturalLanguage).toHaveBeenCalledWith(
+    expect(taskAgent.delegateNaturalLanguage).toHaveBeenCalledWith(
       'Give me a report of my tasks.',
       { tenantId, userId },
     );
