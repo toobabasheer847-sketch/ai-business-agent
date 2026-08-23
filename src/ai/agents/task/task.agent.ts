@@ -13,6 +13,8 @@ import type { TaskAgentResponse, TaskContext } from './types/task.types.js';
 @Injectable()
 export class TaskAgent {
   private readonly agent: any | null;
+  private readonly apiKey: string | null;
+  private readonly adkTools: any[] | null;
 
   constructor(
     private readonly taskRepository: TaskRepository,
@@ -21,14 +23,32 @@ export class TaskAgent {
     private readonly userRepository: UserRepository,
     private readonly crmResolver: TaskCrmResolver,
   ) {
-    const modelName = resolveAdkModelName(this.configService);
-    const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
+    this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? null;
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       this.agent = null;
+      this.adkTools = null;
       return;
     }
 
+    this.adkTools = this.buildTools();
+    const modelName = resolveAdkModelName(this.configService);
+    this.agent = this.buildLlmAgent(modelName);
+  }
+
+  /**
+   * Builds a fresh ADK LlmAgent for Master routing. Each Master Agent instance
+   * must receive its own child agent — ADK agents can have only one parent.
+   */
+  buildLlmAgent(modelName: string): any | null {
+    if (!this.apiKey || !this.adkTools) {
+      return null;
+    }
+
+    return this.createAgent(modelName, this.apiKey, this.adkTools);
+  }
+
+  private buildTools(): any[] {
     const { FunctionTool } = require('@google/adk');
 
     const createTaskTool = new FunctionTool({
@@ -201,14 +221,14 @@ export class TaskAgent {
       },
     });
 
-    this.agent = this.createAgent(modelName, apiKey, [
+    return [
       createTaskTool,
       getTaskTool,
       listTasksTool,
       updateTaskTool,
       completeTaskTool,
       cancelTaskTool,
-    ]);
+    ];
   }
 
   private createAgent(modelName: string, apiKey: string, tools: any[]) {

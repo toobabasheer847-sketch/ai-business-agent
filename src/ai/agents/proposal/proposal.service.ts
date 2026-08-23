@@ -14,6 +14,7 @@ import { ProposalQueryDto } from './dto/proposal-query.dto.js';
 import { GenerateProposalDto } from './dto/generate-proposal.dto.js';
 import { ChangeProposalStatusDto } from './dto/change-proposal-status.dto.js';
 import { ProposalAgent } from './proposal-agent.js';
+import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
 import {
   ProposalContext,
@@ -28,6 +29,7 @@ export class ProposalService {
   constructor(
     private readonly proposalAgent: ProposalAgent,
     private readonly proposalRepository: ProposalRepository,
+    private readonly proposalDelivery: ProposalDeliveryService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -225,6 +227,16 @@ export class ProposalService {
     const newStatus = dto.status as ProposalStatus;
     const oldStatus = existing.status;
 
+    let delivery: { messageId: string; to: string; fromEmail: string } | undefined;
+
+    if (newStatus === 'sent' && oldStatus !== 'sent') {
+      delivery = await this.proposalDelivery.sendProposalEmail({
+        proposal: existing,
+        tenantId: context.tenantId,
+        fromEmail: dto.fromEmail,
+      });
+    }
+
     const update: any = { status: newStatus };
     const now = new Date().toISOString();
     if (newStatus === 'sent') update.sentAt = now;
@@ -240,6 +252,13 @@ export class ProposalService {
     await this.audit(context, 'proposal.status_changed', proposalId, `Changed proposal status`, {
       from: oldStatus,
       to: newStatus,
+      ...(delivery
+        ? {
+            emailMessageId: delivery.messageId,
+            emailedTo: delivery.to,
+            emailedFrom: delivery.fromEmail,
+          }
+        : {}),
     });
 
     return updated;

@@ -23,7 +23,7 @@ import {
   ConversationRepository,
 } from '../../../modules/conversation/conversation.repository';
 import { MasterSettingsService } from '../../../modules/master-settings/master-settings.service';
-import { createMasterAgent, resolveMasterRoute } from './master.agent.js';
+import { resolveMasterRoute } from './master.agent.js';
 import { CommunicationAgentService } from '../communication/communication.service.js';
 import { RagAgent } from '../rag/rag.agent.js';
 import { RagSourceMetadata } from '../rag/types/rag.types.js';
@@ -63,7 +63,6 @@ type HistoryMessage = {
 @Injectable()
 export class MasterAgentService {
   private readonly logger = new Logger(MasterAgentService.name);
-  private readonly masterAgent: any;
   private readonly routeAgents: Record<string, unknown>;
 
   constructor(
@@ -77,15 +76,12 @@ export class MasterAgentService {
     private readonly adkAgentFactory: AdkAgentFactoryService,
   ) {
     const communicationAgent = this.communicationAgentService.getAgent();
-    const ragAgentInstance = this.ragAgent.getAgentInstance?.();
-    const taskAgentInstance = this.taskAgent.getAgentInstance?.();
-    const proposalAgentInstance = this.proposalAgent.getAgentInstance?.();
+    const hasGemini = !!this.configService.get<string>('GOOGLE_GENAI_API_KEY');
 
     const missingAgents: string[] = [];
     if (!communicationAgent) missingAgents.push('communication_agent');
-    if (!ragAgentInstance) missingAgents.push('rag_agent');
-    if (!taskAgentInstance) missingAgents.push('task_agent');
-    if (!proposalAgentInstance) missingAgents.push('proposal_agent');
+    if (!hasGemini) missingAgents.push('rag_agent');
+    if (!hasGemini) missingAgents.push('proposal_agent');
 
     if (missingAgents.length) {
       this.logger.warn(
@@ -93,26 +89,23 @@ export class MasterAgentService {
       );
     }
 
+    // Routing placeholders only — ADK hierarchy is built once per model in AdkAgentFactory.
     this.routeAgents = {
-      master_status_agent: {},
-      master_chat_agent: {},
-      communication_agent: communicationAgent ?? undefined,
-      rag_agent: ragAgentInstance ?? undefined,
-      // Always present so task intents route to TaskService even without Gemini/ADK.
-      task_agent: taskAgentInstance ?? { name: 'task_agent' },
-      proposal_agent: proposalAgentInstance ?? undefined,
+      master_status_agent: { name: 'master_status_agent' },
+      master_chat_agent: { name: 'master_chat_agent' },
+      communication_agent: communicationAgent
+        ? { name: 'communication_agent' }
+        : undefined,
+      rag_agent: hasGemini ? { name: 'rag_agent' } : undefined,
+      task_agent: { name: 'task_agent' },
+      proposal_agent: hasGemini ? { name: 'proposal_agent' } : undefined,
     };
-
-    this.masterAgent = createMasterAgent({
-      communicationAgent,
-      ragAgent: ragAgentInstance,
-      taskAgent: taskAgentInstance,
-      proposalAgent: proposalAgentInstance,
-    });
   }
 
-  getAgent() {
-    return this.masterAgent;
+  getAgent(): { name: string } {
+    // Status probe only — do not construct/cache a Master hierarchy here.
+    // Chat builds the tenant-model Master via getMasterAgent(aiModel).
+    return { name: 'master_agent' };
   }
 
   getChatHistoryLimit(): number {

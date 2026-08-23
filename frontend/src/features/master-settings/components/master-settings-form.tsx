@@ -2,6 +2,8 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import {
+  ALLOWED_AI_MODELS,
+  SYSTEM_DEFAULT_AI_MODEL,
   updateMasterSettingsSchema,
   type UpdateMasterSettingsFormValues,
 } from '@/features/master-settings/schemas/master-settings.schemas'
@@ -49,6 +51,14 @@ const CURRENCY_OPTIONS = [
   { value: 'INR', label: 'INR' },
 ] as const
 
+const AI_MODEL_OPTIONS = [
+  { value: SYSTEM_DEFAULT_AI_MODEL, label: 'System default (GEMINI_MODEL)' },
+  ...ALLOWED_AI_MODELS.map((model) => ({
+    value: model,
+    label: model,
+  })),
+] as const
+
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
   value: String(hour),
   label: `${String(hour).padStart(2, '0')}:00`,
@@ -61,6 +71,18 @@ function withCurrentOption(
   if (!current) return [...options]
   if (options.some((option) => option.value === current)) return [...options]
   return [{ value: current, label: current }, ...options]
+}
+
+function normalizeAiModel(
+  value: string | null | undefined,
+): (typeof ALLOWED_AI_MODELS)[number] | typeof SYSTEM_DEFAULT_AI_MODEL {
+  if (!value) {
+    return SYSTEM_DEFAULT_AI_MODEL
+  }
+  if ((ALLOWED_AI_MODELS as readonly string[]).includes(value)) {
+    return value as (typeof ALLOWED_AI_MODELS)[number]
+  }
+  return SYSTEM_DEFAULT_AI_MODEL
 }
 
 type MasterSettingsFormProps = {
@@ -85,7 +107,7 @@ export function MasterSettingsForm({
       defaultLanguage: settings.defaultLanguage,
       defaultTimezone: settings.defaultTimezone,
       defaultCurrency: settings.defaultCurrency,
-      aiModel: settings.aiModel ?? '',
+      aiModel: normalizeAiModel(settings.aiModel),
       maxConversationHistory: settings.maxConversationHistory,
       enableNotifications: settings.enableNotifications,
       notificationEmail: settings.notificationEmail ?? '',
@@ -216,17 +238,35 @@ export function MasterSettingsForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="ai-model">AI model</Label>
-            <Input
-              id="ai-model"
-              placeholder="e.g. gemini-2.0-flash"
-              disabled={submitting}
-              {...register('aiModel')}
+            <Controller
+              name="aiModel"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  value={field.value || SYSTEM_DEFAULT_AI_MODEL}
+                  onValueChange={field.onChange}
+                  disabled={submitting}
+                >
+                  <SelectTrigger id="ai-model">
+                    <SelectValue placeholder="System default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AI_MODEL_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             />
             {errors.aiModel && (
               <p className="text-sm text-destructive">{errors.aiModel.message}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Leave blank to use the system default.
+              System default uses the server GEMINI_MODEL env. Only allowlisted
+              Gemini models can be selected. Changing this affects only your
+              tenant.
             </p>
           </div>
           <div className="space-y-2">

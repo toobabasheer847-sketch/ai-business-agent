@@ -19,6 +19,7 @@ import {
   useUpdateMasterSettings,
 } from '@/features/master-settings/hooks/use-master-settings'
 import type { UpdateMasterSettingsFormValues } from '@/features/master-settings/schemas/master-settings.schemas'
+import { SYSTEM_DEFAULT_AI_MODEL } from '@/features/master-settings/schemas/master-settings.schemas'
 import type { UpdateMasterSettingsRequest } from '@/features/master-settings/types/master-settings.types'
 
 function MasterSettingsSkeleton() {
@@ -46,7 +47,12 @@ function toUpdatePayload(
     defaultLanguage: values.defaultLanguage.trim(),
     defaultTimezone: values.defaultTimezone.trim(),
     defaultCurrency: values.defaultCurrency.trim(),
-    aiModel: values.aiModel?.trim() ? values.aiModel.trim() : null,
+    aiModel:
+      !values.aiModel ||
+      values.aiModel === SYSTEM_DEFAULT_AI_MODEL ||
+      !values.aiModel.trim()
+        ? null
+        : values.aiModel.trim(),
     maxConversationHistory: values.maxConversationHistory,
     enableNotifications: values.enableNotifications,
     notificationEmail: values.notificationEmail?.trim()
@@ -113,8 +119,8 @@ export function MasterSettingsPage() {
             <CardHeader>
               <CardTitle>Tenant defaults</CardTitle>
               <CardDescription>
-                Updates are saved via PATCH /api/master-settings. Blank AI model or
-                notification email clears those optional fields.
+                Updates are saved via PATCH /api/master-settings. AI model uses an
+                allowlisted Gemini selector; system default clears the override.
               </CardDescription>
             </CardHeader>
             <CardContent>

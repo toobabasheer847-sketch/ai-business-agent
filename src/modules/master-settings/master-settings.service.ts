@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
+import { isAllowedAiModel } from '../../ai/context/allowed-ai-models';
 import { MasterSettingsRepository } from './master-settings.repository';
 import { UpdateMasterSettingsDto } from './dto/update-master-settings.dto';
 
@@ -38,6 +39,16 @@ export class MasterSettingsService {
     ) {
       throw new BadRequestException(
         'businessHoursStart must be less than businessHoursEnd.',
+      );
+    }
+
+    if (
+      dto.aiModel !== undefined &&
+      dto.aiModel !== null &&
+      !isAllowedAiModel(dto.aiModel)
+    ) {
+      throw new BadRequestException(
+        'aiModel is not in the allowlisted set of Gemini models.',
       );
     }
 

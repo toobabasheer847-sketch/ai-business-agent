@@ -1,5 +1,20 @@
 import { z } from 'zod'
 
+/** Mirrors backend ALLOWED_AI_MODELS — keep in sync with src/ai/context/allowed-ai-models.ts */
+export const ALLOWED_AI_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-001',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash-001',
+  'gemini-1.5-pro-001',
+] as const
+
+const SYSTEM_DEFAULT_AI_MODEL = '__system_default__'
+
 const optionalEmail = z
   .string()
   .trim()
@@ -11,12 +26,10 @@ const optionalEmail = z
     'Enter a valid email address',
   )
 
-const optionalAiModel = z
-  .string()
-  .trim()
-  .max(100, 'AI model must be at most 100 characters')
-  .optional()
-  .or(z.literal(''))
+const optionalAiModel = z.enum([
+  SYSTEM_DEFAULT_AI_MODEL,
+  ...ALLOWED_AI_MODELS,
+])
 
 export const updateMasterSettingsSchema = z
   .object({
@@ -66,3 +79,5 @@ export const updateMasterSettingsSchema = z
 export type UpdateMasterSettingsFormValues = z.infer<
   typeof updateMasterSettingsSchema
 >
+
+export { SYSTEM_DEFAULT_AI_MODEL }

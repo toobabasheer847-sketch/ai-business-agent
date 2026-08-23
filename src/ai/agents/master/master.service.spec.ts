@@ -86,10 +86,12 @@ describe('MasterAgentService', () => {
   };
   const taskAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'task_agent' }),
+    buildLlmAgent: jest.fn().mockReturnValue({ name: 'task_agent' }),
     delegateNaturalLanguage: jest.fn(),
   };
   const proposalAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
+    buildLlmAgent: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
   };
   const masterSettingsService = {
     getOrCreate: jest.fn().mockResolvedValue({ aiModel: null }),
@@ -762,13 +764,63 @@ describe('MasterAgentService', () => {
   it('loads tenant master settings and uses tenant aiModel for ADK agents', async () => {
     mockChatEvents();
     masterSettingsService.getOrCreate.mockResolvedValue({
-      aiModel: 'gemini-2.5-pro',
+      aiModel: 'gemini-3.6-flash',
     });
 
     await service.invoke(tenantId, userId, 'hello');
 
     expect(masterSettingsService.getOrCreate).toHaveBeenCalledWith(tenantId);
-    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith('gemini-2.5-pro');
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith('gemini-3.6-flash');
+  });
+
+  it('isolates tenant A and tenant B AI model resolution', async () => {
+    mockChatEvents();
+    masterSettingsService.getOrCreate.mockResolvedValueOnce({
+      aiModel: 'gemini-3.6-flash',
+    });
+
+    await service.invoke(tenantId, userId, 'hello');
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith('gemini-3.6-flash');
+
+    mockRunEphemeral.mockClear();
+    adkAgentFactory.getMasterAgent.mockClear();
+    mockChatEvents();
+    masterSettingsService.getOrCreate.mockResolvedValueOnce({
+      aiModel: 'gemini-1.5-flash',
+    });
+
+    await service.invoke(otherTenantId, otherUserId, 'hello');
+    expect(masterSettingsService.getOrCreate).toHaveBeenCalledWith(otherTenantId);
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith('gemini-1.5-flash');
+    expect(adkAgentFactory.getMasterAgent).not.toHaveBeenCalledWith(
+      'gemini-3.6-flash',
+    );
+  });
+
+  it('passes null aiModel through so factory can fall back to GEMINI_MODEL', async () => {
+    mockChatEvents();
+    masterSettingsService.getOrCreate.mockResolvedValue({ aiModel: null });
+
+    await service.invoke(tenantId, userId, 'hello');
+
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalledWith(null);
+  });
+
+  it('getAgent() returns a status probe without constructing a Master hierarchy', () => {
+    expect(service.getAgent()).toEqual({ name: 'master_agent' });
+    expect(adkAgentFactory.getMasterAgent).not.toHaveBeenCalled();
+  });
+
+  it('handles casual chat such as "hr u" without task delegation or 500 errors', async () => {
+    mockChatEvents();
+
+    const result = await service.invoke(tenantId, userId, 'hr u');
+
+    expect(taskAgent.delegateNaturalLanguage).not.toHaveBeenCalled();
+    expect(adkAgentFactory.getMasterAgent).toHaveBeenCalled();
+    expect(mockRunEphemeral).toHaveBeenCalledTimes(1);
+    expect(result.delegation).toBe('chat');
+    expect(result.response).toContain('Hello');
   });
 
   it('still routes greetings through ADK chat, not TaskService', async () => {

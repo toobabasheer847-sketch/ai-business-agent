@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getTrustedAiContext } from '../../context/ai-request-context.js';
 import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
+import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
 import {
   ProposalAgentResponse,
@@ -16,19 +17,40 @@ import {
 @Injectable()
 export class ProposalAgent {
   private readonly agent: any | null;
+  private readonly apiKey: string | null;
+  private readonly adkTools: any[] | null;
 
   constructor(
     private readonly proposalRepository: ProposalRepository,
+    private readonly proposalDelivery: ProposalDeliveryService,
     private readonly configService: ConfigService,
   ) {
-    const modelName = resolveAdkModelName(this.configService);
-    const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
+    this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? null;
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       this.agent = null;
+      this.adkTools = null;
       return;
     }
 
+    this.adkTools = this.buildTools();
+    const modelName = resolveAdkModelName(this.configService);
+    this.agent = this.buildLlmAgent(modelName);
+  }
+
+  /**
+   * Builds a fresh ADK LlmAgent for Master routing. Each Master Agent instance
+   * must receive its own child agent — ADK agents can have only one parent.
+   */
+  buildLlmAgent(modelName: string): any | null {
+    if (!this.apiKey || !this.adkTools) {
+      return null;
+    }
+
+    return this.createAgent(modelName, this.apiKey, this.adkTools);
+  }
+
+  private buildTools(): any[] {
     const { FunctionTool } = require('@google/adk');
 
     const createProposalTool = new FunctionTool({
@@ -152,14 +174,31 @@ export class ProposalAgent {
     const changeProposalStatusTool = new FunctionTool({
       name: 'change_proposal_status',
       description:
-        'Transition a proposal to a new status. Sets sentAt/viewedAt/acceptedAt/rejectedAt timestamps automatically when applicable.',
+        'Transition a proposal to a new status. When status is sent, emails the proposal to the prospect via the authenticated tenant Gmail account, then marks it sent.',
       parameters: z.object({
         proposalId: z.string(),
         status: z.enum(['draft', 'generated', 'sent', 'viewed', 'accepted', 'rejected', 'expired', 'cancelled']),
+        fromEmail: z.string().email().optional(),
       }),
       execute: async (input: any) => {
         const { tenantId } = getTrustedAiContext();
+        const existing = await this.proposalRepository.getProposal(
+          input.proposalId,
+          tenantId,
+        );
+        if (!existing) {
+          return null;
+        }
+
         const status: ProposalStatus = input.status;
+        if (status === 'sent' && existing.status !== 'sent') {
+          await this.proposalDelivery.sendProposalEmail({
+            proposal: existing,
+            tenantId,
+            fromEmail: input.fromEmail,
+          });
+        }
+
         const update: any = { status };
         const now = new Date().toISOString();
         if (status === 'sent') update.sentAt = now;
@@ -170,14 +209,14 @@ export class ProposalAgent {
       },
     });
 
-    this.agent = this.createAgent(modelName, apiKey, [
+    return [
       createProposalTool,
       getProposalTool,
       listProposalsTool,
       updateProposalTool,
       generateProposalTool,
       changeProposalStatusTool,
-    ]);
+    ];
   }
 
   private createAgent(modelName: string, apiKey: string, tools: any[]) {
@@ -297,6 +336,25 @@ export class ProposalAgent {
 
     if (fallback.action === 'change_status' && fallback.data.id) {
       const status: ProposalStatus = fallback.data.status;
+      const existing = await this.proposalRepository.getProposal(
+        fallback.data.id,
+        context.tenantId,
+      );
+      if (!existing) {
+        return {
+          action: 'change_status',
+          data: null,
+          message: 'Proposal not found.',
+        };
+      }
+
+      if (status === 'sent' && existing.status !== 'sent') {
+        await this.proposalDelivery.sendProposalEmail({
+          proposal: existing,
+          tenantId: context.tenantId,
+        });
+      }
+
       const update: any = { status };
       const now = new Date().toISOString();
       if (status === 'sent') update.sentAt = now;
@@ -311,7 +369,11 @@ export class ProposalAgent {
       return {
         action: 'change_status',
         data: updated,
-        message: updated ? `Proposal status changed to ${status}.` : 'Proposal not found.',
+        message: updated
+          ? status === 'sent'
+            ? 'Proposal emailed to the prospect and marked as sent.'
+            : `Proposal status changed to ${status}.`
+          : 'Proposal not found.',
       };
     }
 

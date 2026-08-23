@@ -41,18 +41,24 @@ export class AdkAgentFactoryService {
       { model: modelName },
     );
 
+    // Every Master subagent must be a fresh ADK instance. Cached/shared children
+    // (especially RAG) retain parentAgent and throw on the next RoutedAgent build.
     const agent = createMasterAgent({
       modelName,
       communicationAgent,
-      ragAgent: this.getRagAgent(tenantAiModel),
-      taskAgent: this.taskAgent.getAgentInstance?.(),
-      proposalAgent: this.proposalAgent.getAgentInstance?.(),
+      ragAgent: this.ragAgent.buildLlmAgent(modelName),
+      taskAgent: this.taskAgent.buildLlmAgent(modelName) ?? undefined,
+      proposalAgent: this.proposalAgent.buildLlmAgent(modelName) ?? undefined,
     });
 
     this.masterAgents.set(modelName, agent);
     return agent;
   }
 
+  /**
+   * Standalone RAG ADK agent for deterministic-fallback RAG queries.
+   * Not used as a Master subagent — Master always builds its own fresh rag child.
+   */
   getRagAgent(tenantAiModel?: string | null) {
     const modelName = this.resolveModel(tenantAiModel);
     const cached = this.ragAgents.get(modelName);

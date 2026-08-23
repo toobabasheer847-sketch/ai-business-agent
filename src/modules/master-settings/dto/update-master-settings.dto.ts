@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -8,7 +9,10 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
+
+import { ALLOWED_AI_MODELS } from '../../../ai/context/allowed-ai-models';
 
 export class UpdateMasterSettingsDto {
   /**
@@ -39,13 +43,15 @@ export class UpdateMasterSettingsDto {
   defaultCurrency?: string;
 
   /**
-   * AI model override (e.g. 'gemini-2.0-flash', 'gemini-1.5-pro').
-   * Set to null to revert to the system default.
+   * AI model override from the allowlisted Gemini models.
+   * Set to null to revert to the system default (GEMINI_MODEL).
    */
   @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
+  @IsIn([...ALLOWED_AI_MODELS], {
+    message: `aiModel must be one of: ${ALLOWED_AI_MODELS.join(', ')}`,
+  })
   aiModel?: string | null;
 
   /**
