@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -11,6 +12,7 @@ import {
 } from 'class-validator';
 
 import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task.types';
+import { RECURRENCE_INTERVALS } from '../compute-task-recurrence.js';
 
 export class CreateTaskDto {
   @IsString()
@@ -53,4 +55,16 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   dueAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  recurrenceEnabled?: boolean;
+
+  @IsOptional()
+  @IsIn(RECURRENCE_INTERVALS)
+  recurrenceInterval?: string;
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceEndsAt?: string;
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -7,6 +8,7 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 import { UserRepository } from '../../../modules/user/user.repository';
 import { CreateTaskDto } from './dto/create-task.dto.js';
@@ -51,6 +53,14 @@ import {
   buildUpdateActivities,
 } from './task-activity.diff.js';
 import { TaskRepository } from './task.repository.js';
+import { TaskDependencyRepository } from './task-dependency.repository.js';
+import {
+  computeNextOccurrence,
+  isOccurrenceWithinEnd,
+  isRecurrenceInterval,
+  occurrenceKeyFromDate,
+  type RecurrenceInterval,
+} from './compute-task-recurrence.js';
 
 @Injectable()
 export class TaskService {
@@ -61,6 +71,7 @@ export class TaskService {
     @Optional() private readonly reminders?: TaskReminderService,
     @Optional() private readonly activity?: TaskActivityRepository,
     @Optional() private readonly analytics?: TaskAnalyticsRepository,
+    @Optional() private readonly dependencies?: TaskDependencyRepository,
   ) {}
 
   async createTask(
@@ -80,6 +91,7 @@ export class TaskService {
     });
 
     try {
+      const recurrence = this.buildRecurrenceOnCreate(dto);
       const created = await this.taskRepository.createTask({
         tenantId: context.tenantId,
         createdBy: context.userId,
@@ -87,10 +99,15 @@ export class TaskService {
         description: dto.description,
         priority: dto.priority as TaskPriority | undefined,
         assignedTo,
-        dueAt: this.parseOptionalDueAt(dto.dueAt),
+        dueAt: this.parseOptionalDueAt(dto.dueAt) ?? recurrence.dueAt,
         companyId: crmIds.companyId ?? null,
         prospectId: crmIds.prospectId ?? null,
         leadId: crmIds.leadId ?? null,
+        recurrenceEnabled: recurrence.recurrenceEnabled,
+        recurrenceInterval: recurrence.recurrenceInterval,
+        recurrenceEndsAt: recurrence.recurrenceEndsAt,
+        recurrenceSeriesId: recurrence.recurrenceSeriesId,
+        recurrenceOccurrenceKey: recurrence.recurrenceOccurrenceKey,
       });
       await this.reminders?.scheduleReminder(created);
       await this.recordActivities(
@@ -163,7 +180,13 @@ export class TaskService {
       },
     );
 
-    return this.withReminders(rows);
+    let decorated = await this.withReminders(rows);
+    if (dto.blocked === true) {
+      decorated = decorated.filter((task) => task.isBlocked);
+    } else if (dto.blocked === false) {
+      decorated = decorated.filter((task) => !task.isBlocked);
+    }
+    return decorated;
   }
 
   async getAnalytics(
@@ -394,6 +417,10 @@ export class TaskService {
     this.requireAuthContext(context);
     const existing = await this.requireAccessibleTask(taskId, context);
 
+    if (dto.status === 'completed') {
+      await this.assertTaskNotBlocked(existing, context);
+    }
+
     const assignedTo =
       dto.assignedTo === undefined
         ? undefined
@@ -408,6 +435,8 @@ export class TaskService {
       leadId: dto.leadId,
     });
 
+    const recurrencePatch = this.buildRecurrenceOnUpdate(existing, dto);
+
     const updated = await this.taskRepository.updateTask(
       taskId,
       context.tenantId,
@@ -419,6 +448,7 @@ export class TaskService {
         priority: dto.priority as TaskPriority | undefined,
         assignedTo,
         dueAt: this.parseOptionalDueAt(dto.dueAt),
+        ...recurrencePatch,
         ...crmPatch(crmIds, dto),
       },
     );
@@ -434,6 +464,10 @@ export class TaskService {
       context.userId,
       buildUpdateActivities(existing, updated),
     );
+    if (updated.status === 'completed' && existing.status !== 'completed') {
+      await this.spawnRecurrenceIfNeeded(updated, context);
+      await this.rescheduleDependents(updated, context);
+    }
     return this.withReminder(updated);
   }
 
@@ -443,6 +477,7 @@ export class TaskService {
   ): Promise<TaskRecord> {
     this.requireAuthContext(context);
     const existing = await this.requireAccessibleTask(taskId, context);
+    await this.assertTaskNotBlocked(existing, context);
 
     const updated = await this.taskRepository.updateTask(
       taskId,
@@ -467,7 +502,9 @@ export class TaskService {
     await this.reminders
       ?.disableReminders(updated, context.userId, `task_${updated.status}`)
       .catch(() => undefined);
-    return updated;
+    await this.spawnRecurrenceIfNeeded(updated, context);
+    await this.rescheduleDependents(updated, context);
+    return this.withReminder(updated);
   }
 
   async cancelTask(taskId: string, context: TaskContext): Promise<TaskRecord> {
@@ -549,6 +586,25 @@ export class TaskService {
       return this.executeAnalyticsCommand(command, context, now);
     }
 
+    if (command.action === 'list_blocked') {
+      const blocked = await this.listTasks({ blocked: true, openOnly: true }, context);
+      return {
+        action: 'list_blocked',
+        data: blocked,
+        message:
+          blocked.length === 0
+            ? 'No tasks are blocked by incomplete dependencies.'
+            : `Found ${blocked.length} blocked task(s).`,
+      };
+    }
+
+    if (
+      command.action === 'add_dependency' ||
+      command.action === 'remove_dependency'
+    ) {
+      return this.executeDependencyCommand(command, context);
+    }
+
     if (command.action === 'create') {
       const crm = await this.applyCrmToCreate(command, context);
       if (crm.kind === 'clarify') {
@@ -568,6 +624,9 @@ export class TaskService {
           companyId: crm.companyId,
           prospectId: crm.prospectId,
           leadId: crm.leadId,
+          recurrenceEnabled: command.recurrenceEnabled,
+          recurrenceInterval: command.recurrenceInterval,
+          recurrenceEndsAt: command.recurrenceEndsAt,
         },
         context,
       );
@@ -1249,15 +1308,493 @@ export class TaskService {
   }
 
   private async withReminders(tasks: TaskRecord[]): Promise<TaskRecord[]> {
-    if (!this.reminders || tasks.length === 0) {
-      return tasks;
+    let withStatus = tasks;
+    if (this.reminders && tasks.length > 0) {
+      try {
+        withStatus = await this.reminders.attachReminderStatus(tasks);
+      } catch {
+        withStatus = tasks;
+      }
+    }
+
+    if (!this.dependencies || withStatus.length === 0) {
+      return withStatus.map((task) => ({
+        ...task,
+        isBlocked: false,
+        blockedBy: [],
+        nextOccurrenceAt: this.computeNextOccurrencePreview(task),
+      }));
+    }
+
+    const tenantId = withStatus[0].tenantId;
+    const blockedIds = await this.dependencies.listBlockedTaskIds(
+      tenantId,
+      withStatus.map((task) => task.id),
+    );
+
+    const decorated: TaskRecord[] = [];
+    for (const task of withStatus) {
+      const isBlocked = blockedIds.has(task.id);
+      const blockedBy =
+        isBlocked && withStatus.length === 1
+          ? await this.dependencies.listIncompleteBlockers(tenantId, task.id)
+          : [];
+      decorated.push({
+        ...task,
+        isBlocked,
+        blockedBy,
+        nextOccurrenceAt: this.computeNextOccurrencePreview(task),
+      });
+    }
+    return decorated;
+  }
+
+  private computeNextOccurrencePreview(task: TaskRecord): string | null {
+    if (
+      !task.recurrenceEnabled ||
+      !isRecurrenceInterval(task.recurrenceInterval) ||
+      !task.dueAt
+    ) {
+      return null;
+    }
+    const due = new Date(task.dueAt);
+    if (Number.isNaN(due.getTime())) {
+      return null;
+    }
+    const next = computeNextOccurrence(due, task.recurrenceInterval);
+    if (!isOccurrenceWithinEnd(next, task.recurrenceEndsAt)) {
+      return null;
+    }
+    return next.toISOString();
+  }
+
+  private async assertTaskNotBlocked(
+    task: TaskRecord,
+    context: TaskContext,
+  ): Promise<void> {
+    if (!this.dependencies) {
+      return;
+    }
+    const blockers = await this.dependencies.listIncompleteBlockers(
+      context.tenantId,
+      task.id,
+    );
+    if (blockers.length === 0) {
+      return;
+    }
+    throw new BadRequestException(
+      `Task is blocked by incomplete dependencies: ${blockers
+        .map((item) => item.title)
+        .join(', ')}`,
+    );
+  }
+
+  private buildRecurrenceOnCreate(dto: CreateTaskDto): {
+    dueAt?: Date | string;
+    recurrenceEnabled: boolean;
+    recurrenceInterval: string | null;
+    recurrenceEndsAt: Date | string | null;
+    recurrenceSeriesId: string | null;
+    recurrenceOccurrenceKey: string | null;
+  } {
+    const interval = dto.recurrenceInterval;
+    const enabled = dto.recurrenceEnabled === true || Boolean(interval);
+    if (!enabled) {
+      return {
+        recurrenceEnabled: false,
+        recurrenceInterval: null,
+        recurrenceEndsAt: null,
+        recurrenceSeriesId: null,
+        recurrenceOccurrenceKey: null,
+      };
+    }
+    if (!isRecurrenceInterval(interval ?? '')) {
+      throw new BadRequestException(
+        'Recurrence interval must be daily, weekly, or monthly.',
+      );
+    }
+    const dueAt = this.parseOptionalDueAt(dto.dueAt) ?? new Date().toISOString();
+    const dueDate = new Date(dueAt);
+    return {
+      dueAt,
+      recurrenceEnabled: dto.recurrenceEnabled !== false,
+      recurrenceInterval: interval ?? null,
+      recurrenceEndsAt: this.parseOptionalDueAt(dto.recurrenceEndsAt) ?? null,
+      recurrenceSeriesId: randomUUID(),
+      recurrenceOccurrenceKey: occurrenceKeyFromDate(dueDate),
+    };
+  }
+
+  private buildRecurrenceOnUpdate(
+    existing: TaskRecord,
+    dto: UpdateTaskDto,
+  ): Partial<{
+    recurrenceEnabled: boolean;
+    recurrenceInterval: string | null;
+    recurrenceEndsAt: Date | string | null;
+    recurrenceSeriesId: string | null;
+    recurrenceOccurrenceKey: string | null;
+  }> {
+    if (
+      dto.recurrenceEnabled === undefined &&
+      dto.recurrenceInterval === undefined &&
+      dto.recurrenceEndsAt === undefined
+    ) {
+      return {};
+    }
+
+    const enabled =
+      dto.recurrenceEnabled === undefined
+        ? Boolean(existing.recurrenceEnabled)
+        : dto.recurrenceEnabled;
+
+    if (!enabled) {
+      return {
+        recurrenceEnabled: false,
+        recurrenceInterval: null,
+        recurrenceEndsAt: null,
+        recurrenceSeriesId: null,
+        recurrenceOccurrenceKey: null,
+      };
+    }
+
+    const interval =
+      dto.recurrenceInterval === undefined
+        ? existing.recurrenceInterval
+        : dto.recurrenceInterval;
+    if (!isRecurrenceInterval(interval ?? '')) {
+      throw new BadRequestException(
+        'Recurrence interval must be daily, weekly, or monthly.',
+      );
+    }
+
+    const dueSource =
+      this.parseOptionalDueAt(dto.dueAt) ?? existing.dueAt ?? new Date();
+    const dueDate = new Date(dueSource as string | Date);
+
+    return {
+      recurrenceEnabled: true,
+      recurrenceInterval: interval,
+      recurrenceEndsAt:
+        dto.recurrenceEndsAt === undefined
+          ? existing.recurrenceEndsAt ?? null
+          : this.parseOptionalDueAt(dto.recurrenceEndsAt) ?? null,
+      recurrenceSeriesId: existing.recurrenceSeriesId ?? randomUUID(),
+      recurrenceOccurrenceKey:
+        existing.recurrenceOccurrenceKey ?? occurrenceKeyFromDate(dueDate),
+    };
+  }
+
+  private async spawnRecurrenceIfNeeded(
+    completed: TaskRecord,
+    context: TaskContext,
+  ): Promise<TaskRecord | null> {
+    if (
+      !completed.recurrenceEnabled ||
+      !isRecurrenceInterval(completed.recurrenceInterval) ||
+      !completed.recurrenceSeriesId
+    ) {
+      return null;
+    }
+
+    const from = completed.dueAt ? new Date(completed.dueAt) : new Date();
+    if (Number.isNaN(from.getTime())) {
+      return null;
+    }
+
+    const interval = completed.recurrenceInterval as RecurrenceInterval;
+    const nextDue = computeNextOccurrence(from, interval);
+    if (!isOccurrenceWithinEnd(nextDue, completed.recurrenceEndsAt)) {
+      return null;
+    }
+
+    const nextKey = occurrenceKeyFromDate(nextDue);
+    const existing = await this.taskRepository.findBySeriesOccurrence(
+      context.tenantId,
+      completed.recurrenceSeriesId,
+      nextKey,
+    );
+    if (existing) {
+      return existing;
     }
 
     try {
-      return await this.reminders.attachReminderStatus(tasks);
-    } catch {
-      return tasks;
+      const spawned = await this.taskRepository.createTask({
+        tenantId: context.tenantId,
+        createdBy: completed.createdBy,
+        assignedTo: completed.assignedTo ?? null,
+        companyId: completed.companyId ?? null,
+        prospectId: completed.prospectId ?? null,
+        leadId: completed.leadId ?? null,
+        title: completed.title,
+        description: completed.description ?? null,
+        priority: completed.priority,
+        dueAt: nextDue,
+        recurrenceEnabled: true,
+        recurrenceInterval: interval,
+        recurrenceEndsAt: completed.recurrenceEndsAt ?? null,
+        recurrenceSeriesId: completed.recurrenceSeriesId,
+        recurrenceOccurrenceKey: nextKey,
+      });
+      await this.reminders?.scheduleReminder(spawned);
+      await this.recordActivities(
+        context.tenantId,
+        spawned.id,
+        context.userId,
+        buildCreateActivities(spawned),
+      );
+      return spawned;
+    } catch (error) {
+      const duplicate = await this.taskRepository.findBySeriesOccurrence(
+        context.tenantId,
+        completed.recurrenceSeriesId,
+        nextKey,
+      );
+      if (duplicate) {
+        return duplicate;
+      }
+      throw error;
     }
+  }
+
+  private async rescheduleDependents(
+    completed: TaskRecord,
+    context: TaskContext,
+  ): Promise<void> {
+    if (!this.dependencies) {
+      return;
+    }
+    const dependents = await this.dependencies.listDependents(
+      context.tenantId,
+      completed.id,
+    );
+    for (const edge of dependents) {
+      const task = await this.taskRepository.findByIdAndTenantAndUser(
+        edge.taskId,
+        context.tenantId,
+        context.userId,
+      );
+      if (!task) {
+        continue;
+      }
+      const blockers = await this.dependencies.listIncompleteBlockers(
+        context.tenantId,
+        task.id,
+      );
+      if (blockers.length === 0) {
+        await this.reminders?.scheduleReminder(task);
+      }
+    }
+  }
+
+  async addTaskDependency(
+    taskId: string,
+    dependsOnTaskId: string,
+    context: TaskContext,
+  ) {
+    this.requireAuthContext(context);
+    if (!this.dependencies) {
+      throw new InternalServerErrorException(
+        'Task dependencies are not available',
+      );
+    }
+    if (taskId === dependsOnTaskId) {
+      throw new BadRequestException('A task cannot depend on itself.');
+    }
+
+    const task = await this.requireAccessibleTask(taskId, context);
+    const prerequisite = await this.taskRepository.findByIdAndTenantAndUser(
+      dependsOnTaskId,
+      context.tenantId,
+      context.userId,
+    );
+    if (!prerequisite) {
+      throw new NotFoundException('Prerequisite task not found');
+    }
+    if (prerequisite.tenantId !== task.tenantId) {
+      throw new ForbiddenException('Tasks must belong to the same tenant.');
+    }
+
+    const existing = await this.dependencies.findPair(
+      context.tenantId,
+      taskId,
+      dependsOnTaskId,
+    );
+    if (existing) {
+      throw new ConflictException('This dependency already exists.');
+    }
+
+    if (
+      await this.wouldCreateCycle(context.tenantId, taskId, dependsOnTaskId)
+    ) {
+      throw new BadRequestException(
+        'This dependency would create a cycle and was rejected.',
+      );
+    }
+
+    try {
+      return await this.dependencies.create({
+        tenantId: context.tenantId,
+        taskId,
+        dependsOnTaskId,
+      });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException('This dependency already exists.');
+      }
+      throw error;
+    }
+  }
+
+  async removeTaskDependency(
+    taskId: string,
+    dependsOnTaskId: string,
+    context: TaskContext,
+  ) {
+    this.requireAuthContext(context);
+    await this.requireAccessibleTask(taskId, context);
+    if (!this.dependencies) {
+      throw new InternalServerErrorException(
+        'Task dependencies are not available',
+      );
+    }
+    const deleted = await this.dependencies.deletePair(
+      context.tenantId,
+      taskId,
+      dependsOnTaskId,
+    );
+    if (!deleted) {
+      throw new NotFoundException('Dependency not found');
+    }
+    return { message: 'Dependency removed', taskId, dependsOnTaskId };
+  }
+
+  async getTaskDependencies(taskId: string, context: TaskContext) {
+    this.requireAuthContext(context);
+    const task = await this.requireAccessibleTask(taskId, context);
+    if (!this.dependencies) {
+      return {
+        taskId,
+        isBlocked: false,
+        blockedBy: [],
+        dependsOn: [],
+        dependents: [],
+      };
+    }
+    const [dependsOn, dependents, blockers] = await Promise.all([
+      this.dependencies.listDependsOn(context.tenantId, taskId),
+      this.dependencies.listDependents(context.tenantId, taskId),
+      this.dependencies.listIncompleteBlockers(context.tenantId, taskId),
+    ]);
+    return {
+      taskId: task.id,
+      isBlocked: blockers.length > 0,
+      blockedBy: blockers,
+      dependsOn,
+      dependents,
+    };
+  }
+
+  private async wouldCreateCycle(
+    tenantId: string,
+    taskId: string,
+    dependsOnTaskId: string,
+  ): Promise<boolean> {
+    if (!this.dependencies) {
+      return false;
+    }
+    const visited = new Set<string>();
+    const queue = [dependsOnTaskId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current === taskId) {
+        return true;
+      }
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+      const next = await this.dependencies.listDependsOnIds(tenantId, current);
+      queue.push(...next);
+    }
+    return false;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    return code === '23505';
+  }
+
+  private async executeDependencyCommand(
+    command: TaskNlCommand,
+    context: TaskContext,
+  ): Promise<TaskAgentResponse> {
+    const task = command.searchTerm
+      ? await this.resolveNlTask(command.searchTerm, context)
+      : null;
+    const prerequisite = command.dependencySearchTerm
+      ? await this.resolveNlTask(command.dependencySearchTerm, context)
+      : null;
+
+    if (!task || !prerequisite) {
+      return {
+        action: 'clarify',
+        data: null,
+        message:
+          'Which tasks should I link? Name both tasks, for example “Make Send proposal depend on Create proposal.”',
+      };
+    }
+
+    if (command.action === 'remove_dependency') {
+      await this.removeTaskDependency(task.id, prerequisite.id, context);
+      return {
+        action: 'remove_dependency',
+        data: await this.getTask(task.id, context),
+        message: `Removed the dependency between “${task.title}” and “${prerequisite.title}”.`,
+      };
+    }
+
+    await this.addTaskDependency(task.id, prerequisite.id, context);
+    return {
+      action: 'add_dependency',
+      data: await this.getTask(task.id, context),
+      message: `“${task.title}” now depends on “${prerequisite.title}”.`,
+    };
+  }
+
+  private async resolveNlTask(
+    searchTerm: string,
+    context: TaskContext,
+  ): Promise<TaskRecord | null> {
+    const uuid =
+      searchTerm.match(
+        /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
+      )?.[0];
+    if (uuid) {
+      return this.taskRepository.findByIdAndTenantAndUser(
+        uuid,
+        context.tenantId,
+        context.userId,
+      );
+    }
+    const matches = await this.taskRepository.findByTitleAndTenantAndUser(
+      searchTerm,
+      context.tenantId,
+      context.userId,
+    );
+    const exact = matches.filter((item) =>
+      titleMatchesSearch(item.title, searchTerm),
+    );
+    if (exact.length === 1) {
+      return exact[0];
+    }
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    return null;
   }
 
   private async recordActivities(
@@ -1300,7 +1837,8 @@ export class TaskService {
       error instanceof BadRequestException ||
       error instanceof NotFoundException ||
       error instanceof UnauthorizedException ||
-      error instanceof ForbiddenException
+      error instanceof ForbiddenException ||
+      error instanceof ConflictException
     ) {
       throw error;
     }

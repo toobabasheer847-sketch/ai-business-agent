@@ -32,6 +32,7 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     reminderFrom: query.reminderFrom || undefined,
     reminderTo: query.reminderTo || undefined,
     assigneeId: query.assigneeId || undefined,
+    blocked: query.blocked || undefined,
   }
 
   if (
@@ -49,7 +50,8 @@ function normalizeListQuery(query?: TaskListQuery): TaskListQuery | undefined {
     !normalized.reminderStatus &&
     normalized.hasReminder == null &&
     !normalized.reminderFrom &&
-    !normalized.reminderTo
+    !normalized.reminderTo &&
+    !normalized.blocked
   ) {
     return undefined
   }
@@ -100,6 +102,7 @@ export const taskKeys = {
   detail: (id: string) => [...taskKeys.details(), id] as const,
   activities: (id: string) => [...taskKeys.all, 'activity', id] as const,
   reminders: (id: string) => [...taskKeys.all, 'reminders', id] as const,
+  dependencies: (id: string) => [...taskKeys.all, 'dependencies', id] as const,
   analytics: (query?: TaskAnalyticsQuery) =>
     [...taskKeys.all, 'analytics', normalizeAnalyticsQuery(query) ?? {}] as const,
   analyticsTrends: (query?: TaskAnalyticsQuery) =>
@@ -114,6 +117,9 @@ async function invalidateTaskQueries(queryClient: QueryClient, taskId?: string) 
     await queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
     await queryClient.invalidateQueries({ queryKey: taskKeys.activities(taskId) })
     await queryClient.invalidateQueries({ queryKey: taskKeys.reminders(taskId) })
+    await queryClient.invalidateQueries({
+      queryKey: taskKeys.dependencies(taskId),
+    })
   }
 }
 
@@ -273,5 +279,47 @@ export function useTaskAnalyticsTrends(query?: TaskAnalyticsQuery) {
 export function useExportTaskAnalyticsCsv() {
   return useMutation({
     mutationFn: (query?: TaskAnalyticsQuery) => tasksApi.exportAnalyticsCsv(query),
+  })
+}
+
+export function useTaskDependencies(taskId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: taskKeys.dependencies(taskId ?? ''),
+    queryFn: () => tasksApi.dependencies(taskId!),
+    enabled: Boolean(taskId) && enabled,
+  })
+}
+
+export function useAddTaskDependency() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      dependsOnTaskId,
+    }: {
+      taskId: string
+      dependsOnTaskId: string
+    }) => tasksApi.addDependency(taskId, dependsOnTaskId),
+    onSuccess: async (_data, vars) => {
+      await invalidateTaskQueries(queryClient, vars.taskId)
+      await invalidateTaskQueries(queryClient, vars.dependsOnTaskId)
+    },
+  })
+}
+
+export function useRemoveTaskDependency() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      dependsOnTaskId,
+    }: {
+      taskId: string
+      dependsOnTaskId: string
+    }) => tasksApi.removeDependency(taskId, dependsOnTaskId),
+    onSuccess: async (_data, vars) => {
+      await invalidateTaskQueries(queryClient, vars.taskId)
+      await invalidateTaskQueries(queryClient, vars.dependsOnTaskId)
+    },
   })
 }

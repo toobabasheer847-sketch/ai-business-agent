@@ -56,6 +56,14 @@ export type Task = {
     channel?: 'gmail' | 'audit' | null
     attemptCount?: number
   } | null
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly' | string | null
+  recurrenceEndsAt?: string | null
+  recurrenceSeriesId?: string | null
+  recurrenceOccurrenceKey?: string | null
+  isBlocked?: boolean
+  blockedBy?: Array<{ id: string; title: string; status: string }>
+  nextOccurrenceAt?: string | null
   company?: TaskCrmEntity | null
   prospect?: TaskCrmEntity | null
   lead?: TaskCrmEntity | null
@@ -71,6 +79,9 @@ export type CreateTaskRequest = {
   prospectId?: string
   leadId?: string
   dueAt?: string
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly'
+  recurrenceEndsAt?: string
 }
 
 /** Matches POST /api/ai/task/:taskId body — never include tenantId or createdBy */
@@ -84,6 +95,25 @@ export type UpdateTaskRequest = {
   prospectId?: string | null
   leadId?: string | null
   dueAt?: string
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly' | null
+  recurrenceEndsAt?: string | null
+}
+
+export type TaskDependencyEdge = {
+  id: string
+  tenantId: string
+  taskId: string
+  dependsOnTaskId: string
+  createdAt: string
+}
+
+export type TaskDependenciesResponse = {
+  taskId: string
+  isBlocked: boolean
+  blockedBy: Array<{ id: string; title: string; status: string }>
+  dependsOn: TaskDependencyEdge[]
+  dependents: TaskDependencyEdge[]
 }
 
 /** Matches DELETE /api/ai/task/:taskId response */
@@ -109,6 +139,7 @@ export type TaskListQuery = {
   reminderFrom?: string
   reminderTo?: string
   assigneeId?: string
+  blocked?: boolean
 }
 
 /** Matches POST /api/ai/task/natural-language response */
@@ -127,6 +158,9 @@ export type TaskNaturalLanguageResponse = {
     | 'reminder_enable'
     | 'reminder_disable'
     | 'reminder_reschedule'
+    | 'add_dependency'
+    | 'remove_dependency'
+    | 'list_blocked'
   data: Task | Task[] | TaskAnalytics | null
   message?: string
 }

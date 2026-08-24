@@ -69,6 +69,11 @@ export class TaskRepository {
     status?: TaskStatus;
     priority?: TaskPriority;
     dueAt?: Date | string | null;
+    recurrenceEnabled?: boolean;
+    recurrenceInterval?: string | null;
+    recurrenceEndsAt?: Date | string | null;
+    recurrenceSeriesId?: string | null;
+    recurrenceOccurrenceKey?: string | null;
   }): Promise<TaskRecord> {
     const [row] = await this.db
       .insert(tasks)
@@ -84,6 +89,13 @@ export class TaskRepository {
         status: input.status ?? 'pending',
         priority: input.priority ?? 'medium',
         dueAt: input.dueAt ? new Date(input.dueAt) : null,
+        recurrenceEnabled: input.recurrenceEnabled ?? false,
+        recurrenceInterval: input.recurrenceInterval ?? null,
+        recurrenceEndsAt: input.recurrenceEndsAt
+          ? new Date(input.recurrenceEndsAt)
+          : null,
+        recurrenceSeriesId: input.recurrenceSeriesId ?? null,
+        recurrenceOccurrenceKey: input.recurrenceOccurrenceKey ?? null,
       })
       .returning({ id: tasks.id });
 
@@ -280,6 +292,11 @@ export class TaskRepository {
         | 'assignedTo'
         | 'dueAt'
         | 'completedAt'
+        | 'recurrenceEnabled'
+        | 'recurrenceInterval'
+        | 'recurrenceEndsAt'
+        | 'recurrenceSeriesId'
+        | 'recurrenceOccurrenceKey'
       > &
         TaskCrmWrite
     >,
@@ -298,6 +315,11 @@ export class TaskRepository {
           : input.completedAt === null
             ? null
             : undefined,
+        recurrenceEndsAt: input.recurrenceEndsAt
+          ? new Date(input.recurrenceEndsAt)
+          : input.recurrenceEndsAt === null
+            ? null
+            : undefined,
         updatedAt: new Date(),
       })
       .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
@@ -308,6 +330,24 @@ export class TaskRepository {
     }
 
     return this.findByIdAndTenantAndUser(row.id, tenantId, userId);
+  }
+
+  async findBySeriesOccurrence(
+    tenantId: string,
+    seriesId: string,
+    occurrenceKey: string,
+  ): Promise<TaskRecord | null> {
+    const [row] = await this.crmQuery()
+      .where(
+        and(
+          eq(tasks.tenantId, tenantId),
+          eq(tasks.recurrenceSeriesId, seriesId),
+          eq(tasks.recurrenceOccurrenceKey, occurrenceKey),
+        ),
+      )
+      .limit(1);
+
+    return row ? this.mapRow(row) : null;
   }
 
   async deleteTask(
@@ -340,6 +380,11 @@ export class TaskRepository {
         completedAt: tasks.completedAt,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
+        recurrenceEnabled: tasks.recurrenceEnabled,
+        recurrenceInterval: tasks.recurrenceInterval,
+        recurrenceEndsAt: tasks.recurrenceEndsAt,
+        recurrenceSeriesId: tasks.recurrenceSeriesId,
+        recurrenceOccurrenceKey: tasks.recurrenceOccurrenceKey,
         companyName: companies.name,
         leadFirstName: leads.firstName,
         leadLastName: leads.lastName,
@@ -393,6 +438,11 @@ export class TaskRepository {
       completedAt: row.completedAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      recurrenceEnabled: Boolean(row.recurrenceEnabled),
+      recurrenceInterval: row.recurrenceInterval ?? null,
+      recurrenceEndsAt: row.recurrenceEndsAt ?? null,
+      recurrenceSeriesId: row.recurrenceSeriesId ?? null,
+      recurrenceOccurrenceKey: row.recurrenceOccurrenceKey ?? null,
       company:
         row.companyId && row.companyName
           ? { id: row.companyId, name: row.companyName }

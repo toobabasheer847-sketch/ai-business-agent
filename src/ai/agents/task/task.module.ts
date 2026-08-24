@@ -19,6 +19,7 @@ import { TaskAnalyticsRepository } from './task-analytics.repository.js';
 import { TaskReminderProcessor } from './task-reminder.processor.js';
 import { TaskReminderRepository } from './task-reminder.repository.js';
 import { TaskReminderService } from './task-reminder.service.js';
+import { TaskDependencyRepository } from './task-dependency.repository.js';
 import { CreateTaskTool } from './tools/create-task.tool.js';
 import { UpdateTaskTool } from './tools/update-task.tool.js';
 import { GetTaskTool } from './tools/get-task.tool.js';
@@ -48,6 +49,7 @@ import { CancelTaskTool } from './tools/cancel-task.tool.js';
     TaskReminderRepository,
     TaskReminderService,
     TaskReminderProcessor,
+    TaskDependencyRepository,
     CreateTaskTool,
     UpdateTaskTool,
     GetTaskTool,

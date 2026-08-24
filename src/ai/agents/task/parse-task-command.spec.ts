@@ -416,4 +416,50 @@ describe('parseTaskCommand', () => {
       false,
     );
   });
+
+  it('parses dependency and blocked commands', () => {
+    expect(
+      parseTaskCommand('Make Send proposal depend on Create proposal.'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'add_dependency',
+        searchTerm: 'Send proposal',
+        dependencySearchTerm: 'Create proposal',
+      }),
+    );
+    expect(
+      parseTaskCommand('Remove the dependency between Send proposal and Create proposal.'),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'remove_dependency',
+        searchTerm: 'Send proposal',
+        dependencySearchTerm: 'Create proposal',
+      }),
+    );
+    expect(parseTaskCommand('Which tasks are blocked?')).toEqual(
+      expect.objectContaining({ action: 'list_blocked' }),
+    );
+  });
+
+  it('parses recurring create intents', () => {
+    expect(
+      parseTaskCommand('Create a task to call client every Monday.', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        title: 'Call client',
+        recurrenceEnabled: true,
+        recurrenceInterval: 'weekly',
+      }),
+    );
+    expect(
+      parseTaskCommand('Create a daily task to check inbox.', { now }),
+    ).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        recurrenceEnabled: true,
+        recurrenceInterval: 'daily',
+      }),
+    );
+  });
 });

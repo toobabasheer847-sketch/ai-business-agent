@@ -34,6 +34,11 @@ const titleSchema = z
   .min(3, 'Title must be at least 3 characters')
   .max(255, 'Title must be at most 255 characters')
 
+const recurrenceIntervalSchema = z
+  .enum(['daily', 'weekly', 'monthly'])
+  .optional()
+  .or(z.literal(''))
+
 export const createTaskSchema = z.object({
   title: titleSchema,
   description: optionalDescription,
@@ -43,6 +48,9 @@ export const createTaskSchema = z.object({
   prospectId: optionalCrmId,
   leadId: optionalCrmId,
   dueAt: optionalDueAt,
+  recurrenceEnabled: z.boolean().optional(),
+  recurrenceInterval: recurrenceIntervalSchema,
+  recurrenceEndsAt: optionalDueAt,
 })
 
 export type CreateTaskFormValues = z.infer<typeof createTaskSchema>
@@ -57,6 +65,9 @@ export const updateTaskSchema = z.object({
   prospectId: optionalCrmId,
   leadId: optionalCrmId,
   dueAt: optionalDueAt,
+  recurrenceEnabled: z.boolean().optional(),
+  recurrenceInterval: recurrenceIntervalSchema,
+  recurrenceEndsAt: optionalDueAt,
 })
 
 export type UpdateTaskFormValues = z.infer<typeof updateTaskSchema>

@@ -32,6 +32,7 @@ type TasksTableProps = {
   onDelete: (item: Task) => void
   onViewActivity: (item: Task) => void
   onManageReminders: (item: Task) => void
+  onManageDependencies: (item: Task) => void
 }
 
 function crmHasLinks(item: Task) {
@@ -142,6 +143,7 @@ export function TasksTable({
   onDelete,
   onViewActivity,
   onManageReminders,
+  onManageDependencies,
 }: TasksTableProps) {
   return (
     <motion.div
@@ -180,6 +182,16 @@ export function TasksTable({
                   {item.description ? (
                     <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                       {item.description}
+                    </div>
+                  ) : null}
+                  {item.isBlocked ? (
+                    <div className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Blocked by dependency
+                    </div>
+                  ) : null}
+                  {item.recurrenceEnabled ? (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Recurs {item.recurrenceInterval || 'on schedule'}
                     </div>
                   ) : null}
                   {crmHasLinks(item) ? (
@@ -233,6 +245,9 @@ export function TasksTable({
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onManageReminders(item)}>
                         View reminder details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onManageDependencies(item)}>
+                        Manage dependencies
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onManageReminders(item)}>
                         Enable reminder

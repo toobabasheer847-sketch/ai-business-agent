@@ -11,6 +11,7 @@ import type {
   TaskAnalytics,
   TaskAnalyticsQuery,
   TaskAnalyticsTrends,
+  TaskDependenciesResponse,
 } from '@/features/tasks/types/task.types'
 
 function toListParams(query?: TaskListQuery) {
@@ -33,6 +34,8 @@ function toListParams(query?: TaskListQuery) {
   if (query.hasReminder === false) params.hasReminder = 'false'
   if (query.reminderFrom) params.reminderFrom = query.reminderFrom
   if (query.reminderTo) params.reminderTo = query.reminderTo
+  if (query.blocked) params.blocked = 'true'
+  if (query.blocked === false) params.blocked = 'false'
 
   return Object.keys(params).length > 0 ? params : undefined
 }
@@ -156,6 +159,24 @@ export const tasksApi = {
         responseType: 'blob',
         headers: { Accept: 'text/csv' },
       })
+      .then((r) => r.data)
+  },
+
+  dependencies(taskId: string) {
+    return apiClient
+      .get<TaskDependenciesResponse>(`/ai/task/${taskId}/dependencies`)
+      .then((r) => r.data)
+  },
+
+  addDependency(taskId: string, dependsOnTaskId: string) {
+    return apiClient
+      .post(`/ai/task/${taskId}/dependencies`, { dependsOnTaskId })
+      .then((r) => r.data)
+  },
+
+  removeDependency(taskId: string, dependsOnTaskId: string) {
+    return apiClient
+      .delete(`/ai/task/${taskId}/dependencies/${dependsOnTaskId}`)
       .then((r) => r.data)
   },
 }

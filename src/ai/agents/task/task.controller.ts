@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard.js';
 import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types.js';
 import { PaginationDto } from '../../../common/dto/pagination.dto.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
+import { CreateTaskDependencyDto } from './dto/create-task-dependency.dto.js';
 import { ForbidUnknownDto } from './dto/forbid-unknown.dto.js';
 import { ProcessNaturalLanguageDto } from './dto/process-natural-language.dto.js';
 import { RescheduleTaskReminderDto } from './dto/reschedule-task-reminder.dto.js';
@@ -100,6 +101,44 @@ export class TaskController {
   ) {
     const context = this.buildContext(req);
     return this.taskService.getTaskActivity(taskId, query, context);
+  }
+
+  @Get(':taskId/dependencies')
+  async listDependencies(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.getTaskDependencies(taskId, context);
+  }
+
+  @Post(':taskId/dependencies')
+  async createDependency(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: CreateTaskDependencyDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.addTaskDependency(
+      taskId,
+      dto.dependsOnTaskId,
+      context,
+    );
+  }
+
+  @Delete(':taskId/dependencies/:dependsOnTaskId')
+  @HttpCode(HttpStatus.OK)
+  async removeDependency(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Param('dependsOnTaskId', ParseUUIDPipe) dependsOnTaskId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const context = this.buildContext(req);
+    return this.taskService.removeTaskDependency(
+      taskId,
+      dependsOnTaskId,
+      context,
+    );
   }
 
   @Get(':taskId/reminders')

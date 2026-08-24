@@ -27,6 +27,7 @@ import { TaskReminderRepository } from './task-reminder.repository.js';
 import { TaskActivityRepository } from './task-activity.repository.js';
 import { computeIsOverdue, isClosedTaskStatus } from './task-overdue.js';
 import { TaskRepository } from './task.repository.js';
+import { TaskDependencyRepository } from './task-dependency.repository.js';
 import type { TaskRecord } from './types/task.types.js';
 
 @Injectable()
@@ -44,6 +45,8 @@ export class TaskReminderService {
     private readonly gmailService?: GmailService,
     @Optional()
     private readonly activity?: TaskActivityRepository,
+    @Optional()
+    private readonly dependencies?: TaskDependencyRepository,
   ) {}
 
   reminderMinutesBefore(): number {
@@ -353,6 +356,18 @@ export class TaskReminderService {
       return;
     }
 
+    if (await this.isBlockedByDependency(task)) {
+      await this.finish(
+        reminder.id,
+        payload.tenantId,
+        'skipped',
+        'blocked_by_dependency',
+        payload,
+        task,
+      );
+      return;
+    }
+
     if (!task.dueAt) {
       await this.finish(
         reminder.id,
@@ -487,6 +502,10 @@ export class TaskReminderService {
     now: Date = new Date(),
   ): Promise<number> {
     if (!task.dueAt || isClosedTaskStatus(task.status)) {
+      return 0;
+    }
+
+    if (await this.isBlockedByDependency(task)) {
       return 0;
     }
 
@@ -812,6 +831,17 @@ export class TaskReminderService {
         { taskId: input.taskId, eventType: input.eventType },
       );
     }
+  }
+
+  private async isBlockedByDependency(task: TaskRecord): Promise<boolean> {
+    if (!this.dependencies) {
+      return false;
+    }
+    const blockers = await this.dependencies.listIncompleteBlockers(
+      task.tenantId,
+      task.id,
+    );
+    return blockers.length > 0;
   }
 
   private assertOpenTaskWithDueAt(task: TaskRecord): void {

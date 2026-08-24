@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgTable,
   uuid,
   varchar,
@@ -6,6 +7,7 @@ import {
   timestamp,
   index,
   pgEnum,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
@@ -81,6 +83,20 @@ export const tasks = pgTable(
 
     completedAt: timestamp('completed_at', { withTimezone: true }),
 
+    recurrenceEnabled: boolean('recurrence_enabled').default(false).notNull(),
+
+    recurrenceInterval: varchar('recurrence_interval', {
+      length: 16,
+    }),
+
+    recurrenceEndsAt: timestamp('recurrence_ends_at', { withTimezone: true }),
+
+    recurrenceSeriesId: uuid('recurrence_series_id'),
+
+    recurrenceOccurrenceKey: varchar('recurrence_occurrence_key', {
+      length: 16,
+    }),
+
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -101,5 +117,15 @@ export const tasks = pgTable(
     companyIdIdx: index('tasks_company_id_idx').on(table.companyId),
     prospectIdIdx: index('tasks_prospect_id_idx').on(table.prospectId),
     leadIdIdx: index('tasks_lead_id_idx').on(table.leadId),
+    recurrenceSeriesIdx: index('tasks_recurrence_series_idx').on(
+      table.recurrenceSeriesId,
+    ),
+    recurrenceOccurrenceUnique: uniqueIndex(
+      'tasks_recurrence_occurrence_unique',
+    ).on(
+      table.tenantId,
+      table.recurrenceSeriesId,
+      table.recurrenceOccurrenceKey,
+    ),
   }),
 );

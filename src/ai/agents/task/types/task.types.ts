@@ -34,6 +34,14 @@ export interface TaskRecord {
   completedAt?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
+  recurrenceEnabled?: boolean;
+  recurrenceInterval?: string | null;
+  recurrenceEndsAt?: Date | string | null;
+  recurrenceSeriesId?: string | null;
+  recurrenceOccurrenceKey?: string | null;
+  isBlocked?: boolean;
+  blockedBy?: Array<{ id: string; title: string; status: string }>;
+  nextOccurrenceAt?: string | null;
   company?: TaskCrmEntity | null;
   prospect?: TaskCrmEntity | null;
   lead?: TaskCrmEntity | null;
@@ -171,7 +179,10 @@ export interface TaskAgentResponse {
     | 'reminder_list'
     | 'reminder_enable'
     | 'reminder_disable'
-    | 'reminder_reschedule';
+    | 'reminder_reschedule'
+    | 'add_dependency'
+    | 'remove_dependency'
+    | 'list_blocked';
   data: TaskRecord | TaskRecord[] | TaskAnalyticsResult | null;
   message?: string;
 }

@@ -137,5 +137,41 @@ There is no Playwright suite. Frontend checks are documented in `docs/phase6-fro
 - Embeddings use `float8[]` cosine similarity in SQL, not pgvector.
 - The live developer database may contain leftover columns/tables (for example `master_setting_entries`) that are unused by current code. Fresh databases created from migrations do not include those leftovers.
 - The `tasks` table exists in the TypeScript schema; older developer databases may need the upgrade script before task APIs work.
-- Task dependencies and recurring tasks are not implemented (future phase).
+- Task dependencies and recurring tasks are supported (Phase 20):
+  - Dependencies live in `task_dependencies` (tenant-scoped; cycles/self/cross-tenant rejected).
+  - Blocking is computed (no new status): incomplete prerequisites keep a task blocked for completion/reminders.
+  - Recurrence (`daily` / `weekly` / `monthly`) spawns the next occurrence on complete with idempotent series keys.
 - Frontend automated tests are not present yet.
+
+### Task dependencies & recurrence API
+
+```http
+POST   /api/ai/task/:taskId/dependencies
+{ "dependsOnTaskId": "<uuid>" }
+
+GET    /api/ai/task/:taskId/dependencies
+DELETE /api/ai/task/:taskId/dependencies/:dependsOnTaskId
+
+POST   /api/ai/task
+{ "title": "Call client", "dueAt": "...", "recurrenceEnabled": true, "recurrenceInterval": "weekly" }
+```
+
+Natural language examples (JWT tenant/user remain authoritative):
+
+- `Make Send proposal depend on Create proposal.`
+- `Which tasks are blocked?`
+- `Create a task to call client every Monday.`
+
+Upgrade existing databases:
+
+```bash
+node scripts/upgrade-existing-db.js
+```
+
+Two-tenant smoke (API + DB):
+
+```bash
+node scripts/verify-phase20-task-deps-recurrence.js
+```
+
+Rollback considerations: drop `task_dependencies` and recurrence columns only after confirming no production series rely on them; do not rewrite baseline migrations.

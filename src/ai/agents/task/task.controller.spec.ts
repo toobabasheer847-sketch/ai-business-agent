@@ -48,6 +48,9 @@ describe('TaskController', () => {
     getAnalyticsTrends: jest.Mock;
     getReport: jest.Mock;
     exportAnalyticsCsv: jest.Mock;
+    addTaskDependency: jest.Mock;
+    removeTaskDependency: jest.Mock;
+    getTaskDependencies: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -103,6 +106,14 @@ describe('TaskController', () => {
       exportAnalyticsCsv: jest.fn().mockResolvedValue(
         'Title,Status,Priority,Due date,Completed date,Company,Prospect,Lead,Assignee,Reminder status,Created date\r\n',
       ),
+      addTaskDependency: jest.fn().mockResolvedValue({ id: 'dep' }),
+      removeTaskDependency: jest.fn().mockResolvedValue({ message: 'ok' }),
+      getTaskDependencies: jest.fn().mockResolvedValue({
+        taskId: TASK_ID,
+        isBlocked: false,
+        dependsOn: [],
+        dependents: [],
+      }),
     };
 
     app = await initTaskTestApp(
@@ -618,5 +629,50 @@ describe('TaskController', () => {
       .expect(400);
 
     expect(taskService.getAnalyticsTrends).not.toHaveBeenCalled();
+  });
+
+  it('routes dependency endpoints with JWT context', async () => {
+    const token = signTestJwt(app);
+    const dependsOnTaskId = '22222222-2222-4222-8222-222222222222';
+
+    await request(app.getHttpServer())
+      .post(`/ai/task/${TASK_ID}/dependencies`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dependsOnTaskId })
+      .expect(201);
+
+    expect(taskService.addTaskDependency).toHaveBeenCalledWith(
+      TASK_ID,
+      dependsOnTaskId,
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+        userId: AUTHENTICATED_TEST_USER.userId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get(`/ai/task/${TASK_ID}/dependencies`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.getTaskDependencies).toHaveBeenCalledWith(
+      TASK_ID,
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .delete(`/ai/task/${TASK_ID}/dependencies/${dependsOnTaskId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(taskService.removeTaskDependency).toHaveBeenCalledWith(
+      TASK_ID,
+      dependsOnTaskId,
+      expect.objectContaining({
+        tenantId: AUTHENTICATED_TEST_USER.tenantId,
+      }),
+    );
   });
 });

@@ -29,7 +29,10 @@ export type TaskNlAction =
   | 'reminder_list'
   | 'reminder_enable'
   | 'reminder_disable'
-  | 'reminder_reschedule';
+  | 'reminder_reschedule'
+  | 'add_dependency'
+  | 'remove_dependency'
+  | 'list_blocked';
 
 export interface TaskNlCommand {
   action: TaskNlAction;
@@ -40,6 +43,7 @@ export interface TaskNlCommand {
   dueAt?: string;
   taskId?: string;
   searchTerm?: string;
+  dependencySearchTerm?: string;
   dueOn?: 'today' | 'tomorrow' | 'overdue' | 'upcoming';
   message?: string;
   companyQuery?: string;
@@ -52,6 +56,9 @@ export interface TaskNlCommand {
   hasReminder?: boolean;
   focus?: TaskNlAnalyticsFocus;
   assigneeQuery?: string;
+  recurrenceEnabled?: boolean;
+  recurrenceInterval?: string;
+  recurrenceEndsAt?: string;
 }
 
 const UUID_RE =
@@ -99,7 +106,11 @@ export function parseTaskCommand(
   const lower = text.toLowerCase();
   let command: TaskNlCommand;
 
-  if (isReminderManageIntent(lower)) {
+  if (isDependencyIntent(lower)) {
+    command = parseDependencyCommand(text);
+  } else if (isBlockedListIntent(lower)) {
+    command = { action: 'list_blocked' };
+  } else if (isReminderManageIntent(lower)) {
     command = parseReminderCommand(text, now);
   } else if (isCreateIntent(lower)) {
     command = parseCreate(text, now);
@@ -228,6 +239,14 @@ function parseCreate(text: string, now: Date): TaskNlCommand {
     '',
   );
   remainder = remainder.replace(/\band\s+remind\s+me(?:\s+at)?\b/gi, ' ');
+  remainder = remainder.replace(
+    /\b(?:every\s+(?:day|week|month|monday)|daily|weekly|monthly)\b/gi,
+    ' ',
+  );
+  remainder = remainder.replace(
+    /\buntil\s+\d{4}-\d{2}-\d{2}|\bend(?:s)?\s+on\s+\d{4}-\d{2}-\d{2}/gi,
+    ' ',
+  );
   remainder = remainder.replace(/\s+/g, ' ').trim().replace(/[.,!?]+$/, '');
 
   const title = capitalizeFirst(remainder);
@@ -243,6 +262,120 @@ function parseCreate(text: string, now: Date): TaskNlCommand {
     title: title.slice(0, 255),
     priority: priorityResult.priority ?? 'medium',
     dueAt: due.status === 'ok' ? due.dueAt.toISOString() : undefined,
+    ...extractRecurrence(text, now, due.status === 'ok' ? due.dueAt.toISOString() : undefined),
+  };
+}
+
+function extractRecurrence(
+  text: string,
+  now: Date,
+  existingDueAt?: string,
+): Pick<
+  TaskNlCommand,
+  'recurrenceEnabled' | 'recurrenceInterval' | 'recurrenceEndsAt' | 'dueAt'
+> {
+  const lower = text.toLowerCase();
+  let interval: string | undefined;
+  if (/\bevery\s+day\b|\bdaily\b/.test(lower)) {
+    interval = 'daily';
+  } else if (/\bevery\s+week\b|\bweekly\b|\bevery\s+monday\b/.test(lower)) {
+    interval = 'weekly';
+  } else if (/\bevery\s+month\b|\bmonthly\b/.test(lower)) {
+    interval = 'monthly';
+  }
+
+  if (!interval) {
+    return {};
+  }
+
+  const result: Pick<
+    TaskNlCommand,
+    'recurrenceEnabled' | 'recurrenceInterval' | 'recurrenceEndsAt' | 'dueAt'
+  > = {
+    recurrenceEnabled: true,
+    recurrenceInterval: interval,
+  };
+
+  if (!existingDueAt && /\bevery\s+monday\b/.test(lower) && interval === 'weekly') {
+    const monday = parseTaskDueAt('next Monday', now);
+    if (monday.status === 'ok') {
+      result.dueAt = monday.dueAt.toISOString();
+    }
+  }
+
+  const until = lower.match(
+    /\buntil\s+(\d{4}-\d{2}-\d{2})|\bend(?:s)?\s+on\s+(\d{4}-\d{2}-\d{2})/,
+  );
+  const endRaw = until?.[1] || until?.[2];
+  if (endRaw) {
+    const end = new Date(`${endRaw}T23:59:59.000Z`);
+    if (!Number.isNaN(end.getTime())) {
+      result.recurrenceEndsAt = end.toISOString();
+    }
+  }
+
+  return result;
+}
+
+function isDependencyIntent(lower: string): boolean {
+  return (
+    (/\bdepend(?:s|ency|encies)?\b/.test(lower) ||
+      /\bprerequisite\b/.test(lower) ||
+      /\bblocked by\b/.test(lower)) &&
+    !isBlockedListIntent(lower)
+  );
+}
+
+function isBlockedListIntent(lower: string): boolean {
+  return (
+    /\bblocked tasks?\b/.test(lower) ||
+    /\btasks? (?:that )?are blocked\b/.test(lower) ||
+    /\bwhich tasks? are blocked\b/.test(lower) ||
+    /\bwaiting for\b.+\b(?:to )?(?:finish|complete)\b/.test(lower)
+  );
+}
+
+function parseDependencyCommand(text: string): TaskNlCommand {
+  const lower = text.toLowerCase();
+  const remove =
+    /\b(remove|delete|unlink|clear)\b.+\bdepend/.test(lower) ||
+    /\bremove the dependency\b/.test(lower);
+
+  const makeMatch = text.match(
+    /\bmake\s+(.+?)\s+depend(?:s)?\s+on\s+(.+?)$/i,
+  );
+  const dependsMatch = text.match(/^(.+?)\s+depends\s+on\s+(.+?)$/i);
+  const betweenMatch = text.match(/\bbetween\s+(.+?)\s+and\s+(.+?)$/i);
+
+  let searchTerm: string | undefined;
+  let dependencySearchTerm: string | undefined;
+
+  if (makeMatch) {
+    searchTerm = makeMatch[1].trim().replace(/[.,!?]+$/, '');
+    dependencySearchTerm = makeMatch[2].trim().replace(/[.,!?]+$/, '');
+  } else if (dependsMatch) {
+    searchTerm = dependsMatch[1]
+      .replace(/^(?:please\s+)?(?:make\s+)?/i, '')
+      .trim()
+      .replace(/[.,!?]+$/, '');
+    dependencySearchTerm = dependsMatch[2].trim().replace(/[.,!?]+$/, '');
+  } else if (betweenMatch) {
+    searchTerm = betweenMatch[1].trim().replace(/[.,!?]+$/, '');
+    dependencySearchTerm = betweenMatch[2].trim().replace(/[.,!?]+$/, '');
+  }
+
+  if (!searchTerm || !dependencySearchTerm) {
+    return {
+      action: 'clarify',
+      message:
+        'Name both tasks, for example “Make Send proposal depend on Create proposal.”',
+    };
+  }
+
+  return {
+    action: remove ? 'remove_dependency' : 'add_dependency',
+    searchTerm,
+    dependencySearchTerm,
   };
 }
 

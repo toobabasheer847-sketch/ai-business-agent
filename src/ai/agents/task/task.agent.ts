@@ -10,6 +10,16 @@ import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
 import type { TaskAgentResponse, TaskContext } from './types/task.types.js';
 
+function toTaskContext(
+  context: ReturnType<typeof getTrustedTaskContext>,
+): TaskContext {
+  return {
+    userId: context.userId,
+    tenantId: context.tenantId,
+    email: context.email ?? undefined,
+  };
+}
+
 @Injectable()
 export class TaskAgent {
   private readonly agent: any | null;
@@ -183,21 +193,13 @@ export class TaskAgent {
     const completeTaskTool = new FunctionTool({
       name: 'complete_task',
       description:
-        'Mark a task owned by or assigned to the authenticated user as completed.',
+        'Mark a task owned by or assigned to the authenticated user as completed. Blocked tasks are rejected.',
       parameters: z.object({
         taskId: z.string(),
       }),
       execute: async (input: any) => {
-        const context = getTrustedTaskContext();
-        return this.taskRepository.updateTask(
-          input.taskId,
-          context.tenantId,
-          context.userId,
-          {
-            status: 'completed',
-            completedAt: new Date().toISOString(),
-          },
-        );
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.completeTask(input.taskId, context);
       },
     });
 
@@ -221,6 +223,56 @@ export class TaskAgent {
       },
     });
 
+    const addDependencyTool = new FunctionTool({
+      name: 'add_task_dependency',
+      description:
+        'Make one task depend on another. Tenant and ownership come from the request context.',
+      parameters: z.object({
+        taskId: z.string().uuid(),
+        dependsOnTaskId: z.string().uuid(),
+      }),
+      execute: async (input: any) => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.addTaskDependency(
+          input.taskId,
+          input.dependsOnTaskId,
+          context,
+        );
+      },
+    });
+
+    const removeDependencyTool = new FunctionTool({
+      name: 'remove_task_dependency',
+      description:
+        'Remove a dependency between two tasks for the authenticated tenant user.',
+      parameters: z.object({
+        taskId: z.string().uuid(),
+        dependsOnTaskId: z.string().uuid(),
+      }),
+      execute: async (input: any) => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.removeTaskDependency(
+          input.taskId,
+          input.dependsOnTaskId,
+          context,
+        );
+      },
+    });
+
+    const listBlockedTool = new FunctionTool({
+      name: 'list_blocked_tasks',
+      description:
+        'List open tasks that are blocked by incomplete dependencies for the authenticated user.',
+      parameters: z.object({}),
+      execute: async () => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.listTasks(
+          { blocked: true, openOnly: true },
+          context,
+        );
+      },
+    });
+
     return [
       createTaskTool,
       getTaskTool,
@@ -228,6 +280,9 @@ export class TaskAgent {
       updateTaskTool,
       completeTaskTool,
       cancelTaskTool,
+      addDependencyTool,
+      removeDependencyTool,
+      listBlockedTool,
     ];
   }
 
@@ -241,7 +296,7 @@ export class TaskAgent {
         apiKey,
       }),
       instruction:
-        'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks. Never cross tenant boundaries. If the request is ambiguous, ask for clarification. Never accept tenantId or createdBy from the user or tool arguments.',
+        'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks, and to manage dependencies. Never cross tenant boundaries. If the request is ambiguous, ask for clarification. Never accept tenantId or createdBy from the user or tool arguments.',
       tools,
     });
   }

@@ -213,6 +213,67 @@ async function main() {
       `ALTER TABLE "task_reminders" ADD COLUMN IF NOT EXISTS "attempt_count" integer DEFAULT 0 NOT NULL`,
     );
 
+    await client.query(`
+      ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "recurrence_enabled" boolean DEFAULT false NOT NULL
+    `);
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "recurrence_interval" varchar(16)`,
+    );
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "recurrence_ends_at" timestamp with time zone`,
+    );
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "recurrence_series_id" uuid`,
+    );
+    await client.query(
+      `ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "recurrence_occurrence_key" varchar(16)`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "tasks_recurrence_series_idx" ON "tasks" USING btree ("recurrence_series_id")`,
+    );
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "tasks_recurrence_occurrence_unique"
+      ON "tasks" ("tenant_id", "recurrence_series_id", "recurrence_occurrence_key")
+      WHERE "recurrence_series_id" IS NOT NULL AND "recurrence_occurrence_key" IS NOT NULL
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "task_dependencies" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "tenant_id" uuid NOT NULL,
+        "task_id" uuid NOT NULL,
+        "depends_on_task_id" uuid NOT NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      );
+    `);
+
+    const dependencyConstraints = [
+      `ALTER TABLE "task_dependencies" ADD CONSTRAINT "task_dependencies_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE cascade`,
+      `ALTER TABLE "task_dependencies" ADD CONSTRAINT "task_dependencies_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE cascade`,
+      `ALTER TABLE "task_dependencies" ADD CONSTRAINT "task_dependencies_depends_on_task_id_tasks_id_fk" FOREIGN KEY ("depends_on_task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE cascade`,
+    ];
+    for (const statement of dependencyConstraints) {
+      await client.query(`
+        DO $$ BEGIN
+          ${statement};
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+    }
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_dependencies_tenant_id_idx" ON "task_dependencies" USING btree ("tenant_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_dependencies_task_id_idx" ON "task_dependencies" USING btree ("task_id")`,
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS "task_dependencies_depends_on_idx" ON "task_dependencies" USING btree ("depends_on_task_id")`,
+    );
+    await client.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "task_dependencies_pair_unique" ON "task_dependencies" USING btree ("tenant_id", "task_id", "depends_on_task_id")`,
+    );
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (

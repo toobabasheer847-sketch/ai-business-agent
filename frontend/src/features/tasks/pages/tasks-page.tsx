@@ -23,6 +23,7 @@ import { TaskForm } from '@/features/tasks/components/task-form'
 import { TasksTable } from '@/features/tasks/components/tasks-table'
 import { TaskActivityDialog } from '@/features/tasks/components/task-activity-dialog'
 import { TaskReminderDialog } from '@/features/tasks/components/task-reminder-dialog'
+import { TaskDependenciesDialog } from '@/features/tasks/components/task-dependencies-dialog'
 import {
   useCancelTask,
   useCompleteTask,
@@ -108,6 +109,18 @@ function toCreatePayload(values: CreateTaskFormValues): CreateTaskRequest {
   const dueAt = toIsoDateString(values.dueAt)
   if (dueAt) payload.dueAt = dueAt
 
+  if (values.recurrenceEnabled) {
+    payload.recurrenceEnabled = true
+    if (values.recurrenceInterval) {
+      payload.recurrenceInterval = values.recurrenceInterval as
+        | 'daily'
+        | 'weekly'
+        | 'monthly'
+    }
+    const endsAt = toIsoDateString(values.recurrenceEndsAt)
+    if (endsAt) payload.recurrenceEndsAt = endsAt
+  }
+
   return payload
 }
 
@@ -126,6 +139,21 @@ function toUpdatePayload(values: UpdateTaskFormValues): UpdateTaskRequest {
 
   const dueAt = toIsoDateString(values.dueAt)
   if (dueAt) payload.dueAt = dueAt
+
+  payload.recurrenceEnabled = Boolean(values.recurrenceEnabled)
+  if (values.recurrenceEnabled && values.recurrenceInterval) {
+    payload.recurrenceInterval = values.recurrenceInterval as
+      | 'daily'
+      | 'weekly'
+      | 'monthly'
+  } else if (!values.recurrenceEnabled) {
+    payload.recurrenceInterval = null
+    payload.recurrenceEndsAt = null
+  }
+  if (values.recurrenceEnabled) {
+    payload.recurrenceEndsAt =
+      toIsoDateString(values.recurrenceEndsAt) ?? null
+  }
 
   return payload
 }
@@ -172,6 +200,7 @@ export function TasksPage() {
   const [deleting, setDeleting] = useState<Task | null>(null)
   const [activityTask, setActivityTask] = useState<Task | null>(null)
   const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  const [dependenciesTask, setDependenciesTask] = useState<Task | null>(null)
   const [confirming, setConfirming] = useState<{
     task: Task
     action: 'complete' | 'cancel'
@@ -473,6 +502,7 @@ export function TasksPage() {
           onDelete={setDeleting}
           onViewActivity={setActivityTask}
           onManageReminders={setReminderTask}
+          onManageDependencies={setDependenciesTask}
         />
       )}
 
@@ -555,6 +585,11 @@ export function TasksPage() {
         task={reminderTask}
         open={Boolean(reminderTask)}
         onOpenChange={(open) => !open && setReminderTask(null)}
+      />
+      <TaskDependenciesDialog
+        task={dependenciesTask}
+        open={Boolean(dependenciesTask)}
+        onOpenChange={(open) => !open && setDependenciesTask(null)}
       />
     </div>
   )

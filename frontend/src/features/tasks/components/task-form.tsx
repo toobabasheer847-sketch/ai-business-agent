@@ -63,6 +63,9 @@ function emptyValues(): CreateTaskFormValues {
     prospectId: '',
     leadId: '',
     dueAt: '',
+    recurrenceEnabled: false,
+    recurrenceInterval: '',
+    recurrenceEndsAt: '',
   }
 }
 
@@ -77,6 +80,9 @@ function fromTask(task: Task): UpdateTaskFormValues {
     prospectId: task.prospectId ?? '',
     leadId: task.leadId ?? '',
     dueAt: toDatetimeLocalValue(task.dueAt),
+    recurrenceEnabled: Boolean(task.recurrenceEnabled),
+    recurrenceInterval: (task.recurrenceInterval as '' | 'daily' | 'weekly' | 'monthly') || '',
+    recurrenceEndsAt: toDatetimeLocalValue(task.recurrenceEndsAt),
   }
 }
 
@@ -107,11 +113,15 @@ export function TaskForm({
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(schema),
     defaultValues: initial ? fromTask(initial) : emptyValues(),
   })
+
+  const recurrenceEnabled = watch('recurrenceEnabled')
 
   const missingAssignee =
     initial?.assignedTo && !users.some((user) => user.id === initial.assignedTo)
@@ -404,6 +414,76 @@ export function TaskForm({
             )}
           />
         </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium">Recurring task</div>
+            <p className="text-xs text-muted-foreground">
+              Completing this occurrence schedules the next one.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            className="size-4"
+            checked={Boolean(recurrenceEnabled)}
+            disabled={submitting}
+            onChange={(event) => {
+              setValue('recurrenceEnabled', event.target.checked, {
+                shouldDirty: true,
+              })
+              if (!event.target.checked) {
+                setValue('recurrenceInterval', '', { shouldDirty: true })
+                setValue('recurrenceEndsAt', '', { shouldDirty: true })
+              } else if (!watch('recurrenceInterval')) {
+                setValue('recurrenceInterval', 'weekly', { shouldDirty: true })
+              }
+            }}
+          />
+        </div>
+        {recurrenceEnabled ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="task-recurrence-interval">Pattern</Label>
+              <Controller
+                name="recurrenceInterval"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value || 'weekly'}
+                    onValueChange={field.onChange}
+                    disabled={submitting}
+                  >
+                    <SelectTrigger id="task-recurrence-interval" className="w-full">
+                      <SelectValue placeholder="Interval" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-recurrence-ends">Ends at (optional)</Label>
+              <Input
+                id="task-recurrence-ends"
+                type="datetime-local"
+                disabled={submitting}
+                {...register('recurrenceEndsAt')}
+              />
+            </div>
+          </div>
+        ) : null}
+        {initial?.nextOccurrenceAt ? (
+          <p className="text-xs text-muted-foreground">
+            Next occurrence after completion:{' '}
+            {new Date(initial.nextOccurrenceAt).toLocaleString()}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
