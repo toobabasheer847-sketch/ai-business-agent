@@ -1,4 +1,5 @@
 import {
+  index,
   pgTable,
   uuid,
   varchar,
@@ -12,60 +13,70 @@ import { tenants } from './tenant.schema';
 import { conversations } from './conversation.schema';
 import { users } from './user.schema';
 
-export const messages = pgTable('messages', {
-  id: uuid('id').defaultRandom().primaryKey(),
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
 
-  tenantId: uuid('tenant_id')
-    .notNull()
-    .references(() => tenants.id, {
-      onDelete: 'cascade',
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+
+    userId: uuid('user_id').references(() => users.id, {
+      onDelete: 'set null',
       onUpdate: 'cascade',
     }),
 
-  conversationId: uuid('conversation_id')
-    .notNull()
-    .references(() => conversations.id, {
-      onDelete: 'cascade',
-      onUpdate: 'cascade',
-    }),
+    // human or ai
+    role: varchar('role', {
+      length: 50,
+    })
+      .notNull()
+      .default('human'),
 
-  userId: uuid('user_id').references(() => users.id, {
-    onDelete: 'set null',
-    onUpdate: 'cascade',
-  }),
+    // Message / AI response text
+    content: text('content').notNull(),
 
-  // human or ai
-  role: varchar('role', {
-    length: 50,
-  })
-    .notNull()
-    .default('human'),
+    // Additional message information
+    metadata: jsonb('metadata'),
 
-  // Message / AI response text
-  content: text('content').notNull(),
+    // LLM token usage
+    inputTokens: integer('input_tokens'),
 
-  // Additional message information
-  metadata: jsonb('metadata'),
+    outputTokens: integer('output_tokens'),
 
-  // LLM token usage
-  inputTokens: integer('input_tokens'),
+    totalTokens: integer('total_tokens'),
 
-  outputTokens: integer('output_tokens'),
+    // Media information such as audio/image/file URL
+    mediaFile: jsonb('media_file'),
 
-  totalTokens: integer('total_tokens'),
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
 
-  // Media information such as audio/image/file URL
-  mediaFile: jsonb('media_file'),
-
-  createdAt: timestamp('created_at', {
-    withTimezone: true,
-  })
-    .defaultNow()
-    .notNull(),
-
-  updatedAt: timestamp('updated_at', {
-    withTimezone: true,
-  })
-    .defaultNow()
-    .notNull(),
-});
+    updatedAt: timestamp('updated_at', {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('messages_conversation_created_idx').on(
+      table.conversationId,
+      table.createdAt,
+    ),
+    index('messages_tenant_id_idx').on(table.tenantId),
+  ],
+);

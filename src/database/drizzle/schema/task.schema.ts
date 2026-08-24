@@ -1,4 +1,6 @@
+import { sql } from 'drizzle-orm';
 import {
+  boolean,
   pgTable,
   uuid,
   varchar,
@@ -6,10 +8,14 @@ import {
   timestamp,
   index,
   pgEnum,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
+import { companies } from './company.schema';
+import { prospects } from './prospect.schema';
+import { leads } from './lead.schema';
 
 export const taskStatusEnum = pgEnum('task_status', [
   'pending',
@@ -49,6 +55,21 @@ export const tasks = pgTable(
       onUpdate: 'cascade',
     }),
 
+    companyId: uuid('company_id').references(() => companies.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    prospectId: uuid('prospect_id').references(() => prospects.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    leadId: uuid('lead_id').references(() => leads.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
     title: varchar('title', {
       length: 255,
     }).notNull(),
@@ -62,6 +83,20 @@ export const tasks = pgTable(
     dueAt: timestamp('due_at', { withTimezone: true }),
 
     completedAt: timestamp('completed_at', { withTimezone: true }),
+
+    recurrenceEnabled: boolean('recurrence_enabled').default(false).notNull(),
+
+    recurrenceInterval: varchar('recurrence_interval', {
+      length: 16,
+    }),
+
+    recurrenceEndsAt: timestamp('recurrence_ends_at', { withTimezone: true }),
+
+    recurrenceSeriesId: uuid('recurrence_series_id'),
+
+    recurrenceOccurrenceKey: varchar('recurrence_occurrence_key', {
+      length: 16,
+    }),
 
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
@@ -80,5 +115,22 @@ export const tasks = pgTable(
       table.tenantId,
       table.status,
     ),
+    companyIdIdx: index('tasks_company_id_idx').on(table.companyId),
+    prospectIdIdx: index('tasks_prospect_id_idx').on(table.prospectId),
+    leadIdIdx: index('tasks_lead_id_idx').on(table.leadId),
+    recurrenceSeriesIdx: index('tasks_recurrence_series_idx').on(
+      table.recurrenceSeriesId,
+    ),
+    recurrenceOccurrenceUnique: uniqueIndex(
+      'tasks_recurrence_occurrence_unique',
+    )
+      .on(
+        table.tenantId,
+        table.recurrenceSeriesId,
+        table.recurrenceOccurrenceKey,
+      )
+      .where(
+        sql`${table.recurrenceSeriesId} IS NOT NULL AND ${table.recurrenceOccurrenceKey} IS NOT NULL`,
+      ),
   }),
 );

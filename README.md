@@ -1,98 +1,192 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# AI Business Agent
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Multi-tenant NestJS backend and React frontend for knowledge-base RAG, Gmail/Twilio communication, CRM-style tenant data, and a JWT-scoped AI Assistant.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Requirements
 
-## Description
+- Node.js 20+
+- PostgreSQL 16+ (no pgvector required; embeddings are stored as `float8[]`)
+- Redis 7+ recommended for queued document ingestion and task reminders
+- A Gemini API key for chat, embeddings, and RAG (optional for non-AI boot; RAG/chat degrade gracefully when unset)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Environment
 
-## Project setup
+Copy `.env.example` to `.env` and set at least:
 
-```bash
-$ npm install
-```
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `JWT_SECRET` | yes | JWT signing secret. Production refuses to start if missing. |
+| `INTEGRATION_ENCRYPTION_KEY` | yes | AES-256 key (base64 or hex, 32 bytes) for Gmail/Twilio secrets at rest. Generate with `openssl rand -base64 32`. Never commit the real value. |
+| `JWT_EXPIRES_IN` | no | Token lifetime (default `7d`) |
+| `REDIS_URL` | recommended | BullMQ document ingestion + task reminders |
+| `GOOGLE_GENAI_API_KEY` | for AI | Gemini chat + embeddings. Without it the app boots; RAG routes are disabled. |
+| `GEMINI_MODEL` | no | Default fallback model (e.g. `gemini-2.0-flash`). Tenants may override via Master Settings allowlist. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Gmail OAuth | Redirect URI must be `{origin}/api/google/auth/callback` |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_WEBHOOK_BASE_URL` | Twilio | Env-level Twilio; per-tenant `authToken` is stored encrypted on `phone_numbers` |
+| `KNOWLEDGE_STORAGE_DIR` | no | Original uploaded files (default `./storage/knowledge`) |
+| `CORS_ORIGINS` | no | Frontend origin (default `http://localhost:5173`) |
 
-## Compile and run the project
+Do not commit `.env` or real encryption keys.
 
-```bash
-# development
-$ npm run start
+### Integration secrets at rest
 
-# watch mode
-$ npm run start:dev
+Gmail `accessToken`, `refreshToken`, `clientSecret`, `smtpPassword` and Twilio `authToken` are encrypted with AES-256-GCM before write and decrypted only inside integration services at point of use. Values never appear in API responses or AI tool outputs.
 
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
+Encrypt existing plaintext rows once:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run db:encrypt-secrets
 ```
 
-## Deployment
+Safe to re-run; already-encrypted (`enc:v1:`) values are skipped.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Local PostgreSQL
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Create an empty database, then apply versioned migrations:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+createdb ai_business_agent
+# or: psql -c "CREATE DATABASE ai_business_agent;"
+npm run db:migrate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+See `src/database/drizzle/migrations/README.md` for fresh vs upgrade paths.
 
-## Resources
+Verify:
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+node scripts/verify-fresh-db-migration.js
+node scripts/verify-phase4-schema.js
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Redis
 
-## Support
+```bash
+# Windows/macOS/Linux with Docker:
+docker run -d --name aba-redis -p 6379:6379 redis:7
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Set `REDIS_URL=redis://127.0.0.1:6379`. Without Redis, knowledge uploads still index in-process after a queue enqueue failure.
 
-## Stay in touch
+## Backend
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```bash
+npm install
+npm run start:dev
+```
 
-## License
+Production:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```bash
+npm run build
+npm run start:prod
+```
+
+`start:prod` runs `node dist/src/main.js` (Nest compiles `src/main.ts` to `dist/src/main.js`).
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend talks to `VITE_API_URL` (see `frontend/.env.example`, default `http://localhost:3000/api`).
+
+## AI Assistant & security architecture
+
+- Chat is persisted: `POST /api/ai/chat` creates/reuses assistant conversations and messages (Phase 8).
+- JWT `tenantId` / `userId` are authoritative. ADK tools use `getTrustedAiContext()` — model-supplied tenant IDs are ignored.
+- Master Agent routes by regex, then delegates to Task (deterministic), RAG (ADK + fallback), Communication, or Proposal subagents.
+- Per-tenant `master_settings.aiModel` is allowlisted and resolved at runtime (`resolveAdkModelName` → `AdkAgentFactoryService`).
+
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests mock Gemini/Gmail/Twilio. They do not require live credentials.
+
+CI (`npm ci`, schema-source check, `npm run build`, `npm test`) does **not**
+migrate PostgreSQL. Generated Drizzle SQL/journal files are local-only and are
+not in Git, so a clean clone cannot recreate the database via `db:migrate`.
+
+API smoke / RAG / multi-tenant verification (running API + migrated PostgreSQL):
+
+```bash
+node scripts/verify-phase5-rag-flow.js
+node scripts/verify-conversational-chat.js
+node scripts/verify-phase19-tenant-isolation.js
+```
+
+There is no Playwright suite. Frontend checks are documented in `docs/phase6-frontend-smoke-checklist.md` and `docs/phase7-production-verification.md`.
+
+## Gmail / Twilio
+
+- Gmail OAuth: `GET /api/google/auth` (JWT) starts the flow. The callback is `GET /api/google/auth/callback`. OAuth `state` is a random, single-use, 10-minute value stored in PostgreSQL and bound to the initiating tenant/user.
+- Proposal status `sent` delivers via the authenticated tenant’s Gmail (`ProposalDeliveryService`) using decrypted credentials in memory only.
+- Twilio inbound webhooks validate `X-Twilio-Signature` before handling calls/SMS.
+- Per-tenant Twilio `authToken` on `phone_numbers` is encrypted at rest.
+
+## Known limitations
+
+- Master Agent routing is regex-based; greetings skip RAG, knowledge questions go to RAG.
+- Embeddings use `float8[]` cosine similarity in SQL, not pgvector.
+- The live developer database may contain leftover columns/tables (for example `master_setting_entries`) that are unused by current code. Fresh databases created from migrations do not include those leftovers.
+- The `tasks` table exists in the TypeScript schema; older developer databases may need the upgrade script before task APIs work.
+- Task dependencies and recurring tasks are supported (Phase 20):
+  - Dependencies live in `task_dependencies` (tenant-scoped; cycles/self/cross-tenant rejected).
+  - Blocking is computed (no new status): incomplete prerequisites keep a task blocked for completion/reminders.
+  - Recurrence (`daily` / `weekly` / `monthly`) spawns the next occurrence on complete with idempotent series keys.
+  - **Intentional:** the next recurring occurrence does **not** copy dependency edges from the completed occurrence. Dependencies are per-task links; re-link prerequisites on the new occurrence when needed.
+- Frontend automated tests are not present yet.
+
+### Task reliability smoke (Phase 21)
+
+```bash
+node scripts/upgrade-existing-db.js
+node scripts/verify-phase20-task-deps-recurrence.js
+node scripts/verify-phase21-task-reliability.js
+```
+
+Activity events recorded for Phase 20/21 actions (when activity/audit is available):
+
+- `TASK_DEPENDENCY_ADDED` / `TASK_DEPENDENCY_REMOVED`
+- `TASK_RECURRENCE_ENABLED` / `TASK_RECURRENCE_DISABLED` / `TASK_RECURRENCE_SPAWNED`
+- `TASK_BLOCKED_COMPLETION_REJECTED`
+
+### Task dependencies & recurrence API
+
+```http
+POST   /api/ai/task/:taskId/dependencies
+{ "dependsOnTaskId": "<uuid>" }
+
+GET    /api/ai/task/:taskId/dependencies
+DELETE /api/ai/task/:taskId/dependencies/:dependsOnTaskId
+
+POST   /api/ai/task
+{ "title": "Call client", "dueAt": "...", "recurrenceEnabled": true, "recurrenceInterval": "weekly" }
+```
+
+Natural language examples (JWT tenant/user remain authoritative):
+
+- `Make Send proposal depend on Create proposal.`
+- `Which tasks are blocked?`
+- `Create a task to call client every Monday.`
+
+Upgrade existing databases:
+
+```bash
+node scripts/upgrade-existing-db.js
+```
+
+Two-tenant smoke (API + DB):
+
+```bash
+node scripts/verify-phase20-task-deps-recurrence.js
+```
+
+Rollback considerations: drop `task_dependencies` and recurrence columns only after confirming no production series rely on them; do not rewrite baseline migrations.

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, feature/ai-business-agent-integration]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      JWT_SECRET: ci-unit-test-secret-not-for-production
+      INTEGRATION_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Drizzle schema sources
+        run: |
+          test -f drizzle.config.ts
+          test -f src/database/drizzle/schema/index.ts
+          test -f src/database/drizzle/schema/oauth-state.schema.ts
+          test -f src/database/drizzle/schema/knowledge-document.schema.ts
+          test -f src/database/drizzle/schema/knowledge-chunk.schema.ts
+          test -f src/database/drizzle/schema/task.schema.ts
+          grep -q "oauth-state.schema" src/database/drizzle/schema/index.ts
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test -- --runInBand
+
+  # SQL migrations and Drizzle journal/snapshots are intentionally not in Git.
+  # Do not run `npm run db:migrate` or scripts/verify-phase4-schema.js in CI —
+  # a clean checkout has no migration artifacts.
+  # Fresh-DB / upgrade verification is local-only:
+  #   node scripts/verify-fresh-db-migration.js
+  #   node scripts/upgrade-existing-db.js
+  # Live API scripts need Gemini and a running API:
+  #   node scripts/verify-phase5-rag-flow.js
+  #   node scripts/verify-conversational-chat.js

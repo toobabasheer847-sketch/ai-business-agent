@@ -4,7 +4,6 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import Twilio from 'twilio';
 
 import { TwilioAppConfigurationService } from './twilio-app-configuration';
@@ -49,17 +48,6 @@ export interface PurchasedPhoneNumberResult {
   sid: string;
   friendlyName: string | null;
   status: string | null;
-  webhooks: {
-    voiceUrl: string;
-    smsUrl: string;
-    statusCallback: string;
-  };
-}
-
-export interface TwilioWebhookUrls {
-  voiceUrl: string;
-  smsUrl: string;
-  statusCallback: string;
 }
 
 @Injectable()
@@ -68,7 +56,6 @@ export class AvailablePhoneNumbersService {
 
   constructor(
     private readonly configService: TwilioAppConfigurationService,
-    private readonly nestConfig: ConfigService,
   ) {}
 
   private async getClient(tenantId: string) {
@@ -77,48 +64,11 @@ export class AvailablePhoneNumbersService {
 
     if (!credentials) {
       throw new ServiceUnavailableException(
-        'Twilio credentials are not configured for this tenant. Add a Twilio App or set TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN.',
+        'Twilio credentials are not configured for this tenant. Save Account SID and Auth Token on a Phone Number, or set TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN.',
       );
     }
 
     return Twilio(credentials.accountSid, credentials.authToken);
-  }
-
-  /**
-   * Builds absolute Twilio webhook URLs from TWILIO_WEBHOOK_BASE_URL.
-   * Throws if the env value is missing or not an absolute http(s) URL.
-   */
-  buildWebhookUrls(): TwilioWebhookUrls {
-    const raw = this.nestConfig.get<string>('TWILIO_WEBHOOK_BASE_URL')?.trim();
-
-    if (!raw) {
-      throw new ServiceUnavailableException(
-        'TWILIO_WEBHOOK_BASE_URL is not configured. Set it to your public backend URL (e.g. ngrok HTTPS) before buying a number.',
-      );
-    }
-
-    let base: URL;
-    try {
-      base = new URL(raw);
-    } catch {
-      throw new ServiceUnavailableException(
-        'TWILIO_WEBHOOK_BASE_URL must be an absolute http(s) URL with no path required (trailing slash optional).',
-      );
-    }
-
-    if (base.protocol !== 'http:' && base.protocol !== 'https:') {
-      throw new ServiceUnavailableException(
-        'TWILIO_WEBHOOK_BASE_URL must use http or https.',
-      );
-    }
-
-    const origin = base.origin;
-
-    return {
-      voiceUrl: `${origin}/api/webhooks/twilio/call/inbound`,
-      smsUrl: `${origin}/api/webhooks/twilio/sms/inbound`,
-      statusCallback: `${origin}/api/webhooks/twilio/call/status`,
-    };
   }
 
   async searchAvailable(
@@ -181,15 +131,12 @@ export class AvailablePhoneNumbersService {
   }
 
   /**
-   * Purchases an E.164 number, then configures voice/SMS/status webhooks on
-   * the IncomingPhoneNumber. Does not persist to the local DB — caller does.
+   * Purchases an E.164 number. Does not configure Twilio webhooks and does
+   * not persist to the local DB — the Phone Numbers service does that.
    */
   async purchaseNumber(
     input: PurchasePhoneNumberInput,
   ): Promise<PurchasedPhoneNumberResult> {
-    // Fail closed before any paid Twilio create if webhook base URL is missing.
-    const webhooks = this.buildWebhookUrls();
-
     const phoneNumber = input.phoneNumber.trim();
     const client = await this.getClient(input.tenantId);
 
@@ -235,45 +182,11 @@ export class AvailablePhoneNumbersService {
 
       purchasedSid = purchased.sid;
 
-      try {
-        await client.incomingPhoneNumbers(purchased.sid).update({
-          voiceUrl: webhooks.voiceUrl,
-          voiceMethod: 'POST',
-          smsUrl: webhooks.smsUrl,
-          smsMethod: 'POST',
-          statusCallback: webhooks.statusCallback,
-          statusCallbackMethod: 'POST',
-        });
-      } catch (webhookError) {
-        const message =
-          webhookError instanceof Error
-            ? webhookError.message
-            : 'Twilio webhook configuration failed';
-
-        this.logger.error(
-          {
-            tenantId: input.tenantId,
-            phoneNumber: purchased.phoneNumber ?? phoneNumber,
-            sid: purchased.sid,
-            voiceUrl: webhooks.voiceUrl,
-            smsUrl: webhooks.smsUrl,
-            statusCallback: webhooks.statusCallback,
-            err: message,
-          },
-          'Purchased Twilio number but failed to configure inbound webhooks; number was NOT saved locally',
-        );
-
-        throw new BadGatewayException(
-          `Phone number was purchased on Twilio (SID ${purchased.sid}) but webhook configuration failed: ${message}. The number was not saved. Configure webhooks manually or retry after fixing TWILIO_WEBHOOK_BASE_URL / Twilio access.`,
-        );
-      }
-
       return {
         phoneNumber: purchased.phoneNumber ?? phoneNumber,
         sid: purchased.sid,
         friendlyName: purchased.friendlyName ?? null,
         status: purchased.status ?? null,
-        webhooks,
       };
     } catch (error) {
       if (

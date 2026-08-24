@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../context/ai-request-context.js';
 import { GmailService, TenantGmailCredentials } from './gmail/gmail.service';
 import type { MailSummary, MailDraft } from '../../../integrations/gmail/mail-operations';
 
@@ -9,7 +10,6 @@ const SEND_MAIL_SCHEMA = z.object({
   to: z.string().email().describe('Recipient email address.'),
   subject: z.string().min(1).describe('Subject of the email.'),
   body: z.string().min(1).describe('Body/content of the email.'),
-  tenantId: z.string().uuid().describe('Tenant ID in which to send the email.'),
   fromEmail: z
     .string()
     .email()
@@ -20,7 +20,6 @@ const SEND_MAIL_SCHEMA = z.object({
 });
 
 const LIST_MAILS_SCHEMA = z.object({
-  tenantId: z.string().uuid().describe('Tenant ID whose inbox should be listed.'),
   fromEmail: z
     .string()
     .email()
@@ -44,7 +43,6 @@ const DRAFT_MAIL_SCHEMA = z.object({
   to: z.string().email().describe('Recipient email address.'),
   subject: z.string().min(1).describe('Subject of the email draft.'),
   body: z.string().min(1).describe('Body/content of the email draft.'),
-  tenantId: z.string().uuid().describe('Tenant ID under which to create the draft.'),
   fromEmail: z
     .string()
     .email()
@@ -124,9 +122,10 @@ export class CommunicationToolsProvider {
     return new FunctionTool({
       name: 'send_mail',
       description:
-        'Sends an email to the specified recipient using the tenant Gmail configuration. Requires a valid tenantId so the correct Gmail account is used.',
+        'Sends an email to the specified recipient using the authenticated tenant Gmail configuration.',
       parameters: SEND_MAIL_SCHEMA,
-      execute: async ({ to, subject, body, tenantId, fromEmail }) => {
+      execute: async ({ to, subject, body, fromEmail }) => {
+        const { tenantId } = getTrustedAiContext();
         const creds = await provider.resolveCredentials(tenantId, fromEmail);
         const sent = await provider.gmailService.mailOperations.sendEmail({
           to,
@@ -157,9 +156,10 @@ export class CommunicationToolsProvider {
     return new FunctionTool({
       name: 'list_all_mails',
       description:
-        'Lists emails available in the configured tenant Gmail inbox. Requires the tenantId so the correct Gmail configuration is selected. Returns a short preview of each email.',
+        'Lists emails available in the authenticated tenant Gmail inbox. Returns a short preview of each email.',
       parameters: LIST_MAILS_SCHEMA,
-      execute: async ({ tenantId, fromEmail, maxResults, query }) => {
+      execute: async ({ fromEmail, maxResults, query }) => {
+        const { tenantId } = getTrustedAiContext();
         const creds = await provider.resolveCredentials(tenantId, fromEmail);
         const mails: MailSummary[] =
           await provider.gmailService.mailOperations.listMessages({
@@ -192,9 +192,10 @@ export class CommunicationToolsProvider {
     return new FunctionTool({
       name: 'draft_mail',
       description:
-        'Creates an email draft in the configured tenant Gmail account. The draft is stored on Gmail servers and is NOT sent. Requires the tenantId.',
+        'Creates an email draft in the authenticated tenant Gmail account. The draft is stored on Gmail servers and is NOT sent.',
       parameters: DRAFT_MAIL_SCHEMA,
-      execute: async ({ to, subject, body, tenantId, fromEmail }) => {
+      execute: async ({ to, subject, body, fromEmail }) => {
+        const { tenantId } = getTrustedAiContext();
         const creds = await provider.resolveCredentials(tenantId, fromEmail);
         const draft: MailDraft =
           await provider.gmailService.mailOperations.createDraft({

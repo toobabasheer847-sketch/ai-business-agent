@@ -6,9 +6,23 @@ import { AppShellLayout } from '@/layouts/app-shell-layout'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { RegisterPage } from '@/features/auth/pages/register-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
+import { AssistantPage } from '@/features/assistant/pages/assistant-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
 import { PhoneNumbersPage } from '@/features/phone-numbers/pages/phone-numbers-page'
-import { ModulePlaceholderPage } from '@/components/common/module-placeholder-page'
+import { TenantPage } from '@/features/tenant/pages/tenant-page'
+import { BrandsPage } from '@/features/brands/pages/brands-page'
+import { MasterSettingsPage } from '@/features/master-settings/pages/master-settings-page'
+import { CompaniesPage } from '@/features/companies/pages/companies-page'
+import { LeadsPage } from '@/features/leads/pages/leads-page'
+import { ProspectsPage } from '@/features/prospects/pages/prospects-page'
+import { ConversationsPage } from '@/features/conversations/pages/conversations-page'
+import { CommunicationHubPage } from '@/features/communication-hub/pages/communication-hub-page'
+import { GmailConfigurationPage } from '@/features/gmail-configuration/pages/gmail-configuration-page'
+import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
+import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
+import { UsersPage } from '@/features/users/pages/users-page'
+import { TasksPage } from '@/features/tasks/pages/tasks-page'
+import { TaskAnalyticsPage } from '@/features/tasks/pages/task-analytics-page'
 
 export function AppRouter() {
   return (
@@ -23,211 +37,24 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShellLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
+          <Route path="/tasks/analytics" element={<TaskAnalyticsPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemStatusPage />} />
+          <Route path="/tenant" element={<TenantPage />} />
 
-          <Route
-            path="/brands"
-            element={
-              <ModulePlaceholderPage
-                title="Brand"
-                module="brand"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/brands',
-                  'GET /api/brands',
-                  'GET /api/brands/:id',
-                  'PATCH /api/brands/:id',
-                  'DELETE /api/brands/:id',
-                ]}
-                notes="One brand per tenant (tenantId unique)."
-              />
-            }
-          />
-          <Route
-            path="/companies"
-            element={
-              <ModulePlaceholderPage
-                title="Companies"
-                module="company"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/companies',
-                  'GET /api/companies?search=',
-                  'GET /api/companies/:id',
-                  'PATCH /api/companies/:id',
-                  'DELETE /api/companies/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/leads"
-            element={
-              <ModulePlaceholderPage
-                title="Leads"
-                module="lead"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/leads',
-                  'GET /api/leads?search=&status=&companyId=&source=',
-                  'GET /api/leads/:id',
-                  'PATCH /api/leads/:id',
-                  'DELETE /api/leads/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/prospects"
-            element={
-              <ModulePlaceholderPage
-                title="Prospects"
-                module="prospect"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/prospects',
-                  'GET /api/prospects',
-                  'GET /api/prospects/:id',
-                  'PATCH /api/prospects/:id',
-                  'DELETE /api/prospects/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/conversations"
-            element={
-              <ModulePlaceholderPage
-                title="Conversations"
-                module="conversation"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/conversations',
-                  'GET /api/conversations',
-                  'GET /api/conversations/:id',
-                  'PATCH /api/conversations/:id',
-                  'DELETE /api/conversations/:id',
-                  'GET /api/conversations/:id/messages',
-                  'POST /api/conversations/:id/messages',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/communication-hub"
-            element={
-              <ModulePlaceholderPage
-                title="Communication Hub"
-                module="communication-hub"
-                availableInAppModule={false}
-                endpoints={[
-                  'GET /api/communication-hub',
-                  'GET /api/communication-hub/stats',
-                  'GET /api/communication-hub/email-threads',
-                  'GET /api/communication-hub/sms-threads',
-                  'GET /api/communication-hub/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/proposals"
-            element={
-              <ModulePlaceholderPage
-                title="Proposals"
-                module="proposal"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/proposals',
-                  'GET /api/proposals',
-                  'GET /api/proposals/:id',
-                  'PATCH /api/proposals/:id',
-                  'DELETE /api/proposals/:id',
-                ]}
-                notes="Separate AI proposal agent routes also exist under /api/api/ai/proposals (double prefix bug)."
-              />
-            }
-          />
-          <Route
-            path="/knowledgebases"
-            element={
-              <ModulePlaceholderPage
-                title="Knowledgebase"
-                module="knowledgebase"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/knowledgebases',
-                  'GET /api/knowledgebases?search=',
-                  'GET /api/knowledgebases/:id',
-                  'PATCH /api/knowledgebases/:id',
-                  'DELETE /api/knowledgebases/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/gmail-configuration"
-            element={
-              <ModulePlaceholderPage
-                title="Gmail Configuration"
-                module="gmail-configuration"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/gmail-configuration',
-                  'GET /api/gmail-configuration',
-                  'PATCH /api/gmail-configuration',
-                  'PATCH /api/gmail-configuration/deactivate',
-                  'DELETE /api/gmail-configuration',
-                ]}
-              />
-            }
-          />
+          <Route path="/brands" element={<BrandsPage />} />
+          <Route path="/companies" element={<CompaniesPage />} />
+          <Route path="/leads" element={<LeadsPage />} />
+          <Route path="/prospects" element={<ProspectsPage />} />
+          <Route path="/conversations" element={<ConversationsPage />} />
+          <Route path="/communication-hub" element={<CommunicationHubPage />} />
+          <Route path="/proposals" element={<ProposalsPage />} />
+          <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
+          <Route path="/gmail-configuration" element={<GmailConfigurationPage />} />
           <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
-          <Route
-            path="/twilio-apps"
-            element={
-              <ModulePlaceholderPage
-                title="Twilio Apps"
-                module="twilio-app"
-                availableInAppModule
-                endpoints={[
-                  'POST /api/twilio-apps',
-                  'GET /api/twilio-apps',
-                  'GET /api/twilio-apps/:id',
-                  'PATCH /api/twilio-apps/:id',
-                  'DELETE /api/twilio-apps/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ModulePlaceholderPage
-                title="Users"
-                module="user"
-                availableInAppModule={false}
-                endpoints={[
-                  'POST /api/users',
-                  'GET /api/users',
-                  'GET /api/users/:id',
-                  'PATCH /api/users/:id',
-                  'DELETE /api/users/:id',
-                ]}
-              />
-            }
-          />
-          <Route
-            path="/master-settings"
-            element={
-              <ModulePlaceholderPage
-                title="Master Settings"
-                module="master-settings"
-                availableInAppModule={false}
-                endpoints={['GET /api/master-settings', 'PATCH /api/master-settings']}
-              />
-            }
-          />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/master-settings" element={<MasterSettingsPage />} />
         </Route>
       </Route>
 

@@ -1,78 +1,150 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
-
+import { UserRepository } from '../../../modules/user/user.repository';
+import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
+import { resolveAssignedToForTenant } from './resolve-assigned-to.js';
+import { TaskCrmResolver } from './resolve-crm-entities.js';
+import { getTrustedTaskContext, runWithTaskContext } from './task-request-context.js';
 import { TaskRepository } from './task.repository.js';
-import { TaskAgentResponse, TaskContext } from './types/task.types.js';
+import { TaskService } from './task.service.js';
+import type { TaskAgentResponse, TaskContext } from './types/task.types.js';
+
+function toTaskContext(
+  context: ReturnType<typeof getTrustedTaskContext>,
+): TaskContext {
+  return {
+    userId: context.userId,
+    tenantId: context.tenantId,
+    email: context.email ?? undefined,
+  };
+}
 
 @Injectable()
 export class TaskAgent {
   private readonly agent: any | null;
+  private readonly apiKey: string | null;
+  private readonly adkTools: any[] | null;
 
   constructor(
     private readonly taskRepository: TaskRepository,
+    private readonly taskService: TaskService,
     private readonly configService: ConfigService,
+    private readonly userRepository: UserRepository,
+    private readonly crmResolver: TaskCrmResolver,
   ) {
-    const modelName = this.configService.get<string>(
-      'GEMINI_MODEL',
-      'gemini-2.0-flash',
-    );
-    const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
+    this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? null;
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       this.agent = null;
+      this.adkTools = null;
       return;
     }
 
+    this.adkTools = this.buildTools();
+    const modelName = resolveAdkModelName(this.configService);
+    this.agent = this.buildLlmAgent(modelName);
+  }
+
+  /**
+   * Builds a fresh ADK LlmAgent for Master routing. Each Master Agent instance
+   * must receive its own child agent — ADK agents can have only one parent.
+   */
+  buildLlmAgent(modelName: string): any | null {
+    if (!this.apiKey || !this.adkTools) {
+      return null;
+    }
+
+    return this.createAgent(modelName, this.apiKey, this.adkTools);
+  }
+
+  private buildTools(): any[] {
     const { FunctionTool } = require('@google/adk');
 
     const createTaskTool = new FunctionTool({
       name: 'create_task',
-      description: 'Create a tenant-scoped task for the current user.',
+      description:
+        'Create a task for the authenticated user. Tenant and owner are taken from the request, not from arguments.',
       parameters: z.object({
-        tenantId: z.string(),
-        createdBy: z.string(),
         title: z.string(),
         description: z.string().optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
-      execute: async (input: any) => this.taskRepository.createTask(input),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        const assignedTo = await resolveAssignedToForTenant(
+          this.userRepository,
+          input.assignedTo,
+          context.tenantId,
+        );
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: input.companyId,
+          prospectId: input.prospectId,
+          leadId: input.leadId,
+        });
+        return this.taskRepository.createTask({
+          tenantId: context.tenantId,
+          createdBy: context.userId,
+          title: input.title,
+          description: input.description,
+          priority: input.priority,
+          assignedTo,
+          dueAt: input.dueAt,
+          companyId: crmIds.companyId ?? null,
+          prospectId: crmIds.prospectId ?? null,
+          leadId: crmIds.leadId ?? null,
+        });
+      },
     });
 
     const getTaskTool = new FunctionTool({
       name: 'get_task',
-      description: 'Fetch a tenant-scoped task by id.',
+      description: 'Fetch a task owned by or assigned to the authenticated user.',
       parameters: z.object({
         taskId: z.string(),
-        tenantId: z.string(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.getTask(input.taskId, input.tenantId),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        return this.taskRepository.getTask(
+          input.taskId,
+          context.tenantId,
+          context.userId,
+        );
+      },
     });
 
     const listTasksTool = new FunctionTool({
       name: 'list_tasks',
-      description: 'List tenant-scoped tasks with optional filters.',
+      description:
+        'List tasks owned by or assigned to the authenticated user.',
       parameters: z.object({
-        tenantId: z.string(),
         status: z
           .enum(['pending', 'in_progress', 'completed', 'cancelled'])
           .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         search: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.listTasks(input.tenantId, input),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        return this.taskRepository.listTasks(
+          context.tenantId,
+          context.userId,
+          input,
+        );
+      },
     });
 
     const updateTaskTool = new FunctionTool({
       name: 'update_task',
-      description: 'Update a tenant-scoped task.',
+      description:
+        'Update a task owned by or assigned to the authenticated user.',
       parameters: z.object({
         taskId: z.string(),
-        tenantId: z.string(),
         title: z.string().optional(),
         description: z.string().optional(),
         status: z
@@ -80,47 +152,138 @@ export class TaskAgent {
           .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.updateTask(input.taskId, input.tenantId, input),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        const { taskId, assignedTo, ...patch } = input;
+        if (assignedTo !== undefined) {
+          patch.assignedTo = await resolveAssignedToForTenant(
+            this.userRepository,
+            assignedTo,
+            context.tenantId,
+          );
+        }
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: patch.companyId,
+          prospectId: patch.prospectId,
+          leadId: patch.leadId,
+        });
+        if (patch.companyId !== undefined) {
+          patch.companyId = crmIds.companyId ?? null;
+        }
+        if (patch.prospectId !== undefined) {
+          patch.prospectId = crmIds.prospectId ?? null;
+        }
+        if (patch.leadId !== undefined) {
+          patch.leadId = crmIds.leadId ?? null;
+        }
+        return this.taskRepository.updateTask(
+          taskId,
+          context.tenantId,
+          context.userId,
+          patch,
+        );
+      },
     });
 
     const completeTaskTool = new FunctionTool({
       name: 'complete_task',
-      description: 'Mark a tenant-scoped task as completed.',
+      description:
+        'Mark a task owned by or assigned to the authenticated user as completed. Blocked tasks are rejected.',
       parameters: z.object({
         taskId: z.string(),
-        tenantId: z.string(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.updateTask(input.taskId, input.tenantId, {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-        }),
+      execute: async (input: any) => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.completeTask(input.taskId, context);
+      },
     });
 
     const cancelTaskTool = new FunctionTool({
       name: 'cancel_task',
-      description: 'Cancel a tenant-scoped task.',
+      description:
+        'Cancel a task owned by or assigned to the authenticated user.',
       parameters: z.object({
         taskId: z.string(),
-        tenantId: z.string(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.updateTask(input.taskId, input.tenantId, {
-          status: 'cancelled',
-        }),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        return this.taskRepository.updateTask(
+          input.taskId,
+          context.tenantId,
+          context.userId,
+          {
+            status: 'cancelled',
+          },
+        );
+      },
     });
 
-    this.agent = this.createAgent(modelName, apiKey, [
+    const addDependencyTool = new FunctionTool({
+      name: 'add_task_dependency',
+      description:
+        'Make one task depend on another. Tenant and ownership come from the request context.',
+      parameters: z.object({
+        taskId: z.string().uuid(),
+        dependsOnTaskId: z.string().uuid(),
+      }),
+      execute: async (input: any) => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.addTaskDependency(
+          input.taskId,
+          input.dependsOnTaskId,
+          context,
+        );
+      },
+    });
+
+    const removeDependencyTool = new FunctionTool({
+      name: 'remove_task_dependency',
+      description:
+        'Remove a dependency between two tasks for the authenticated tenant user.',
+      parameters: z.object({
+        taskId: z.string().uuid(),
+        dependsOnTaskId: z.string().uuid(),
+      }),
+      execute: async (input: any) => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.removeTaskDependency(
+          input.taskId,
+          input.dependsOnTaskId,
+          context,
+        );
+      },
+    });
+
+    const listBlockedTool = new FunctionTool({
+      name: 'list_blocked_tasks',
+      description:
+        'List open tasks that are blocked by incomplete dependencies for the authenticated user.',
+      parameters: z.object({}),
+      execute: async () => {
+        const context = toTaskContext(getTrustedTaskContext());
+        return this.taskService.listTasks(
+          { blocked: true, openOnly: true },
+          context,
+        );
+      },
+    });
+
+    return [
       createTaskTool,
       getTaskTool,
       listTasksTool,
       updateTaskTool,
       completeTaskTool,
       cancelTaskTool,
-    ]);
+      addDependencyTool,
+      removeDependencyTool,
+      listBlockedTool,
+    ];
   }
 
   private createAgent(modelName: string, apiKey: string, tools: any[]) {
@@ -133,132 +296,25 @@ export class TaskAgent {
         apiKey,
       }),
       instruction:
-        'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks. Never cross tenant boundaries. If the request is ambiguous, ask for clarification.',
+        'You are a tenant-aware task assistant. Use the provided tools to create, read, list, update, complete, and cancel tasks, and to manage dependencies. Never cross tenant boundaries. If the request is ambiguous, ask for clarification. Never accept tenantId or createdBy from the user or tool arguments.',
       tools,
     });
   }
 
-  async processRequest(
-    context: TaskContext,
-    request: string,
-  ): Promise<TaskAgentResponse> {
-    const fallback = this.parseNaturalLanguage(request, context);
-
-    if (fallback.action === 'create') {
-      const created = await this.taskRepository.createTask({
-        tenantId: context.tenantId,
-        createdBy: context.userId,
-        title: fallback.data.title,
-        description: fallback.data.description,
-        priority: fallback.data.priority,
-        assignedTo: fallback.data.assignedTo,
-        dueAt: fallback.data.dueAt,
-      });
-      return {
-        action: 'create',
-        data: created,
-        message: 'Task created successfully.',
-      };
-    }
-
-    if (fallback.action === 'list') {
-      const rows = await this.taskRepository.listTasks(context.tenantId, {
-        status: fallback.data.status,
-      });
-      return { action: 'list', data: rows, message: 'Tasks retrieved.' };
-    }
-
-    if (fallback.action === 'complete') {
-      const updated = await this.taskRepository.updateTask(
-        fallback.data.id,
-        context.tenantId,
-        {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-        },
-      );
-      return { action: 'complete', data: updated, message: 'Task completed.' };
-    }
-
-    if (fallback.action === 'cancel') {
-      const updated = await this.taskRepository.updateTask(
-        fallback.data.id,
-        context.tenantId,
-        {
-          status: 'cancelled',
-        },
-      );
-      return { action: 'cancel', data: updated, message: 'Task cancelled.' };
-    }
-
-    return {
-      action: 'get',
-      data: null,
-      message: 'Task request could not be understood.',
-    };
-  }
-
-  private parseNaturalLanguage(request: string, context: TaskContext): any {
-    const lower = request.toLowerCase();
-
-    if (
-      lower.includes('show') ||
-      lower.includes('list') ||
-      lower.includes('pending') ||
-      lower.includes('today')
-    ) {
-      return {
-        action: 'list',
-        data: {
-          status: lower.includes('completed')
-            ? 'completed'
-            : lower.includes('cancelled')
-              ? 'cancelled'
-              : 'pending',
-        },
-      };
-    }
-
-    if (lower.includes('complete') || lower.includes('mark as completed')) {
-      const id = this.extractId(request);
-      return { action: 'complete', data: { id } };
-    }
-
-    if (lower.includes('cancel')) {
-      const id = this.extractId(request);
-      return { action: 'cancel', data: { id } };
-    }
-
-    if (lower.includes('create') || lower.includes('new')) {
-      const title = request.replace(/^(create|new)\s+/i, '').trim();
-      const priority = lower.includes('urgent')
-        ? 'urgent'
-        : lower.includes('high')
-          ? 'high'
-          : lower.includes('low')
-            ? 'low'
-            : 'medium';
-      return {
-        action: 'create',
-        data: {
-          title: title || 'Untitled task',
-          description: request,
-          priority,
-          assignedTo: undefined,
-          dueAt: undefined,
-        },
-      };
-    }
-
-    return { action: 'get', data: { id: this.extractId(request) } };
-  }
-
-  private extractId(request: string): string | undefined {
-    const match = request.match(/([a-f0-9-]{8,})/i);
-    return match ? match[1] : undefined;
-  }
-
   getAgentInstance() {
     return this.agent;
+  }
+
+  /**
+   * Master delegation entry point. Deterministic NL parsing stays in TaskService;
+   * trusted tenant/user identity is bound server-side before any tool or service call.
+   */
+  async delegateNaturalLanguage(
+    message: string,
+    context: TaskContext,
+  ): Promise<TaskAgentResponse> {
+    return runWithTaskContext(context, () =>
+      this.taskService.processNaturalLanguage(message, context),
+    );
   }
 }

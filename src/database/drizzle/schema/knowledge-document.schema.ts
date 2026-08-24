@@ -3,6 +3,7 @@ import {
   uuid,
   varchar,
   text,
+  integer,
   timestamp,
   index,
   jsonb,
@@ -36,6 +37,10 @@ export const knowledgeDocuments = pgTable(
       length: 500,
     }).notNull(),
 
+    originalFilename: varchar('original_filename', {
+      length: 500,
+    }).notNull(),
+
     content: text('content'),
 
     /** S3 object URL/key or external source */
@@ -57,13 +62,21 @@ export const knowledgeDocuments = pgTable(
       length: 100,
     }),
 
-    /**  category */
     category: varchar('category', {
       length: 255,
     }),
 
-    /**  Meta Data */
     metadata: jsonb('metadata'),
+
+    byteSize: integer('byte_size'),
+
+    status: varchar('status', {
+      length: 32,
+    })
+      .notNull()
+      .default('pending'),
+
+    failureReason: text('failure_reason'),
 
     createdAt: timestamp('created_at', {
       withTimezone: true,
@@ -92,5 +105,7 @@ export const knowledgeDocuments = pgTable(
       table.tenantId,
       table.knowledgeBaseId,
     ),
+
+    statusIdx: index('knowledge_documents_status_idx').on(table.status),
   }),
 );

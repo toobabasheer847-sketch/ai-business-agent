@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthRepository } from './auth.repository';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { resolveJwtSecret } from './jwt-secret.util';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -17,7 +18,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService): JwtModuleOptions => ({
-        secret: configService.get<string>('JWT_SECRET') ?? 'development-secret',
+        secret: resolveJwtSecret(
+          configService.get<string>('JWT_SECRET'),
+          configService.get<string>('NODE_ENV'),
+        ),
         signOptions: {
           expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1d') as unknown as number,
         },

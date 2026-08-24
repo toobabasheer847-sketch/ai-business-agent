@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -13,7 +14,6 @@ export class UpdateProposalTool extends FunctionTool<any> {
         'Update a tenant-scoped proposal (title, description, requirements, price, currency, validUntil, content, status).',
       parameters: z.object({
         proposalId: z.string(),
-        tenantId: z.string(),
         prospectId: z.string().optional(),
         title: z.string().min(3).optional(),
         description: z.string().optional(),
@@ -26,8 +26,11 @@ export class UpdateProposalTool extends FunctionTool<any> {
         validUntil: z.string().optional(),
         content: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.proposalRepository.updateProposal(input.proposalId, input.tenantId, input),
+      execute: async (input: any) => {
+        const { tenantId } = getTrustedAiContext();
+        const { proposalId, ...patch } = input;
+        return this.proposalRepository.updateProposal(proposalId, tenantId, patch);
+      },
     });
   }
 }

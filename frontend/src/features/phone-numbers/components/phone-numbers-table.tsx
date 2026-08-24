@@ -5,6 +5,7 @@ import type { PhoneNumber } from '@/features/phone-numbers/types/phone-number.ty
 import {
   PhoneNumberProviderBadge,
   PhoneNumberStatusBadge,
+  TwilioConnectedBadge,
 } from '@/features/phone-numbers/components/phone-number-badges'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,6 +49,7 @@ export function PhoneNumbersTable({ items, onEdit, onDelete }: PhoneNumbersTable
             <TableHead className="hidden sm:table-cell">Label</TableHead>
             <TableHead>Provider</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="hidden lg:table-cell">Twilio</TableHead>
             <TableHead className="hidden md:table-cell">Created</TableHead>
             <TableHead className="w-[100px] text-right">Actions</TableHead>
           </TableRow>
@@ -67,6 +69,13 @@ export function PhoneNumbersTable({ items, onEdit, onDelete }: PhoneNumbersTable
               </TableCell>
               <TableCell>
                 <PhoneNumberStatusBadge status={item.status} />
+              </TableCell>
+              <TableCell className="hidden lg:table-cell">
+                <TwilioConnectedBadge
+                  connected={Boolean(
+                    item.hasAuthToken || item.twilioSid || item.appSid || item.webhookUrl,
+                  )}
+                />
               </TableCell>
               <TableCell className="hidden text-muted-foreground md:table-cell">
                 {formatDate(item.createdAt)}

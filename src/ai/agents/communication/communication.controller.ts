@@ -1,7 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 
+import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import { CommunicationAgentService } from './communication.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('ai/communication')
 export class CommunicationAgentController {
   constructor(

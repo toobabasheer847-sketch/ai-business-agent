@@ -9,6 +9,7 @@ import * as argon2 from 'argon2';
 import { AuthRepository } from './auth.repository';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { resolveJwtSecret } from './jwt-secret.util';
 import {
   AuthenticatedUser,
   JwtPayload,
@@ -138,10 +139,10 @@ export class AuthService {
   private generateToken(
     payload: JwtPayload,
   ): string {
-    const secret =
-      this.configService.get<string>(
-        'JWT_SECRET',
-      ) ?? 'development-secret';
+    const secret = resolveJwtSecret(
+      this.configService.get<string>('JWT_SECRET'),
+      this.configService.get<string>('NODE_ENV'),
+    );
 
     const expiresIn =
       this.configService.get<string>(

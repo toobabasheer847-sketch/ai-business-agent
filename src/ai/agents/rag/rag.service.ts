@@ -25,31 +25,24 @@ export class RagService {
       throw new BadRequestException('Query is required');
     }
 
-    // Tenant can come from the authenticated user
-    // or from the request DTO for development/testing.
-    const resolvedTenantId = dto?.tenantId ?? tenantId;
-
-    if (!resolvedTenantId) {
+    if (!tenantId) {
       throw new BadRequestException(
         'Tenant context is required',
       );
     }
 
     try {
-      return await this.ragAgent.answerQuery(
-        resolvedTenantId,
-        queryText,
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unknown RAG error';
+      const topK = dto?.topK ? Number.parseInt(dto.topK, 10) : undefined;
 
+      return await this.ragAgent.answerQuery(tenantId, queryText, {
+        topK: Number.isFinite(topK) ? topK : undefined,
+        knowledgeBaseId: dto?.knowledgeBaseId,
+      });
+    } catch (error) {
       console.error('RagService.query failed:', error);
 
       throw new InternalServerErrorException(
-        `RAG query failed: ${message}`,
+        'RAG query failed to process the request',
       );
     }
   }

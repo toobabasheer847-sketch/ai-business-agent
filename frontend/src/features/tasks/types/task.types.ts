@@ -1,0 +1,321 @@
+/** Backend TaskStatus values — do not invent others */
+export const TASK_STATUSES = [
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+] as const
+
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/** Backend TaskPriority values — do not invent others */
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
+export type TaskPriority = (typeof TASK_PRIORITIES)[number]
+
+export type TaskCrmEntity = {
+  id: string
+  name: string
+  email?: string | null
+}
+
+/**
+ * Matches GET/POST /api/ai/task and related mutation responses.
+ * tenantId and createdBy are response-only; never send them from the client.
+ */
+export type Task = {
+  id: string
+  tenantId: string
+  createdBy: string
+  assignedTo: string | null
+  companyId: string | null
+  prospectId: string | null
+  leadId: string | null
+  title: string
+  description: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  dueAt: string | null
+  completedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  isOverdue?: boolean
+  reminder?: {
+    id: string
+    type: 'upcoming' | 'overdue' | 'before_due'
+    status:
+      | 'pending'
+      | 'processing'
+      | 'sent'
+      | 'skipped'
+      | 'failed'
+      | 'cancelled'
+      | 'disabled'
+    scheduledAt: string
+    processedAt?: string | null
+    channel?: 'gmail' | 'audit' | null
+    attemptCount?: number
+  } | null
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly' | string | null
+  recurrenceEndsAt?: string | null
+  recurrenceSeriesId?: string | null
+  recurrenceOccurrenceKey?: string | null
+  isBlocked?: boolean
+  blockedBy?: Array<{ id: string; title: string; status: string }>
+  nextOccurrenceAt?: string | null
+  company?: TaskCrmEntity | null
+  prospect?: TaskCrmEntity | null
+  lead?: TaskCrmEntity | null
+}
+
+/** Matches POST /api/ai/task body — never include tenantId or createdBy */
+export type CreateTaskRequest = {
+  title: string
+  description?: string
+  priority?: TaskPriority
+  assignedTo?: string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
+  dueAt?: string
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly'
+  recurrenceEndsAt?: string
+}
+
+/** Matches POST /api/ai/task/:taskId body — never include tenantId or createdBy */
+export type UpdateTaskRequest = {
+  title?: string
+  description?: string
+  status?: TaskStatus
+  priority?: TaskPriority
+  assignedTo?: string
+  companyId?: string | null
+  prospectId?: string | null
+  leadId?: string | null
+  dueAt?: string
+  recurrenceEnabled?: boolean
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly' | null
+  recurrenceEndsAt?: string | null
+}
+
+export type TaskDependencyEdge = {
+  id: string
+  tenantId: string
+  taskId: string
+  dependsOnTaskId: string
+  createdAt: string
+}
+
+export type TaskDependenciesResponse = {
+  taskId: string
+  isBlocked: boolean
+  blockedBy: Array<{ id: string; title: string; status: string }>
+  dependsOn: TaskDependencyEdge[]
+  dependents: TaskDependencyEdge[]
+}
+
+/** Matches DELETE /api/ai/task/:taskId response */
+export type DeleteTaskResponse = {
+  message: string
+  id: string
+}
+
+/** Matches GET /api/ai/task query — backend-supported filters only */
+export type TaskListQuery = {
+  status?: TaskStatus | string
+  priority?: TaskPriority | string
+  search?: string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
+  overdue?: boolean
+  dueFrom?: string
+  dueTo?: string
+  openOnly?: boolean
+  reminderStatus?: string
+  hasReminder?: boolean
+  reminderFrom?: string
+  reminderTo?: string
+  assigneeId?: string
+  blocked?: boolean
+}
+
+/** Matches POST /api/ai/task/natural-language response */
+export type TaskNaturalLanguageResponse = {
+  action:
+    | 'create'
+    | 'get'
+    | 'list'
+    | 'update'
+    | 'complete'
+    | 'cancel'
+    | 'clarify'
+    | 'activity'
+    | 'analytics'
+    | 'reminder_list'
+    | 'reminder_enable'
+    | 'reminder_disable'
+    | 'reminder_reschedule'
+    | 'add_dependency'
+    | 'remove_dependency'
+    | 'list_blocked'
+  data: Task | Task[] | TaskAnalytics | null
+  message?: string
+}
+
+export const TASK_ACTIVITY_EVENTS = [
+  'TASK_CREATED',
+  'TASK_UPDATED',
+  'TASK_COMPLETED',
+  'TASK_CANCELLED',
+  'TASK_REOPENED',
+  'TASK_CRM_LINKED',
+  'TASK_CRM_UNLINKED',
+  'TASK_DEPENDENCY_ADDED',
+  'TASK_DEPENDENCY_REMOVED',
+  'TASK_RECURRENCE_ENABLED',
+  'TASK_RECURRENCE_DISABLED',
+  'TASK_RECURRENCE_SPAWNED',
+  'TASK_BLOCKED_COMPLETION_REJECTED',
+  'REMINDER_SCHEDULED',
+  'REMINDER_ENABLED',
+  'REMINDER_DISABLED',
+  'REMINDER_RESCHEDULED',
+  'REMINDER_PROCESSING',
+  'REMINDER_SENT',
+  'REMINDER_FAILED',
+  'REMINDER_RETRY',
+] as const
+
+export type TaskActivityEventType = (typeof TASK_ACTIVITY_EVENTS)[number]
+
+export type TaskActivityActor = {
+  id: string
+  name: string
+} | null
+
+export type TaskActivityItem = {
+  id: string
+  eventType: TaskActivityEventType
+  actor: TaskActivityActor
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export type TaskActivityResponse = {
+  taskId: string
+  activities: TaskActivityItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
+export type TaskReminderApiStatus =
+  | 'scheduled'
+  | 'processing'
+  | 'sent'
+  | 'failed'
+  | 'cancelled'
+  | 'disabled'
+
+export type TaskReminderItem = {
+  id: string
+  type: 'before_due' | 'overdue'
+  scheduledAt: string
+  status: TaskReminderApiStatus
+  channel: 'gmail' | 'audit' | null
+  sentAt: string | null
+  failedAt: string | null
+  attemptCount: number
+}
+
+export type TaskReminderListResponse = {
+  taskId: string
+  reminders: TaskReminderItem[]
+}
+
+export type TaskAnalyticsGroupBy = 'day' | 'week' | 'month'
+
+export type TaskAnalyticsQuery = {
+  from?: string
+  to?: string
+  status?: TaskStatus | string
+  priority?: TaskPriority | string
+  companyId?: string
+  prospectId?: string
+  leadId?: string
+  assigneeId?: string
+  groupBy?: TaskAnalyticsGroupBy
+}
+
+export type TaskAnalytics = {
+  summary: {
+    total: number
+    pending: number
+    inProgress: number
+    completed: number
+    cancelled: number
+    overdue: number
+    dueToday: number
+    dueTomorrow: number
+    highPriorityOpen: number
+    urgentOpen: number
+    withReminders: number
+  }
+  completionRate: number
+  overdueRate: number
+  reminderSuccessRate: number
+  reminderFailureRate: number
+  priority: {
+    low: number
+    medium: number
+    high: number
+    urgent: number
+  }
+  crm: {
+    company: number
+    prospect: number
+    lead: number
+    unlinked: number
+  }
+  reminders: {
+    scheduled: number
+    processing: number
+    sent: number
+    failed: number
+    cancelled: number
+    disabled: number
+  }
+  activity: {
+    created: number
+    updated: number
+    completed: number
+    cancelled: number
+    reopened: number
+    crmLinked: number
+    crmUnlinked: number
+    reminderEnabled: number
+    reminderDisabled: number
+    reminderSent: number
+    reminderFailed: number
+  }
+}
+
+export type TaskAnalyticsTrendPoint = {
+  period: string
+  created: number
+  completed: number
+  overdue: number
+}
+
+export type TaskAnalyticsTrends = {
+  groupBy: TaskAnalyticsGroupBy
+  from: string
+  to: string
+  trends: TaskAnalyticsTrendPoint[]
+}

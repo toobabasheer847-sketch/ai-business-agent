@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -12,8 +13,6 @@ export class CreateProposalTool extends FunctionTool<any> {
       description:
         'Create a tenant-scoped business proposal linked to a prospect. Always require prospectId and title.',
       parameters: z.object({
-        tenantId: z.string(),
-        createdBy: z.string(),
         prospectId: z.string(),
         title: z.string().min(3),
         description: z.string().optional(),
@@ -22,7 +21,27 @@ export class CreateProposalTool extends FunctionTool<any> {
         currency: z.string().length(3).optional(),
         validUntil: z.string().optional(),
       }),
-      execute: async (input: any) => this.proposalRepository.createProposal(input),
+      execute: async (input: any) => {
+        const context = getTrustedAiContext();
+        const prospect = await this.proposalRepository.getProspect(
+          input.prospectId,
+          context.tenantId,
+        );
+        if (!prospect) {
+          throw new BadRequestException('Prospect not found for this tenant');
+        }
+        return this.proposalRepository.createProposal({
+          tenantId: context.tenantId,
+          createdBy: context.userId,
+          prospectId: input.prospectId,
+          title: input.title,
+          description: input.description,
+          requirements: input.requirements,
+          price: input.price,
+          currency: input.currency,
+          validUntil: input.validUntil,
+        });
+      },
     });
   }
 }

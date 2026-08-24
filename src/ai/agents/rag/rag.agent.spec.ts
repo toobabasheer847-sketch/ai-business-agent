@@ -13,24 +13,53 @@ jest.mock('@google/adk', () => {
     constructor(public options: any) {}
   }
 
-  class MockInMemoryRunner {
-    constructor(public options: any) {}
-
-    async *runEphemeral() {
-      throw new Error('simulated model failure');
-    }
-  }
-
   return {
     FunctionTool: MockFunctionTool,
     LlmAgent: MockLlmAgent,
     Gemini: MockGemini,
-    InMemoryRunner: MockInMemoryRunner,
   };
 });
 
+jest.mock('@google/genai', () => ({
+  GoogleGenAI: jest.fn().mockImplementation(() => ({
+    models: {
+      generateContent: jest.fn().mockRejectedValue(
+        new Error('simulated model failure'),
+      ),
+    },
+  })),
+}));
+
 describe('RagAgent', () => {
-  it('falls back to a chunk-based answer when the model call fails', async () => {
+  it('boots without GOOGLE_GENAI_API_KEY and returns unavailable (no fake knowledge)', async () => {
+    const ragTools = {
+      searchKnowledge: jest.fn(),
+    };
+
+    const configService = {
+      get: jest.fn((key: string, fallback?: string) => {
+        if (key === 'GEMINI_MODEL') {
+          return fallback ?? 'gemini-2.0-flash';
+        }
+        if (key === 'GOOGLE_GENAI_API_KEY') {
+          return '';
+        }
+        return undefined;
+      }),
+    } as any;
+
+    const agent = new RagAgent(ragTools as any, configService);
+    expect(agent.isConfigured()).toBe(false);
+    expect(agent.getAgentInstance()).toBeNull();
+
+    const response = await agent.answerQuery('tenant-1', 'What is the refund policy?');
+    expect(response.usedKnowledge).toBe(false);
+    expect(response.sources).toEqual([]);
+    expect(response.answer).toMatch(/unavailable/i);
+    expect(ragTools.searchKnowledge).not.toHaveBeenCalled();
+  });
+
+  it('returns no-knowledge when the model call fails', async () => {
     const ragTools = {
       searchKnowledge: jest.fn().mockResolvedValue([
         {
@@ -59,8 +88,10 @@ describe('RagAgent', () => {
 
     const response = await agent.answerQuery('tenant-1', 'What does Acme do?');
 
-    expect(response.usedKnowledge).toBe(true);
-    expect(response.answer).toContain('Acme Corp');
-    expect(response.sources).toHaveLength(1);
+    expect(response.usedKnowledge).toBe(false);
+    expect(response.sources).toEqual([]);
+    expect(response.answer).toContain(
+      "couldn't find enough relevant information",
+    );
   });
 });

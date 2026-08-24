@@ -1,0 +1,1525 @@
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+
+import { TaskService } from './task.service';
+
+describe('TaskService', () => {
+  const tenantA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const tenantB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const userA = '11111111-1111-4111-8111-111111111111';
+  const userB = '22222222-2222-4222-8222-222222222222';
+  const taskId = '33333333-3333-4333-8333-333333333333';
+
+  const contextA = { tenantId: tenantA, userId: userA };
+  const contextB = { tenantId: tenantA, userId: userB };
+  const otherTenant = { tenantId: tenantB, userId: userA };
+
+  const ownedTask = {
+    id: taskId,
+    tenantId: tenantA,
+    createdBy: userA,
+    assignedTo: null,
+    title: 'Call Ahmed',
+    status: 'pending',
+    priority: 'medium',
+  };
+
+  let service: TaskService;
+  let taskRepository: {
+    createTask: jest.Mock;
+    findByIdAndTenantAndUser: jest.Mock;
+    findAllByTenantAndUser: jest.Mock;
+    updateTask: jest.Mock;
+    deleteTask: jest.Mock;
+  };
+  let userRepository: { findByIdAndTenant: jest.Mock; findAllByTenant: jest.Mock };
+  let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
+  let activity: { record: jest.Mock; listForTask: jest.Mock };
+  let analytics: { getSummary: jest.Mock; getTrends: jest.Mock; listExportRows: jest.Mock };
+
+  const analyticsFixture = {
+    summary: {
+      total: 20,
+      pending: 8,
+      inProgress: 3,
+      completed: 7,
+      cancelled: 2,
+      overdue: 4,
+      dueToday: 3,
+      dueTomorrow: 2,
+      highPriorityOpen: 4,
+      urgentOpen: 1,
+      withReminders: 9,
+    },
+    completionRate: 35,
+    overdueRate: 20,
+    reminderSuccessRate: 89,
+    reminderFailureRate: 11,
+    priority: { low: 2, medium: 10, high: 6, urgent: 2 },
+    crm: { company: 8, prospect: 5, lead: 4, unlinked: 3 },
+    reminders: {
+      scheduled: 5,
+      processing: 0,
+      sent: 8,
+      failed: 1,
+      cancelled: 0,
+      disabled: 3,
+    },
+    activity: {
+      created: 5,
+      updated: 2,
+      completed: 3,
+      cancelled: 1,
+      reopened: 0,
+      crmLinked: 1,
+      crmUnlinked: 0,
+      reminderEnabled: 1,
+      reminderDisabled: 0,
+      reminderSent: 8,
+      reminderFailed: 1,
+    },
+  };
+
+  beforeEach(() => {
+    taskRepository = {
+      createTask: jest.fn().mockResolvedValue(ownedTask),
+      findByIdAndTenantAndUser: jest.fn().mockResolvedValue(ownedTask),
+      findAllByTenantAndUser: jest.fn().mockResolvedValue([ownedTask]),
+      updateTask: jest.fn().mockResolvedValue(ownedTask),
+      deleteTask: jest.fn().mockResolvedValue(true),
+    };
+    userRepository = {
+      findByIdAndTenant: jest.fn().mockResolvedValue({ id: userB, tenantId: tenantA }),
+      findAllByTenant: jest.fn().mockResolvedValue([
+        { id: userB, tenantId: tenantA, name: 'Ahmed', email: 'ahmed@example.com' },
+      ]),
+    };
+    crmResolver = {
+      resolve: jest.fn().mockResolvedValue({ status: 'none' }),
+      assertIds: jest.fn(async (_tenantId: string, ids: any) => ids),
+    };
+    activity = {
+      record: jest.fn().mockResolvedValue(undefined),
+      listForTask: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    };
+    analytics = {
+      getSummary: jest.fn().mockResolvedValue(analyticsFixture),
+      getTrends: jest.fn().mockResolvedValue([
+        { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+      ]),
+      listExportRows: jest.fn().mockResolvedValue([]),
+    };
+
+    service = new TaskService(
+      taskRepository as any,
+      userRepository as any,
+      crmResolver as any,
+      undefined,
+      activity as any,
+      analytics as any,
+    );
+  });
+
+  it('creates a task with JWT tenant and user, not body ownership fields', async () => {
+    await service.createTask(
+      { title: 'Call Ahmed', assignedTo: userB } as any,
+      contextA,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        assignedTo: userB,
+        title: 'Call Ahmed',
+      }),
+    );
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(tenantA, expect.any(Object));
+  });
+
+  it('creates a task linked to a same-tenant company', async () => {
+    await service.createTask(
+      { title: 'Follow up', companyId: 'company-1' } as any,
+      contextA,
+    );
+
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
+  it('creates a task linked to a same-tenant prospect or lead', async () => {
+    await service.createTask(
+      { title: 'Follow up', prospectId: 'prospect-1' } as any,
+      contextA,
+    );
+    await service.createTask(
+      { title: 'Follow up', leadId: 'lead-1' } as any,
+      contextA,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ prospectId: 'prospect-1', tenantId: tenantA }),
+    );
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ leadId: 'lead-1', tenantId: tenantA }),
+    );
+  });
+
+  it('rejects a cross-tenant company on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Company not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', companyId: 'company-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-tenant prospect on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Prospect not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', prospectId: 'prospect-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a cross-tenant lead on create', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Lead not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.createTask(
+        { title: 'Follow up', leadId: 'lead-b' } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('updates a CRM relationship after tenant validation', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-2',
+    });
+
+    await service.updateTask(
+      taskId,
+      { companyId: 'company-2' } as any,
+      contextA,
+    );
+    await service.updateTask(
+      taskId,
+      { prospectId: 'prospect-2' } as any,
+      contextA,
+    );
+    await service.updateTask(
+      taskId,
+      { leadId: 'lead-2' } as any,
+      contextA,
+    );
+
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-2' }),
+    );
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ prospectId: 'prospect-2' }),
+    );
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ leadId: 'lead-2' }),
+    );
+  });
+
+  it('rejects assignment to a user in another tenant', async () => {
+    userRepository.findByIdAndTenant.mockResolvedValue(undefined);
+
+    await expect(
+      service.createTask(
+        { title: 'Call Ahmed', assignedTo: userB } as any,
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('does not allow another tenant to read a task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(undefined);
+
+    await expect(service.getTask(taskId, otherTenant)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(taskRepository.findByIdAndTenantAndUser).toHaveBeenCalledWith(
+      taskId,
+      tenantB,
+      userA,
+    );
+  });
+
+  it('does not allow another user in the same tenant to read a private task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(undefined);
+
+    await expect(service.getTask(taskId, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(taskRepository.findByIdAndTenantAndUser).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userB,
+    );
+  });
+
+  it('allows an assigned user to access a task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue({
+      ...ownedTask,
+      assignedTo: userB,
+    });
+
+    const task = await service.getTask(taskId, contextB);
+
+    expect(task.assignedTo).toBe(userB);
+  });
+
+  it('does not allow another user to update a private task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(undefined);
+
+    await expect(
+      service.updateTask(taskId, { title: 'Hacked' } as any, contextB),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('does not allow another user to delete a private task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(undefined);
+
+    await expect(service.deleteTask(taskId, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(taskRepository.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('deletes an owned task', async () => {
+    const result = await service.deleteTask(taskId, contextA);
+
+    expect(taskRepository.deleteTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+    );
+    expect(result).toEqual({
+      message: 'Task deleted successfully',
+      id: taskId,
+    });
+  });
+
+  it('lists only the current user scope', async () => {
+    await service.listTasks({}, contextA);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+    );
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.any(Object),
+    );
+  });
+
+  it('lists tasks by tenant-safe assignee and rejects a cross-tenant assignee', async () => {
+    await service.listTasks({ assigneeId: userB }, contextA);
+    expect(userRepository.findByIdAndTenant).toHaveBeenCalledWith(userB, tenantA);
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+    );
+
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+    await expect(
+      service.listTasks({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('lists overdue tasks through the repository overdue filter', async () => {
+    const now = new Date('2026-08-20T12:00:00.000Z');
+
+    await service.processNaturalLanguage('Show my overdue tasks', contextA, now);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ overdue: true }),
+    );
+  });
+
+  it('lists tasks due today and tomorrow using UTC day bounds', async () => {
+    const now = new Date('2026-08-20T12:00:00.000Z');
+
+    await service.processNaturalLanguage('Show tasks due today', contextA, now);
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        dueFrom: '2026-08-20T00:00:00.000Z',
+        dueTo: '2026-08-20T23:59:59.999Z',
+      }),
+    );
+
+    await service.processNaturalLanguage(
+      'Show tasks due tomorrow',
+      contextA,
+      now,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        dueFrom: '2026-08-21T00:00:00.000Z',
+        dueTo: '2026-08-21T23:59:59.999Z',
+      }),
+    );
+  });
+
+  it('lists by same-tenant company without weakening ownership', async () => {
+    await service.listTasks({ companyId: 'company-1' } as any, contextA);
+
+    expect(crmResolver.assertIds).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+  });
+
+  it('lists by prospect and lead using JWT ownership', async () => {
+    await service.listTasks({ prospectId: 'prospect-1' } as any, contextA);
+    await service.listTasks({ leadId: 'lead-1' } as any, contextA);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ prospectId: 'prospect-1' }),
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ leadId: 'lead-1' }),
+    );
+  });
+
+  it('rejects a cross-tenant company filter', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException(
+        'Company not found or does not belong to your tenant.',
+      ),
+    );
+
+    await expect(
+      service.listTasks({ companyId: 'company-b' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(taskRepository.findAllByTenantAndUser).not.toHaveBeenCalled();
+  });
+
+  it('clears a CRM relationship on update', async () => {
+    await service.updateTask(taskId, { companyId: null } as any, contextA);
+
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: null }),
+    );
+  });
+
+  it('passes JWT context into natural language and requires userId', async () => {
+    await service.processNaturalLanguage('Show my pending tasks', contextA);
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+    );
+
+    await expect(
+      service.processNaturalLanguage('Show my pending tasks', {
+        tenantId: tenantA,
+        userId: '',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('creates a task from natural language using JWT tenant and user', async () => {
+    const now = new Date('2026-08-20T12:00:00.000Z');
+
+    await service.processNaturalLanguage(
+      'Create a high priority task to call Ahmed tomorrow.',
+      contextA,
+      now,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        title: 'Call Ahmed',
+        priority: 'high',
+        dueAt: '2026-08-21T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('ignores tenantId and createdBy mentioned in natural language', async () => {
+    await service.processNaturalLanguage(
+      'Create a task to call Ahmed tomorrow for tenant bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb createdBy attacker',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+    expect(taskRepository.createTask).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantB,
+      }),
+    );
+  });
+
+  it('completes, cancels, updates, and gets a unique title match', async () => {
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([
+      { ...ownedTask, title: 'ABC follow-up' },
+    ]);
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      title: 'ABC follow-up',
+      status: 'completed',
+    });
+
+    const completed = await service.processNaturalLanguage(
+      'Mark my ABC follow-up task as completed.',
+      contextA,
+    );
+    expect(completed.action).toBe('complete');
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ status: 'completed' }),
+    );
+
+    await service.processNaturalLanguage('Cancel my ABC follow-up task.', contextA);
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ status: 'cancelled' }),
+    );
+
+    await service.processNaturalLanguage(
+      'Change my ABC task priority to high.',
+      contextA,
+    );
+    expect(taskRepository.updateTask).toHaveBeenCalledWith(
+      taskId,
+      tenantA,
+      userA,
+      expect.objectContaining({ priority: 'high' }),
+    );
+
+    const found = await service.processNaturalLanguage(
+      'Show my ABC follow-up task.',
+      contextA,
+    );
+    expect(found.action).toBe('get');
+    expect(found.data).toEqual(expect.objectContaining({ title: 'ABC follow-up' }));
+  });
+
+  it('asks for clarification when multiple tasks match', async () => {
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([
+      { ...ownedTask, id: '44444444-4444-4444-8444-444444444444', title: 'Follow up with Ahmed' },
+      { ...ownedTask, id: '55555555-5555-4555-8555-555555555555', title: 'Follow up with ABC' },
+    ]);
+
+    const result = await service.processNaturalLanguage(
+      'Complete my follow-up task.',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain('I found 2 matching tasks');
+    expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when no accessible task matches', async () => {
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([]);
+
+    const result = await service.processNaturalLanguage(
+      'Complete the task to call Ahmed.',
+      contextA,
+    );
+
+    expect(result).toEqual({
+      action: 'complete',
+      data: null,
+      message: 'Task not found.',
+    });
+    expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('cannot complete another user or tenant private task through natural language', async () => {
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([]);
+
+    await service.processNaturalLanguage(
+      'Complete the task to call Ahmed.',
+      contextB,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userB,
+      expect.any(Object),
+    );
+
+    await service.processNaturalLanguage(
+      'Complete the task to call Ahmed.',
+      otherTenant,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantB,
+      userA,
+      expect.any(Object),
+    );
+    expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('does not create a task when the due date cannot be understood', async () => {
+    const result = await service.processNaturalLanguage(
+      'Create a task to call Ahmed tomorrow at 25:00',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('persists companyId for follow-up text that names a unique company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with ABC tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
+  it('creates a task with a uniquely resolved company name', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with ABC company tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(crmResolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyQuery: 'ABC',
+        explicitCompany: true,
+      }),
+      tenantA,
+    );
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        title: 'Follow up with ABC Technologies',
+        companyId: 'company-1',
+      }),
+    );
+    expect(taskRepository.createTask.mock.calls[0][0].description).not.toBe(
+      'Resolved CRM context: company ABC Technologies.',
+    );
+  });
+
+  it('does not create a task when multiple companies match', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'company',
+      query: 'ABC',
+      matches: ['ABC Solutions', 'ABC Technologies', 'ABC Trading'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'Create a task to follow up with ABC company tomorrow.',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain('3 companies matching ABC');
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('does not invent a company when none match', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'missing',
+      kind: 'company',
+      query: 'ABC',
+    });
+
+    const result = await service.processNaturalLanguage(
+      'Create a task to follow up with ABC company tomorrow.',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain("I couldn't find a company named ABC");
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('creates a task with a uniquely resolved prospect id', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      person: {
+        kind: 'prospect',
+        id: 'prospect-1',
+        name: 'Ahmed Khan',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with Ahmed tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        prospectId: 'prospect-1',
+      }),
+    );
+  });
+
+  it('creates a task for a uniquely resolved person', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      person: {
+        kind: 'lead',
+        id: 'lead-1',
+        name: 'Ahmed Khan',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task to follow up with Ahmed tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        createdBy: userA,
+        title: 'Follow up with Ahmed Khan',
+        leadId: 'lead-1',
+      }),
+    );
+  });
+
+  it('persists prospect and company ids for a uniquely resolved person', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+      person: {
+        kind: 'prospect',
+        id: 'prospect-1',
+        name: 'Ahmed Khan',
+        companyId: 'company-1',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task for Ahmed from ABC tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        prospectId: 'prospect-1',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
+  it('asks which person when multiple people match', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'person',
+      query: 'Ahmed',
+      matches: ['Ahmed Khan', 'Ahmed Ali'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'Create a task to follow up with Ahmed.',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain('2 people matching Ahmed');
+    expect(taskRepository.createTask).not.toHaveBeenCalled();
+  });
+
+  it('still creates a plain-text task when a person is not in CRM', async () => {
+    crmResolver.resolve.mockResolvedValue({ status: 'none' });
+
+    await service.processNaturalLanguage(
+      'Create a task to call Ahmed tomorrow.',
+      contextA,
+      new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Call Ahmed',
+        tenantId: tenantA,
+        createdBy: userA,
+      }),
+    );
+  });
+
+  it('persists a lead id for a unique email match', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      person: {
+        kind: 'lead',
+        id: 'lead-1',
+        name: 'John Smith',
+        email: 'john@example.com',
+        companyId: 'c1',
+      },
+    });
+
+    await service.processNaturalLanguage(
+      'Create a task for john@example.com.',
+      contextA,
+    );
+
+    expect(taskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: 'lead-1',
+        companyId: 'c1',
+        tenantId: tenantA,
+      }),
+    );
+  });
+
+  it('resolves CRM using JWT tenant even if the text names another tenant', async () => {
+    await service.processNaturalLanguage(
+      'Create a task for ABC company in tenant-b createdBy attacker',
+      contextA,
+    );
+
+    expect(crmResolver.resolve).toHaveBeenCalledWith(
+      expect.any(Object),
+      tenantA,
+    );
+    expect(crmResolver.resolve.mock.calls[0][1]).not.toBe('tenant-b');
+  });
+
+  it('does not let a shared company name open another user private task', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([]);
+
+    const result = await service.processNaturalLanguage(
+      'Complete the ABC follow-up task.',
+      contextB,
+    );
+
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userB,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+    expect(result.message).toBe('Task not found.');
+    expect(taskRepository.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('lists tasks for a uniquely resolved company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'ABC Technologies' },
+    });
+    taskRepository.findAllByTenantAndUser.mockResolvedValue([
+      { ...ownedTask, companyId: 'company-1', title: 'Follow up' },
+    ]);
+
+    const result = await service.processNaturalLanguage(
+      'Show my tasks for ABC',
+      contextA,
+    );
+
+    expect(result.action).toBe('list');
+    expect(crmResolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ personQuery: 'ABC' }),
+      tenantA,
+    );
+    expect(taskRepository.findAllByTenantAndUser).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+    );
+  });
+
+  it('asks for clarification when listing an ambiguous company', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'company',
+      query: 'ABC',
+      matches: ['ABC Solutions', 'ABC Technologies'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'Show my tasks related to ABC',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(result.message).toContain('2 companies matching ABC');
+    expect(taskRepository.findAllByTenantAndUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing tenant context', async () => {
+    await expect(
+      service.createTask({ title: 'Call Ahmed' } as any, {
+        tenantId: '',
+        userId: userA,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('records TASK_CREATED activity on create', async () => {
+    await service.createTask({ title: 'Call Ahmed' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        taskId,
+        actorUserId: userA,
+        eventType: 'TASK_CREATED',
+      }),
+    );
+  });
+
+  it('records TASK_UPDATED activity for changed fields only', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      priority: 'high',
+    });
+
+    await service.updateTask(taskId, { priority: 'high' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_UPDATED',
+        metadata: {
+          changes: { priority: { from: 'medium', to: 'high' } },
+        },
+      }),
+    );
+  });
+
+  it('records TASK_COMPLETED activity', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      status: 'completed',
+    });
+
+    await service.completeTask(taskId, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'TASK_COMPLETED' }),
+    );
+  });
+
+  it('records TASK_CANCELLED activity', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      status: 'cancelled',
+    });
+
+    await service.cancelTask(taskId, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'TASK_CANCELLED' }),
+    );
+  });
+
+  it('records CRM link activity from resolved database names', async () => {
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-1',
+      company: { id: 'company-1', name: 'NimbusForge' },
+    });
+
+    await service.updateTask(taskId, { companyId: 'company-1' } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_CRM_LINKED',
+        metadata: {
+          type: 'company',
+          id: 'company-1',
+          name: 'NimbusForge',
+        },
+      }),
+    );
+  });
+
+  it('records CRM unlink activity', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue({
+      ...ownedTask,
+      companyId: 'company-1',
+      company: { id: 'company-1', name: 'NimbusForge' },
+    });
+    taskRepository.updateTask.mockResolvedValue({
+      ...ownedTask,
+      companyId: null,
+      company: null,
+    });
+
+    await service.updateTask(taskId, { companyId: null } as any, contextA);
+
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_CRM_UNLINKED',
+        metadata: {
+          type: 'company',
+          id: 'company-1',
+          name: 'NimbusForge',
+        },
+      }),
+    );
+  });
+
+  it('lists activity for the owner and assigned user', async () => {
+    activity.listForTask.mockResolvedValue({
+      items: [
+        {
+          id: 'act-1',
+          eventType: 'TASK_CREATED',
+          actor: { id: userA, name: 'Ahmed' },
+          metadata: {},
+          createdAt: new Date('2026-08-21T00:00:00.000Z'),
+        },
+      ],
+      total: 1,
+    });
+
+    const ownerResult = await service.getTaskActivity(taskId, {}, contextA);
+    expect(ownerResult.activities).toHaveLength(1);
+    expect(activity.listForTask).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: tenantA, taskId }),
+    );
+
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue({
+      ...ownedTask,
+      assignedTo: userB,
+    });
+    await expect(
+      service.getTaskActivity(taskId, {}, contextB),
+    ).resolves.toEqual(expect.objectContaining({ taskId }));
+  });
+
+  it('rejects activity for another user or tenant', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(null);
+
+    await expect(service.getTaskActivity(taskId, {}, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(
+      service.getTaskActivity(taskId, {}, otherTenant),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(activity.listForTask).not.toHaveBeenCalled();
+  });
+
+  it('lists reminders only for an accessible task', async () => {
+    taskRepository.findByIdAndTenantAndUser.mockResolvedValue(null);
+    await expect(service.getTaskReminders(taskId, contextB)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.enableTaskReminders(taskId, otherTenant)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('computes analytics for the JWT tenant and user only', async () => {
+    const result = await service.getAnalytics({}, contextA);
+
+    expect(result.summary.total).toBe(20);
+    expect(result.summary.pending).toBe(8);
+    expect(result.completionRate).toBe(35);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('does not let another tenant or user read private analytics', async () => {
+    await service.getAnalytics({}, otherTenant);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantB,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+
+    await service.getAnalytics({}, contextB);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userB,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('allows an assigned user path through the same access scope', async () => {
+    await service.getAnalytics({ assigneeId: userB }, contextA);
+    expect(userRepository.findByIdAndTenant).toHaveBeenCalledWith(userB, tenantA);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+      expect.any(Date),
+    );
+  });
+
+  it('rejects a cross-tenant assignee filter', async () => {
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+
+    await expect(
+      service.getAnalytics({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-tenant CRM filter', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Company not found or does not belong to your tenant.'),
+    );
+
+    await expect(
+      service.getAnalytics({ companyId: 'company-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('filters analytics by date range, CRM, and status', async () => {
+    await service.getAnalytics(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'completed',
+        companyId: 'company-1',
+      } as any,
+      contextA,
+    );
+
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        from: new Date('2026-08-01T00:00:00.000Z'),
+        to: new Date('2026-08-22T23:59:59.999Z'),
+        status: 'completed',
+        companyId: 'company-1',
+      }),
+      expect.any(Date),
+    );
+  });
+
+  it('rejects an inverted analytics date range', async () => {
+    await expect(
+      service.getAnalytics(
+        {
+          from: '2026-08-22T00:00:00.000Z',
+          to: '2026-08-01T00:00:00.000Z',
+        },
+        contextA,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('returns trend grouping from SQL aggregation', async () => {
+    const result = await service.getAnalyticsTrends(
+      {
+        from: '2026-08-22T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        groupBy: 'day',
+      },
+      contextA,
+    );
+
+    expect(result.trends).toEqual([
+      { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+    ]);
+    expect(analytics.getTrends).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      'day',
+      expect.any(Date),
+      expect.any(Date),
+      expect.any(Date),
+    );
+  });
+
+  it('handles zero-task analytics from natural language', async () => {
+    analytics.getSummary.mockResolvedValue({
+      ...analyticsFixture,
+      summary: {
+        ...analyticsFixture.summary,
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        completed: 0,
+        cancelled: 0,
+        overdue: 0,
+      },
+      completionRate: 0,
+      overdueRate: 0,
+    });
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks do I have?',
+      contextA,
+    );
+
+    expect(result.action).toBe('analytics');
+    expect(result.message).toContain('0 tasks');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.any(Object),
+      expect.any(Date),
+    );
+  });
+
+  it('answers overdue, completed, priority, CRM, and rate analytics in NL', async () => {
+    const overdue = await service.processNaturalLanguage(
+      'How many tasks are overdue?',
+      contextA,
+    );
+    expect(overdue.action).toBe('analytics');
+    expect(overdue.message).toContain('4 overdue');
+
+    const completed = await service.processNaturalLanguage(
+      'How many tasks did I complete this week?',
+      contextA,
+      new Date('2026-08-22T12:00:00.000Z'),
+    );
+    expect(completed.action).toBe('analytics');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        status: 'completed',
+        rangeField: 'completedAt',
+      }),
+      expect.any(Date),
+    );
+
+    const priority = await service.processNaturalLanguage(
+      'How many high priority tasks do I have?',
+      contextA,
+    );
+    expect(priority.message).toContain('high priority');
+
+    crmResolver.resolve.mockResolvedValue({
+      status: 'resolved',
+      company: { kind: 'company', id: 'company-1', name: 'NimbusForge' },
+    });
+    const crm = await service.processNaturalLanguage(
+      'How many tasks are related to NimbusForge?',
+      contextA,
+    );
+    expect(crm.action).toBe('analytics');
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ companyId: 'company-1' }),
+      expect.any(Date),
+    );
+
+    const rate = await service.processNaturalLanguage(
+      "What's my task completion rate?",
+      contextA,
+    );
+    expect(rate.message).toContain('35%');
+
+    const reminders = await service.processNaturalLanguage(
+      'How many tasks have reminders?',
+      contextA,
+    );
+    expect(reminders.action).toBe('analytics');
+    expect(reminders.message).toMatch(/reminders/i);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ hasReminder: true }),
+      expect.any(Date),
+    );
+  });
+
+  it('asks for clarification when CRM analytics is ambiguous', async () => {
+    crmResolver.resolve.mockResolvedValue({
+      status: 'ambiguous',
+      kind: 'company',
+      query: 'ABC',
+      matches: ['ABC Solutions', 'ABC Technologies'],
+    });
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks are related to ABC?',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('returns a report by reusing analytics summary and trends', async () => {
+    const result = await service.getReport(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        groupBy: 'week',
+      },
+      contextA,
+    );
+
+    expect(result.summary.total).toBe(20);
+    expect(result.trends).toEqual([
+      { period: '2026-08-22', created: 5, completed: 3, overdue: 1 },
+    ]);
+    expect(result.groupBy).toBe('week');
+    expect(analytics.getSummary).toHaveBeenCalledTimes(1);
+    expect(analytics.getTrends).toHaveBeenCalledTimes(1);
+  });
+
+  it('exports CSV rows from the same analytics access scope and omits secrets', async () => {
+    analytics.listExportRows.mockResolvedValue([
+      {
+        id: taskId,
+        title: 'Call Ahmed',
+        status: 'pending',
+        priority: 'high',
+        dueAt: new Date('2026-08-22T09:00:00.000Z'),
+        completedAt: null,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        company: 'NimbusForge',
+        prospect: '',
+        lead: '',
+        assignee: 'Ahmed',
+        reminderStatus: '',
+      },
+    ]);
+
+    const csv = await service.exportAnalyticsCsv(
+      {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-22T23:59:59.999Z',
+        status: 'pending',
+        priority: 'high',
+        companyId: 'company-1',
+      } as any,
+      contextA,
+    );
+
+    expect(analytics.listExportRows).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({
+        status: 'pending',
+        priority: 'high',
+        companyId: 'company-1',
+      }),
+    );
+    expect(csv).toContain('Title,Status,Priority');
+    expect(csv).toContain('Call Ahmed');
+    expect(csv).toContain('NimbusForge');
+    expect(csv).not.toContain(tenantA);
+    expect(csv).not.toMatch(/createdBy|password|token|api[_-]?key/i);
+  });
+
+  it('exports header-only CSV for an empty dataset', async () => {
+    const csv = await service.exportAnalyticsCsv({}, contextA);
+    expect(csv).toContain('Title,Status,Priority');
+    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(1);
+  });
+
+  it('rejects cross-tenant CRM and assignee filters on CSV export', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Company not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.exportAnalyticsCsv({ companyId: 'company-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    crmResolver.assertIds.mockResolvedValue({});
+    userRepository.findByIdAndTenant.mockResolvedValue(null);
+    await expect(
+      service.exportAnalyticsCsv({ assigneeId: userB }, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.listExportRows).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-tenant prospect and lead analytics filters', async () => {
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Prospect not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.getAnalytics({ prospectId: 'prospect-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    crmResolver.assertIds.mockRejectedValue(
+      new BadRequestException('Lead not found or does not belong to your tenant.'),
+    );
+    await expect(
+      service.getAnalytics({ leadId: 'lead-other' } as any, contextA),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+
+  it('answers NL report, trends, overdue high priority, and assignee analytics', async () => {
+    const reportNow = new Date('2026-08-22T12:00:00.000Z');
+    const report = await service.processNaturalLanguage(
+      'Show my task report for this month.',
+      contextA,
+      reportNow,
+    );
+    expect(report.action).toBe('analytics');
+    expect(report.message).toMatch(/Task report/i);
+    expect(analytics.getTrends).toHaveBeenCalled();
+
+    const completed = await service.processNaturalLanguage(
+      'How many tasks did I complete this month?',
+      contextA,
+      reportNow,
+    );
+    expect(completed.message).toContain('completed');
+
+    const overdueHigh = await service.processNaturalLanguage(
+      'How many overdue high priority tasks do I have?',
+      contextA,
+    );
+    expect(overdueHigh.message).toMatch(/overdue high priority/i);
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ priority: 'high' }),
+      expect.any(Date),
+    );
+
+    const assigned = await service.processNaturalLanguage(
+      'How many tasks are assigned to Ahmed?',
+      contextA,
+    );
+    expect(assigned.action).toBe('analytics');
+    expect(userRepository.findAllByTenant).toHaveBeenCalledWith(
+      tenantA,
+      expect.objectContaining({ search: 'Ahmed' }),
+    );
+    expect(analytics.getSummary).toHaveBeenCalledWith(
+      tenantA,
+      userA,
+      expect.objectContaining({ assigneeId: userB }),
+      expect.any(Date),
+    );
+
+    const trends = await service.processNaturalLanguage(
+      'Show my task trends this month.',
+      contextA,
+      reportNow,
+    );
+    expect(trends.message).toMatch(/trends/i);
+  });
+
+  it('asks for clarification when an assignee name is ambiguous', async () => {
+    userRepository.findAllByTenant.mockResolvedValue([
+      { id: userA, name: 'Ahmed Ali', email: 'ahmed.ali@example.com' },
+      { id: userB, name: 'Ahmed Khan', email: 'ahmed.khan@example.com' },
+    ]);
+
+    const result = await service.processNaturalLanguage(
+      'How many tasks are assigned to Ahmed?',
+      contextA,
+    );
+
+    expect(result.action).toBe('clarify');
+    expect(analytics.getSummary).not.toHaveBeenCalled();
+  });
+});

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { ProposalService } from '../../ai/agents/proposal/proposal.service.js';
+import { TaskReminderService } from '../../ai/agents/task/task-reminder.service.js';
 import { AppLogger } from '../logging/logger.service';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class SchedulerService {
   constructor(
     private readonly appLogger: AppLogger,
     private readonly proposalService: ProposalService,
+    private readonly taskReminderService: TaskReminderService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR, {
@@ -46,6 +48,26 @@ export class SchedulerService {
         error instanceof Error ? error.stack : undefined,
         { requestId },
         { job: 'proposal-expiry-check' },
+      );
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE, {
+    name: 'task-reminder-scan',
+    timeZone: 'UTC',
+  })
+  async handleTaskReminders(): Promise<void> {
+    const now = new Date();
+    const requestId = `cron:task-reminders:${now.toISOString()}`;
+
+    try {
+      await this.taskReminderService.enqueueDueReminders(now);
+    } catch (error) {
+      this.appLogger.error(
+        'Task reminder scan cron job failed',
+        error instanceof Error ? error.stack : undefined,
+        { requestId },
+        { job: 'task-reminder-scan' },
       );
     }
   }

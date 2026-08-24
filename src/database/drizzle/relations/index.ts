@@ -12,11 +12,12 @@ import { prospects } from '../schema/prospect.schema';
 import { conversations } from '../schema/conversation.schema';
 import { messages } from '../schema/message.schema';
 import { proposals } from '../schema/proposal.schema';
-import { twilioPhoneNumbers } from '../schema/twilio-phone-number.schema';
+import { phoneNumbers } from '../schema/phone-number.schema';
 import { gmailConfigs } from '../schema/gmail-config.schema';
 import { auditLogs } from '../schema/audit-log.schema';
 import { tasks } from '../schema/task.schema';
 import { masterSettings, masterSettingEntries } from '../schema/master-settings.schema';
+import { taskReminders } from '../schema/task-reminder.schema';
 
 /**
  * Tenant relations
@@ -38,11 +39,12 @@ export const tenantRelations = relations(
     conversations: many(conversations),
     messages: many(messages),
     proposals: many(proposals),
-    twilioPhoneNumbers: many(twilioPhoneNumbers),
+    phoneNumbers: many(phoneNumbers),
     gmailConfigs: many(gmailConfigs),
 
     auditLogs: many(auditLogs),
     tasks: many(tasks),
+    taskReminders: many(taskReminders),
   }),
 );
 
@@ -69,6 +71,8 @@ export const userRelations = relations(
     assignedTasks: many(tasks, {
       relationName: 'assignedTasks',
     }),
+
+    taskReminders: many(taskReminders),
   }),
 );
 
@@ -131,6 +135,10 @@ export const knowledgeChunkRelations = relations(
       fields: [knowledgeChunks.userId],
       references: [users.id],
     }),
+    knowledgebase: one(knowledgebases, {
+      fields: [knowledgeChunks.knowledgeBaseId],
+      references: [knowledgebases.id],
+    }),
     document: one(knowledgeDocuments, {
       fields: [knowledgeChunks.documentId],
       references: [knowledgeDocuments.id],
@@ -153,6 +161,7 @@ export const companyRelations = relations(
     }),
     leads: many(leads),
     prospects: many(prospects),
+    tasks: many(tasks),
   }),
 );
 
@@ -178,6 +187,7 @@ export const leadRelations = relations(
     }),
 
     prospects: many(prospects),
+    tasks: many(tasks),
   }),
 );
 
@@ -204,6 +214,7 @@ export const prospectRelations = relations(
 
     conversations: many(conversations),
     proposals: many(proposals),
+    tasks: many(tasks),
   }),
 );
 
@@ -280,15 +291,15 @@ export const proposalRelations = relations(
 /**
  * Phone Number relations (unified phone + Twilio table)
  */
-export const twilioPhoneNumberRelations = relations(
-  twilioPhoneNumbers,
+export const phoneNumberRelations = relations(
+  phoneNumbers,
   ({ one }) => ({
     tenant: one(tenants, {
-      fields: [twilioPhoneNumbers.tenantId],
+      fields: [phoneNumbers.tenantId],
       references: [tenants.id],
     }),
     user: one(users, {
-      fields: [twilioPhoneNumbers.userId],
+      fields: [phoneNumbers.userId],
       references: [users.id],
     }),
   }),
@@ -326,11 +337,11 @@ export const auditLogRelations = relations(
 );
 
 /**
- * Task relations
+ * Task relation
  */
 export const taskRelations = relations(
   tasks,
-  ({ one }) => ({
+  ({ one, many }) => ({
     tenant: one(tenants, {
       fields: [tasks.tenantId],
       references: [tenants.id],
@@ -346,6 +357,43 @@ export const taskRelations = relations(
       fields: [tasks.assignedTo],
       references: [users.id],
       relationName: 'assignedTasks',
+    }),
+
+    company: one(companies, {
+      fields: [tasks.companyId],
+      references: [companies.id],
+    }),
+
+    prospect: one(prospects, {
+      fields: [tasks.prospectId],
+      references: [prospects.id],
+    }),
+
+    lead: one(leads, {
+      fields: [tasks.leadId],
+      references: [leads.id],
+    }),
+
+    reminders: many(taskReminders),
+  }),
+);
+
+export const taskReminderRelations = relations(
+  taskReminders,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [taskReminders.tenantId],
+      references: [tenants.id],
+    }),
+
+    task: one(tasks, {
+      fields: [taskReminders.taskId],
+      references: [tasks.id],
+    }),
+
+    user: one(users, {
+      fields: [taskReminders.userId],
+      references: [users.id],
     }),
   }),
 );

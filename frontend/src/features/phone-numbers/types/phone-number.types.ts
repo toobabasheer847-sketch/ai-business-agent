@@ -9,7 +9,7 @@ export const PHONE_NUMBER_STATUSES = [
 export type PhoneNumberProvider = (typeof PHONE_NUMBER_PROVIDERS)[number]
 export type PhoneNumberStatus = (typeof PHONE_NUMBER_STATUSES)[number]
 
-/** Matches backend PhoneNumber entity / repository returning columns */
+/** Matches backend PhoneNumber public response — authToken is never included. */
 export type PhoneNumber = {
   id: string
   tenantId: string
@@ -17,6 +17,11 @@ export type PhoneNumber = {
   label: string | null
   provider: string
   status: string
+  phoneSid: string | null
+  twilioSid: string | null
+  appSid: string | null
+  webhookUrl: string | null
+  hasAuthToken: boolean
   createdAt: string
   updatedAt: string
 }
@@ -26,6 +31,11 @@ export type CreatePhoneNumberPayload = {
   label?: string
   provider?: PhoneNumberProvider
   status?: PhoneNumberStatus
+  phoneSid?: string
+  twilioSid?: string
+  authToken?: string
+  appSid?: string
+  webhookUrl?: string
 }
 
 export type UpdatePhoneNumberPayload = {
@@ -33,6 +43,11 @@ export type UpdatePhoneNumberPayload = {
   label?: string
   provider?: PhoneNumberProvider
   status?: PhoneNumberStatus
+  phoneSid?: string
+  twilioSid?: string
+  authToken?: string
+  appSid?: string
+  webhookUrl?: string
 }
 
 export type PhoneNumberQuery = {
@@ -87,10 +102,5 @@ export type BoughtPhoneNumber = PhoneNumber & {
     sid: string
     status: string | null
     friendlyName: string | null
-    webhooks?: {
-      voiceUrl: string
-      smsUrl: string
-      statusCallback: string
-    }
   }
 }

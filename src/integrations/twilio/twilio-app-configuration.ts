@@ -79,11 +79,12 @@ export class TwilioAppConfigurationService {
   }
 
   /**
-   * Resolves credentials for a specific tenant by first querying twilio_apps.
-   * Falls back to environment variables only when no DB record exists.
+   * Resolves credentials for a specific tenant from phone_numbers
+   * (active row with twilio_sid + auth_token). Falls back to environment
+   * variables only when no DB record exists.
    *
    * Resolution order (most specific → least specific):
-   *  1. Active twilio_apps row for this tenantId
+   *  1. Active phone_numbers row for this tenantId with Twilio credentials
    *  2. Environment variables (shared / single-tenant fallback)
    *
    * Never mixes credentials across tenants.

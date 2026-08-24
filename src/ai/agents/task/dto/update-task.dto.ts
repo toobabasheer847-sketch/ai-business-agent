@@ -1,11 +1,17 @@
 import {
-  IsEnum,
+  IsBoolean,
+  IsDateString,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+
+import { TASK_PRIORITIES, TASK_STATUSES } from '../types/task.types';
+import { RECURRENCE_INTERVALS } from '../compute-task-recurrence.js';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -19,11 +25,11 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsEnum(['pending', 'in_progress', 'completed', 'cancelled'] as const)
+  @IsIn(TASK_STATUSES)
   status?: string;
 
   @IsOptional()
-  @IsEnum(['low', 'medium', 'high', 'urgent'] as const)
+  @IsIn(TASK_PRIORITIES)
   priority?: string;
 
   @IsOptional()
@@ -31,6 +37,33 @@ export class UpdateTaskDto {
   assignedTo?: string;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsUUID()
+  companyId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsUUID()
+  prospectId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsUUID()
+  leadId?: string | null;
+
+  @IsOptional()
+  @IsDateString()
   dueAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  recurrenceEnabled?: boolean;
+
+  @IsOptional()
+  @IsIn(RECURRENCE_INTERVALS)
+  recurrenceInterval?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceEndsAt?: string | null;
 }

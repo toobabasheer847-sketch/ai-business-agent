@@ -2,17 +2,25 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { UserRepository } from '../../../../modules/user/user.repository';
+import { resolveAssignedToForTenant } from '../resolve-assigned-to.js';
+import { TaskCrmResolver } from '../resolve-crm-entities.js';
+import { getTrustedTaskContext } from '../task-request-context.js';
 import { TaskRepository } from '../task.repository.js';
 
 @Injectable()
 export class UpdateTaskTool extends FunctionTool<any> {
-  constructor(private readonly taskRepository: TaskRepository) {
+  constructor(
+    private readonly taskRepository: TaskRepository,
+    private readonly userRepository: UserRepository,
+    private readonly crmResolver: TaskCrmResolver,
+  ) {
     super({
       name: 'update_task',
-      description: 'Update a tenant-scoped task.',
+      description:
+        'Update a task owned by or assigned to the authenticated user.',
       parameters: z.object({
         taskId: z.string(),
-        tenantId: z.string(),
         title: z.string().optional(),
         description: z.string().optional(),
         status: z
@@ -20,10 +28,42 @@ export class UpdateTaskTool extends FunctionTool<any> {
           .optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
         assignedTo: z.string().optional(),
+        companyId: z.string().uuid().optional(),
+        prospectId: z.string().uuid().optional(),
+        leadId: z.string().uuid().optional(),
         dueAt: z.string().optional(),
       }),
-      execute: async (input: any) =>
-        this.taskRepository.updateTask(input.taskId, input.tenantId, input),
+      execute: async (input: any) => {
+        const context = getTrustedTaskContext();
+        const { taskId, ...patch } = input;
+        if (patch.assignedTo !== undefined) {
+          patch.assignedTo = await resolveAssignedToForTenant(
+            this.userRepository,
+            patch.assignedTo,
+            context.tenantId,
+          );
+        }
+        const crmIds = await this.crmResolver.assertIds(context.tenantId, {
+          companyId: patch.companyId,
+          prospectId: patch.prospectId,
+          leadId: patch.leadId,
+        });
+        if (patch.companyId !== undefined) {
+          patch.companyId = crmIds.companyId ?? null;
+        }
+        if (patch.prospectId !== undefined) {
+          patch.prospectId = crmIds.prospectId ?? null;
+        }
+        if (patch.leadId !== undefined) {
+          patch.leadId = crmIds.leadId ?? null;
+        }
+        return this.taskRepository.updateTask(
+          taskId,
+          context.tenantId,
+          context.userId,
+          patch,
+        );
+      },
     });
   }
 }

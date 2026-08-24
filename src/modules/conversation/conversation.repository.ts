@@ -8,6 +8,8 @@ import type { DrizzleDb } from '../../database/database.service';
 import { conversations, messages } from '../../database/drizzle/schema';
 import { ConversationChannel, ConversationStatus } from './dto/create-conversation.dto';
 
+export const ASSISTANT_CONVERSATION_CHANNEL = 'assistant';
+
 // Columns returned for every conversation query
 const CONV_COLUMNS = {
   id: conversations.id,
@@ -103,6 +105,99 @@ export class ConversationRepository {
         updatedAt: true,
       },
     });
+  }
+
+  async findByIdTenantAndUser(
+    conversationId: string,
+    tenantId: string,
+    userId: string,
+  ) {
+    return this.db.query.conversations.findFirst({
+      where: and(
+        eq(conversations.id, conversationId),
+        eq(conversations.tenantId, tenantId),
+        eq(conversations.userId, userId),
+        eq(conversations.channel, ASSISTANT_CONVERSATION_CHANNEL),
+      ),
+      columns: {
+        id: true,
+        tenantId: true,
+        userId: true,
+        prospectId: true,
+        title: true,
+        slug: true,
+        channel: true,
+        status: true,
+        summary: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async findRecentByUser(tenantId: string, userId: string, limit: number) {
+    const safeLimit = Math.max(1, limit);
+
+    return this.db
+      .select(CONV_COLUMNS)
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.tenantId, tenantId),
+          eq(conversations.userId, userId),
+          eq(conversations.channel, ASSISTANT_CONVERSATION_CHANNEL),
+        ),
+      )
+      .orderBy(desc(conversations.updatedAt))
+      .limit(safeLimit);
+  }
+
+  async findRecentMessages(
+    conversationId: string,
+    tenantId: string,
+    limit: number,
+  ) {
+    const safeLimit = Math.max(1, limit);
+
+    const rows = await this.db
+      .select(MSG_COLUMNS)
+      .from(messages)
+      .where(
+        and(
+          eq(messages.conversationId, conversationId),
+          eq(messages.tenantId, tenantId),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(safeLimit);
+
+    return rows.reverse();
+  }
+
+  async deleteByIdTenantAndUser(
+    conversationId: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.tenantId, tenantId),
+          eq(conversations.userId, userId),
+          eq(conversations.channel, ASSISTANT_CONVERSATION_CHANNEL),
+        ),
+      );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async touchUpdatedAt(id: string, tenantId: string): Promise<void> {
+    await this.db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(conversations.id, id), eq(conversations.tenantId, tenantId)));
   }
 
   async create(input: {

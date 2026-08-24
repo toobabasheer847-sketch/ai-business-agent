@@ -11,6 +11,7 @@ import {
 
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
+import { knowledgebases } from './knowledgebase.schema';
 import { knowledgeDocuments } from './knowledge-document.schema';
 
 export const knowledgeChunks = pgTable(
@@ -30,7 +31,14 @@ export const knowledgeChunks = pgTable(
       onUpdate: 'cascade',
     }),
 
-    /** Document id */
+    knowledgeBaseId: uuid('knowledge_base_id').references(
+      () => knowledgebases.id,
+      {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      },
+    ),
+
     documentId: uuid('document_id').references(() => knowledgeDocuments.id, {
       onDelete: 'cascade',
       onUpdate: 'cascade',
@@ -61,8 +69,16 @@ export const knowledgeChunks = pgTable(
     metadata: jsonb('metadata'),
 
     /**
-     * : vector embedding.
-     * Stored as float8[] so local Postgres works without pgvector.
+     * Vector embedding generated from chunk content.
+     *
+     * Model:
+     * gemini-embedding-001
+     *
+     * Dimensions:
+     * 3072
+     *
+     * Live PostgreSQL stores this as double precision[] (float8[]).
+     * Do not use pgvector here — the extension is not installed.
      */
     embedding: doublePrecision('embedding').array(),
 
@@ -86,6 +102,9 @@ export const knowledgeChunks = pgTable(
   (table) => [
     index('knowledge_chunks_tenant_id_idx').on(table.tenantId),
     index('knowledge_chunks_user_id_idx').on(table.userId),
+    index('knowledge_chunks_document_id_idx').on(table.documentId),
+    index('knowledge_chunks_knowledge_base_id_idx').on(table.knowledgeBaseId),
+
     index('knowledge_chunks_document_id_idx').on(table.documentId),
     index('knowledge_chunks_source_type_idx').on(table.sourceType),
     index('knowledge_chunks_doc_type_idx').on(table.docType),
