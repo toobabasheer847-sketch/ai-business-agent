@@ -377,6 +377,18 @@ export class MasterAgentService {
         const ragAgentInstance = this.adkAgentFactory.getRagAgent(
           aiModel,
         ) as any;
+
+        if (!ragAgentInstance) {
+          return {
+            response:
+              'Knowledge search is unavailable because the AI provider is not configured.',
+            delegation: 'rag',
+            sources: [],
+            usedKnowledge: false,
+            message: 'GOOGLE_GENAI_API_KEY is not configured',
+          };
+        }
+
         const ragResult = await this.ragAgent.delegateAdkQuery(
           tenantId,
           userId,

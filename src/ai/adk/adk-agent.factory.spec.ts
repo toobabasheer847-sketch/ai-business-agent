@@ -89,7 +89,7 @@ describe('AdkAgentFactoryService', () => {
       configService,
       { createListMailsTool: jest.fn(), createDraftMailTool: jest.fn(), createSendMailTool: jest.fn() } as any,
       { createSendSmsTool: jest.fn(), createInitiateCallTool: jest.fn() } as any,
-      { buildLlmAgent: ragBuildLlmAgent } as any,
+      { buildLlmAgent: ragBuildLlmAgent, isConfigured: () => true } as any,
       { buildLlmAgent: taskBuildLlmAgent } as any,
       { buildLlmAgent: proposalBuildLlmAgent } as any,
     );

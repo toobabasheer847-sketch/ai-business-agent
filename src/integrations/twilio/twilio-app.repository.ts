@@ -4,16 +4,68 @@ import { and, eq, sql } from 'drizzle-orm';
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
 import { phoneNumbers } from '../../database/drizzle/schema/phone-number.schema';
+import { IntegrationEncryptionService } from '../../infrastructure/security/integration-encryption.service.js';
 import type { TenantTwilioAppConfig } from './twilio-app-configuration';
 
 /**
  * Credential lookup for Twilio operations (calls, SMS, buy, webhooks).
  * Reads from phone_numbers — not a Twilio Apps CRUD overlay.
- * The retired /api/twilio-apps module lived in src/modules/twilio-app/.
+ * authToken is decrypted in memory only at point of use.
  */
 @Injectable()
 export class TwilioAppRepository {
-  constructor(@Inject(DRIZZLE_DB) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+    private readonly encryption: IntegrationEncryptionService,
+  ) {}
+
+  private async decryptConfig(
+    row: {
+      id: string;
+      tenantId: string;
+      phoneNumberId: string;
+      accountSid: string | null;
+      authToken: string | null;
+      appSid: string | null;
+      webhookUrl: string | null;
+      status: string;
+    } | undefined,
+  ): Promise<TenantTwilioAppConfig | null> {
+    if (!row?.accountSid || !row?.authToken) {
+      return null;
+    }
+
+    const authToken = this.encryption.decryptStored(row.authToken);
+    if (authToken.wasLegacy && authToken.plaintext) {
+      await this.db
+        .update(phoneNumbers)
+        .set({
+          authToken: this.encryption.encrypt(authToken.plaintext),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(phoneNumbers.id, row.id),
+            eq(phoneNumbers.tenantId, row.tenantId),
+          ),
+        );
+    }
+
+    if (!authToken.plaintext) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      phoneNumberId: row.phoneNumberId,
+      accountSid: row.accountSid,
+      authToken: authToken.plaintext,
+      appSid: row.appSid,
+      webhookUrl: row.webhookUrl,
+      status: row.status,
+    };
+  }
 
   async findActiveForTenant(tenantId: string): Promise<TenantTwilioAppConfig | null> {
     if (!tenantId) return null;
@@ -39,19 +91,7 @@ export class TwilioAppRepository {
       )
       .limit(1);
 
-    const row = result[0];
-    if (!row?.accountSid || !row?.authToken) return null;
-
-    return {
-      id: row.id,
-      tenantId: row.tenantId,
-      phoneNumberId: row.phoneNumberId,
-      accountSid: row.accountSid,
-      authToken: row.authToken,
-      appSid: row.appSid,
-      webhookUrl: row.webhookUrl,
-      status: row.status,
-    };
+    return this.decryptConfig(result[0]);
   }
 
   async findByIdForTenant(
@@ -72,26 +112,9 @@ export class TwilioAppRepository {
         status: phoneNumbers.status,
       })
       .from(phoneNumbers)
-      .where(
-        and(
-          eq(phoneNumbers.id, id),
-          eq(phoneNumbers.tenantId, tenantId),
-        ),
-      )
+      .where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId)))
       .limit(1);
 
-    const row = result[0];
-    if (!row?.accountSid || !row?.authToken) return null;
-
-    return {
-      id: row.id,
-      tenantId: row.tenantId,
-      phoneNumberId: row.phoneNumberId,
-      accountSid: row.accountSid,
-      authToken: row.authToken,
-      appSid: row.appSid,
-      webhookUrl: row.webhookUrl,
-      status: row.status,
-    };
+    return this.decryptConfig(result[0]);
   }
 }

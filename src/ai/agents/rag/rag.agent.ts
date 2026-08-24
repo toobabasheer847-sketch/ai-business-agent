@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Gemini, FunctionTool, LlmAgent } from '@google/adk';
 import { GoogleGenAI } from '@google/genai';
@@ -23,29 +23,47 @@ import {
 const NO_KNOWLEDGE_ANSWER =
   "I couldn't find enough relevant information in the knowledge base to answer that question.";
 
+const RAG_UNAVAILABLE_ANSWER =
+  'Knowledge search is unavailable because the AI provider is not configured.';
+
 const DEFAULT_ANSWER_MIN_SIMILARITY = 0.4;
 
 @Injectable()
 export class RagAgent {
-  private readonly agent: LlmAgent;
+  private readonly logger = new Logger(RagAgent.name);
+  private readonly agent: LlmAgent | null;
   private readonly modelName: string;
-  private readonly apiKey: string;
+  private readonly apiKey: string | null;
 
   constructor(
     private readonly ragTools: RagTools,
     private readonly configService: ConfigService,
   ) {
     this.modelName = resolveAdkModelName(this.configService);
-    this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? '';
+    const rawKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY')?.trim();
+    this.apiKey = rawKey || null;
 
     if (!this.apiKey) {
-      throw new Error('GOOGLE_GENAI_API_KEY is not configured');
+      this.logger.warn(
+        'RAG agent starting without GOOGLE_GENAI_API_KEY — RAG routes are disabled; other features continue.',
+      );
+      this.agent = null;
+      return;
     }
 
     this.agent = this.buildLlmAgent(this.modelName);
   }
 
+  /** True when Gemini credentials are available for RAG. */
+  isConfigured(): boolean {
+    return Boolean(this.apiKey);
+  }
+
   buildLlmAgent(modelName: string): LlmAgent {
+    if (!this.apiKey) {
+      throw new Error('GOOGLE_GENAI_API_KEY is not configured');
+    }
+
     const geminiModel = new Gemini({
       model: modelName,
       apiKey: this.apiKey,
@@ -85,6 +103,15 @@ export class RagAgent {
 
   getAgentInstance() {
     return this.agent;
+  }
+
+  private unavailableResponse(): RagResponse {
+    return {
+      answer: RAG_UNAVAILABLE_ANSWER,
+      sources: [],
+      usedKnowledge: false,
+      message: 'GOOGLE_GENAI_API_KEY is not configured',
+    };
   }
 
   /**
@@ -155,6 +182,10 @@ export class RagAgent {
     query: string,
     options: RagQueryOptions = {},
   ): Promise<RagResponse> {
+    if (!this.apiKey) {
+      return this.unavailableResponse();
+    }
+
     const topK = options.topK ?? 5;
     const chunks = await this.ragTools.searchKnowledge(
       tenantId,
@@ -233,7 +264,12 @@ export class RagAgent {
   }
 
   private async generateGroundedAnswer(prompt: string): Promise<string> {
-    const client = new GoogleGenAI({ apiKey: this.apiKey });
+    const apiKey = this.apiKey;
+    if (!apiKey) {
+      throw new Error('GOOGLE_GENAI_API_KEY is not configured');
+    }
+
+    const client = new GoogleGenAI({ apiKey });
     const response = await client.models.generateContent({
       model: this.modelName,
       contents: prompt,

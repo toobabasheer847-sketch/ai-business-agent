@@ -4,6 +4,7 @@ import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
 import { phoneNumbers } from '../../database/drizzle/schema';
+import { IntegrationEncryptionService } from '../../infrastructure/security/integration-encryption.service.js';
 import type { PhoneNumberRow } from './entities/phone-number.entity';
 
 const RETURNING_COLUMNS = {
@@ -44,7 +45,50 @@ export type PhoneNumberWriteInput = {
 export class PhoneNumberRepository {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+    private readonly encryption: IntegrationEncryptionService,
   ) {}
+
+  private decryptAuthToken(row: PhoneNumberRow): PhoneNumberRow {
+    return {
+      ...row,
+      authToken: this.encryption.decryptStored(row.authToken).plaintext,
+    };
+  }
+
+  private async materialize(
+    row: PhoneNumberRow | null,
+  ): Promise<PhoneNumberRow | null> {
+    if (!row) {
+      return null;
+    }
+
+    const authToken = this.encryption.decryptStored(row.authToken);
+    if (authToken.wasLegacy && authToken.plaintext) {
+      await this.db
+        .update(phoneNumbers)
+        .set({
+          authToken: this.encryption.encrypt(authToken.plaintext),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(phoneNumbers.id, row.id),
+            eq(phoneNumbers.tenantId, row.tenantId),
+          ),
+        );
+    }
+
+    return {
+      ...row,
+      authToken: authToken.plaintext,
+    };
+  }
+
+  private async materializeMany(rows: PhoneNumberRow[]): Promise<PhoneNumberRow[]> {
+    return Promise.all(
+      rows.map(async (row) => (await this.materialize(row))!),
+    );
+  }
 
   async findAllByTenant(tenantId: string, options: ListPhoneNumbersOptions = {}) {
     const { provider, status, search } = options;
@@ -68,26 +112,23 @@ export class PhoneNumberRepository {
       );
     }
 
-    return this.db
+    const rows = await this.db
       .select(RETURNING_COLUMNS)
       .from(phoneNumbers)
       .where(and(...conditions))
       .orderBy(desc(phoneNumbers.createdAt));
+
+    return this.materializeMany(rows);
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {
     const rows = await this.db
       .select(RETURNING_COLUMNS)
       .from(phoneNumbers)
-      .where(
-        and(
-          eq(phoneNumbers.id, id),
-          eq(phoneNumbers.tenantId, tenantId),
-        ),
-      )
+      .where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId)))
       .limit(1);
 
-    return rows[0] ?? null;
+    return this.materialize(rows[0] ?? null);
   }
 
   async findByPhoneNumberAndTenant(phoneNumber: string, tenantId: string) {
@@ -102,7 +143,7 @@ export class PhoneNumberRepository {
       )
       .limit(1);
 
-    return rows[0] ?? null;
+    return this.materialize(rows[0] ?? null);
   }
 
   async create(input: {
@@ -127,13 +168,13 @@ export class PhoneNumberRepository {
         status: input.status ?? 'active',
         phoneSid: input.phoneSid ?? null,
         twilioSid: input.twilioSid ?? null,
-        authToken: input.authToken ?? null,
+        authToken: this.encryption.encrypt(input.authToken ?? null) ?? null,
         appSid: input.appSid ?? null,
         webhookUrl: input.webhookUrl ?? null,
       })
       .returning(RETURNING_COLUMNS);
 
-    return row;
+    return this.decryptAuthToken(row);
   }
 
   async update(
@@ -151,28 +192,28 @@ export class PhoneNumberRepository {
     if (input.status !== undefined) values.status = input.status;
     if (input.phoneSid !== undefined) values.phoneSid = input.phoneSid;
     if (input.twilioSid !== undefined) values.twilioSid = input.twilioSid;
-    if (input.authToken !== undefined) values.authToken = input.authToken;
+    if (input.authToken !== undefined) {
+      values.authToken = this.encryption.encrypt(input.authToken) ?? null;
+    }
     if (input.appSid !== undefined) values.appSid = input.appSid;
     if (input.webhookUrl !== undefined) values.webhookUrl = input.webhookUrl;
 
     const [row] = await this.db
       .update(phoneNumbers)
       .set(values)
-      .where(
-        and(
-          eq(phoneNumbers.id, id),
-          eq(phoneNumbers.tenantId, tenantId),
-        ),
-      )
+      .where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId)))
       .returning(RETURNING_COLUMNS);
 
-    return row ?? null;
+    return row ? this.decryptAuthToken(row) : null;
   }
 
   /**
    * Clears Twilio configuration columns without deleting the phone number row.
    */
-  async disconnectTwilio(id: string, tenantId: string): Promise<PhoneNumberRow | null> {
+  async disconnectTwilio(
+    id: string,
+    tenantId: string,
+  ): Promise<PhoneNumberRow | null> {
     return this.update(id, tenantId, {
       phoneSid: null,
       twilioSid: null,
@@ -185,12 +226,7 @@ export class PhoneNumberRepository {
   async delete(id: string, tenantId: string): Promise<boolean> {
     const result = await this.db
       .delete(phoneNumbers)
-      .where(
-        and(
-          eq(phoneNumbers.id, id),
-          eq(phoneNumbers.tenantId, tenantId),
-        ),
-      );
+      .where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId)));
 
     return (result.rowCount ?? 0) > 0;
   }

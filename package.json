@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:upgrade": "node scripts/upgrade-existing-db.js",
+    "db:encrypt-secrets": "node scripts/encrypt-integration-secrets.js",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -95,6 +96,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "setupFiles": [
+      "<rootDir>/test-env.ts"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

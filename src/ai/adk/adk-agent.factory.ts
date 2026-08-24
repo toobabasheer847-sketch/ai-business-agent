@@ -46,7 +46,9 @@ export class AdkAgentFactoryService {
     const agent = createMasterAgent({
       modelName,
       communicationAgent,
-      ragAgent: this.ragAgent.buildLlmAgent(modelName),
+      ragAgent: this.ragAgent.isConfigured()
+        ? this.ragAgent.buildLlmAgent(modelName)
+        : undefined,
       taskAgent: this.taskAgent.buildLlmAgent(modelName) ?? undefined,
       proposalAgent: this.proposalAgent.buildLlmAgent(modelName) ?? undefined,
     });
@@ -60,6 +62,10 @@ export class AdkAgentFactoryService {
    * Not used as a Master subagent — Master always builds its own fresh rag child.
    */
   getRagAgent(tenantAiModel?: string | null) {
+    if (!this.ragAgent.isConfigured()) {
+      return null;
+    }
+
     const modelName = this.resolveModel(tenantAiModel);
     const cached = this.ragAgents.get(modelName);
     if (cached) {
