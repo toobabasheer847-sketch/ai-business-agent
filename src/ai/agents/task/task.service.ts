@@ -114,7 +114,10 @@ export class TaskService {
         context.tenantId,
         created.id,
         context.userId,
-        buildCreateActivities(created),
+        [
+          ...buildCreateActivities(created),
+          ...buildRecurrenceActivityEvents(null, created),
+        ],
       );
       return this.withReminder(created);
     } catch (error) {
@@ -462,7 +465,10 @@ export class TaskService {
       context.tenantId,
       updated.id,
       context.userId,
-      buildUpdateActivities(existing, updated),
+      [
+        ...buildUpdateActivities(existing, updated),
+        ...buildRecurrenceActivityEvents(existing, updated),
+      ],
     );
     if (updated.status === 'completed' && existing.status !== 'completed') {
       await this.spawnRecurrenceIfNeeded(updated, context);
@@ -1382,6 +1388,18 @@ export class TaskService {
     if (blockers.length === 0) {
       return;
     }
+    await this.recordActivities(context.tenantId, task.id, context.userId, [
+      {
+        eventType: 'TASK_BLOCKED_COMPLETION_REJECTED',
+        metadata: {
+          blockedBy: blockers.map((item) => ({
+            id: item.id,
+            title: item.title,
+            status: item.status,
+          })),
+        },
+      },
+    ]);
     throw new BadRequestException(
       `Task is blocked by incomplete dependencies: ${blockers
         .map((item) => item.title)
@@ -1543,6 +1561,18 @@ export class TaskService {
         context.userId,
         buildCreateActivities(spawned),
       );
+      await this.recordActivities(context.tenantId, completed.id, context.userId, [
+        {
+          eventType: 'TASK_RECURRENCE_SPAWNED',
+          metadata: {
+            nextTaskId: spawned.id,
+            recurrenceSeriesId: completed.recurrenceSeriesId,
+            recurrenceOccurrenceKey: nextKey,
+            recurrenceInterval: interval,
+            dueAt: nextDue.toISOString(),
+          },
+        },
+      ]);
       return spawned;
     } catch (error) {
       const duplicate = await this.taskRepository.findBySeriesOccurrence(
@@ -1633,11 +1663,21 @@ export class TaskService {
     }
 
     try {
-      return await this.dependencies.create({
+      const created = await this.dependencies.create({
         tenantId: context.tenantId,
         taskId,
         dependsOnTaskId,
       });
+      await this.recordActivities(context.tenantId, taskId, context.userId, [
+        {
+          eventType: 'TASK_DEPENDENCY_ADDED',
+          metadata: {
+            dependsOnTaskId,
+            dependsOnTitle: prerequisite.title,
+          },
+        },
+      ]);
+      return created;
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('This dependency already exists.');
@@ -1666,6 +1706,12 @@ export class TaskService {
     if (!deleted) {
       throw new NotFoundException('Dependency not found');
     }
+    await this.recordActivities(context.tenantId, taskId, context.userId, [
+      {
+        eventType: 'TASK_DEPENDENCY_REMOVED',
+        metadata: { dependsOnTaskId },
+      },
+    ]);
     return { message: 'Dependency removed', taskId, dependsOnTaskId };
   }
 
@@ -1965,6 +2011,46 @@ function spanDays(from: string, to: Date | string): number {
     return 0;
   }
   return Math.round((end - start) / (24 * 60 * 60 * 1000));
+}
+
+function buildRecurrenceActivityEvents(
+  before: TaskRecord | null,
+  after: TaskRecord,
+): Array<{
+  eventType:
+    | 'TASK_RECURRENCE_ENABLED'
+    | 'TASK_RECURRENCE_DISABLED';
+  metadata: Record<string, unknown>;
+}> {
+  const wasEnabled = Boolean(before?.recurrenceEnabled);
+  const isEnabled = Boolean(after.recurrenceEnabled);
+  if (wasEnabled === isEnabled) {
+    return [];
+  }
+  if (isEnabled) {
+    return [
+      {
+        eventType: 'TASK_RECURRENCE_ENABLED',
+        metadata: {
+          recurrenceInterval: after.recurrenceInterval ?? null,
+          recurrenceEndsAt:
+            after.recurrenceEndsAt instanceof Date
+              ? after.recurrenceEndsAt.toISOString()
+              : after.recurrenceEndsAt ?? null,
+          recurrenceSeriesId: after.recurrenceSeriesId ?? null,
+        },
+      },
+    ];
+  }
+  return [
+    {
+      eventType: 'TASK_RECURRENCE_DISABLED',
+      metadata: {
+        previousInterval: before?.recurrenceInterval ?? null,
+        previousSeriesId: before?.recurrenceSeriesId ?? null,
+      },
+    },
+  ];
 }
 
 function crmPatch(

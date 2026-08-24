@@ -1,4 +1,5 @@
 import {
+  isTaskActivityEventType,
   mapLegacyActivityAction,
   sanitizeActivityMetadata,
 } from './task-activity.constants';
@@ -21,6 +22,17 @@ const baseTask = {
 } as TaskRecord;
 
 describe('task activity helpers', () => {
+  it('recognizes Phase 21 dependency and recurrence activity events', () => {
+    expect(isTaskActivityEventType('TASK_DEPENDENCY_ADDED')).toBe(true);
+    expect(isTaskActivityEventType('TASK_DEPENDENCY_REMOVED')).toBe(true);
+    expect(isTaskActivityEventType('TASK_RECURRENCE_ENABLED')).toBe(true);
+    expect(isTaskActivityEventType('TASK_RECURRENCE_DISABLED')).toBe(true);
+    expect(isTaskActivityEventType('TASK_RECURRENCE_SPAWNED')).toBe(true);
+    expect(isTaskActivityEventType('TASK_BLOCKED_COMPLETION_REJECTED')).toBe(
+      true,
+    );
+  });
+
   it('strips secrets from metadata', () => {
     expect(
       sanitizeActivityMetadata({

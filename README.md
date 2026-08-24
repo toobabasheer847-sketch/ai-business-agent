@@ -141,7 +141,22 @@ There is no Playwright suite. Frontend checks are documented in `docs/phase6-fro
   - Dependencies live in `task_dependencies` (tenant-scoped; cycles/self/cross-tenant rejected).
   - Blocking is computed (no new status): incomplete prerequisites keep a task blocked for completion/reminders.
   - Recurrence (`daily` / `weekly` / `monthly`) spawns the next occurrence on complete with idempotent series keys.
+  - **Intentional:** the next recurring occurrence does **not** copy dependency edges from the completed occurrence. Dependencies are per-task links; re-link prerequisites on the new occurrence when needed.
 - Frontend automated tests are not present yet.
+
+### Task reliability smoke (Phase 21)
+
+```bash
+node scripts/upgrade-existing-db.js
+node scripts/verify-phase20-task-deps-recurrence.js
+node scripts/verify-phase21-task-reliability.js
+```
+
+Activity events recorded for Phase 20/21 actions (when activity/audit is available):
+
+- `TASK_DEPENDENCY_ADDED` / `TASK_DEPENDENCY_REMOVED`
+- `TASK_RECURRENCE_ENABLED` / `TASK_RECURRENCE_DISABLED` / `TASK_RECURRENCE_SPAWNED`
+- `TASK_BLOCKED_COMPLETION_REJECTED`
 
 ### Task dependencies & recurrence API
 

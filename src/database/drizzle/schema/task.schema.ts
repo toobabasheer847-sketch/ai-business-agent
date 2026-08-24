@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   pgTable,
@@ -122,10 +123,14 @@ export const tasks = pgTable(
     ),
     recurrenceOccurrenceUnique: uniqueIndex(
       'tasks_recurrence_occurrence_unique',
-    ).on(
-      table.tenantId,
-      table.recurrenceSeriesId,
-      table.recurrenceOccurrenceKey,
-    ),
+    )
+      .on(
+        table.tenantId,
+        table.recurrenceSeriesId,
+        table.recurrenceOccurrenceKey,
+      )
+      .where(
+        sql`${table.recurrenceSeriesId} IS NOT NULL AND ${table.recurrenceOccurrenceKey} IS NOT NULL`,
+      ),
   }),
 );

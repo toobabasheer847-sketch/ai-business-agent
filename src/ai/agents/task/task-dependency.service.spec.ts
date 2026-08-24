@@ -62,6 +62,8 @@ describe('TaskService dependencies and recurrence', () => {
   let userRepository: { findByIdAndTenant: jest.Mock; findAllByTenant: jest.Mock };
   let crmResolver: { resolve: jest.Mock; assertIds: jest.Mock };
 
+  let activity: { record: jest.Mock };
+
   beforeEach(() => {
     taskRepository = {
       createTask: jest.fn(),
@@ -95,13 +97,16 @@ describe('TaskService dependencies and recurrence', () => {
       resolve: jest.fn().mockResolvedValue({ status: 'none' }),
       assertIds: jest.fn(async (_tenantId: string, ids: any) => ids),
     };
+    activity = {
+      record: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new TaskService(
       taskRepository as any,
       userRepository as any,
       crmResolver as any,
       undefined,
-      undefined,
+      activity as any,
       undefined,
       dependencies as any,
     );
@@ -119,6 +124,13 @@ describe('TaskService dependencies and recurrence', () => {
       taskId: taskB,
       dependsOnTaskId: taskA,
     });
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: tenantA,
+        taskId: taskB,
+        eventType: 'TASK_DEPENDENCY_ADDED',
+      }),
+    );
   });
 
   it('rejects self dependencies', async () => {
@@ -196,6 +208,12 @@ describe('TaskService dependencies and recurrence', () => {
     await expect(
       service.completeTask(taskB, contextA),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(activity.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'TASK_BLOCKED_COMPLETION_REJECTED',
+        taskId: taskB,
+      }),
+    );
   });
 
   it('completes a dependency and does not auto-complete dependents', async () => {
