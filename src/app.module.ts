@@ -11,6 +11,7 @@ import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
 import { CompanyModule } from './modules/company/company.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -39,6 +40,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     LeadModule,
     ProspectModule,
     ConversationModule,
+    DashboardModule,
     MessageModule,
     CommunicationHubModule,
     GmailConfigurationModule,

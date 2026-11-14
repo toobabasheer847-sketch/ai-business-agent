@@ -1,101 +1,364 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import {
+  Building2,
+  CheckCircle2,
+  FileText,
+  ListTodo,
+  Phone,
+  Send,
+  Target,
+  Users,
+} from 'lucide-react'
 
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { DashboardKpiCard } from '@/features/dashboard/components/dashboard-kpi-card'
+import { DashboardSectionError } from '@/features/dashboard/components/dashboard-section-error'
+import {
+  useDashboardActivity,
+  useDashboardCommunications,
+  useDashboardCounts,
+  useDashboardPipeline,
+  useDashboardTasks,
+} from '@/features/dashboard/hooks/use-dashboard'
+import type { DashboardRangeQuery } from '@/features/dashboard/types/dashboard.types'
 import { PageHeader } from '@/components/layout/page-header'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { mainNav } from '@/lib/constants/navigation'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+
+const RANGE_OPTIONS = [
+  { id: 'lifetime', label: 'Lifetime' },
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: '90d', label: 'Last 90 days' },
+] as const
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  'company.created': 'Company created',
+  'lead.created': 'Lead created',
+  'prospect.created': 'Prospect created',
+  'proposal.generated': 'Proposal generated',
+  'proposal.sent': 'Proposal sent',
+  'proposal.accepted': 'Proposal accepted',
+  'proposal.rejected': 'Proposal rejected',
+  'task.created': 'Task created',
+  'task.completed': 'Task completed',
+}
+
+function rangeLabel(query: DashboardRangeQuery): string {
+  if (query.range === '7d') return 'Last 7 days (UTC)'
+  if (query.range === '30d') return 'Last 30 days (UTC)'
+  if (query.range === '90d') return 'Last 90 days (UTC)'
+  if (query.range === 'custom') return 'Custom range (UTC)'
+  return 'Lifetime totals'
+}
+
+function formatWhen(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const available = mainNav.filter((n) => n.available && n.href !== '/dashboard')
-  const upcoming = mainNav.filter((n) => !n.available)
+  const [query, setQuery] = useState<DashboardRangeQuery>({})
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const counts = useDashboardCounts(query)
+  const pipeline = useDashboardPipeline(query)
+  const tasks = useDashboardTasks(query)
+  const activity = useDashboardActivity(query)
+  const communications = useDashboardCommunications(query)
+  const overview = counts.overview.data
+  const activeCounts = overview?.filtered ?? overview?.lifetime
+  const pipelineCounts = pipeline.data?.filtered ?? pipeline.data?.lifetime
+  const taskCounts = tasks.data?.filtered
+    ? {
+        pending: tasks.data.filtered.pending,
+        completed: tasks.data.filtered.completed,
+        overdue: tasks.data.filtered.overdue,
+        dueToday: tasks.data.current.dueToday,
+        dueThisWeek: tasks.data.current.dueThisWeek,
+      }
+    : tasks.data?.current
+  const communicationCounts = communications.data?.filtered ?? communications.data?.lifetime
+  const proposalParts: Array<[string, number]> = activeCounts
+    ? [
+        ['Draft', activeCounts.draftProposals],
+        ['Generated', activeCounts.generatedProposals],
+        ['Sent', activeCounts.sentProposals],
+        ['Viewed', activeCounts.viewedProposals],
+        ['Accepted', activeCounts.acceptedProposals],
+        ['Rejected', activeCounts.rejectedProposals],
+      ]
+    : []
+  const proposalMax = Math.max(1, ...proposalParts.map(([, value]) => value))
+  const pipelineMax = Math.max(
+    1,
+    pipelineCounts?.companies ?? 0,
+    pipelineCounts?.leads ?? 0,
+    pipelineCounts?.prospects ?? 0,
+    pipelineCounts?.proposals ?? 0,
+  )
+  const isEmpty =
+    !!overview &&
+    overview.lifetime.companies === 0 &&
+    overview.lifetime.leads === 0 &&
+    overview.lifetime.prospects === 0 &&
+    overview.lifetime.proposals === 0 &&
+    overview.lifetime.pendingTasks === 0 &&
+    overview.lifetime.completedTasks === 0
 
   return (
-    <div>
+    <div className="space-y-6 bg-background text-foreground">
       <PageHeader
-        title="Dashboard"
-        description={`Welcome back${user?.name ? `, ${user.name}` : ''}. Tenant-scoped workspace ready.`}
+        title={`Welcome back${user?.name ? `, ${user.name}` : ''}`}
+        description={`${rangeLabel(query)}. Due today and due this week stay on the current UTC calendar.`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/companies">Companies</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/leads">Leads</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/proposals">Proposals</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to="/assistant">Open assistant</Link>
+            </Button>
+          </div>
+        }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Authenticated user</CardTitle>
-              <CardDescription>From JWT session /auth/me</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <p>
-                <span className="text-muted-foreground">Name:</span> {user?.name}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Email:</span> {user?.email}
-              </p>
-              <p className="truncate">
-                <span className="text-muted-foreground">Tenant:</span> {user?.tenantId}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Live backend modules</CardTitle>
-              <CardDescription>Currently imported in AppModule</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {available.map((item) => (
-                <Badge key={item.href} variant="secondary">
-                  {item.title}
-                </Badge>
-              ))}
-              <Badge variant="secondary">Auth</Badge>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Foundation status</CardTitle>
-              <CardDescription>Phase 1 setup complete</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>React + Vite + Tailwind + shadcn/ui</p>
-              <p>TanStack Query + Axios + JWT auth shell</p>
-              <p>
-                <Link to="/system" className="text-foreground underline-offset-4 hover:underline">
-                  Check backend connectivity →
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Date range">
+          {RANGE_OPTIONS.map((option) => (
+            <Button
+              key={option.id}
+              type="button"
+              size="sm"
+              variant={!query.range && option.id === 'lifetime' || query.range === option.id ? 'default' : 'outline'}
+              aria-pressed={!query.range && option.id === 'lifetime' || query.range === option.id}
+              onClick={() => setQuery(option.id === 'lifetime' ? {} : { range: option.id })}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <form
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!customFrom || !customTo) return
+            setQuery({ range: 'custom', from: customFrom, to: customTo })
+          }}
+        >
+          <label className="text-xs text-muted-foreground">
+            From
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(event) => setCustomFrom(event.target.value)}
+              className="mt-1 block rounded-md border bg-background px-2 py-1 text-sm text-foreground"
+            />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            To
+            <input
+              type="date"
+              value={customTo}
+              onChange={(event) => setCustomTo(event.target.value)}
+              className="mt-1 block rounded-md border bg-background px-2 py-1 text-sm text-foreground"
+            />
+          </label>
+          <Button type="submit" size="sm" variant="outline">
+            Apply range
+          </Button>
+        </form>
       </div>
 
-      <Card className="mt-6">
+      {counts.isError ? (
+        <DashboardSectionError
+          title="Could not load KPIs"
+          error={counts.error}
+          onRetry={() => void counts.overview.refetch()}
+        />
+      ) : (
+        <div
+          data-testid="kpi-grid"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        >
+          <DashboardKpiCard title="Companies" value={counts.companies} icon={Building2} href="/companies" isLoading={counts.isLoading} description={rangeLabel(query)} />
+          <DashboardKpiCard title="Leads" value={counts.leads} icon={Users} href="/leads" isLoading={counts.isLoading} description={overview ? `Lifetime ${overview.lifetime.leads}` : undefined} />
+          <DashboardKpiCard title="Prospects" value={counts.prospects} icon={Target} href="/prospects" isLoading={counts.isLoading} description={overview ? `Lifetime ${overview.lifetime.prospects}` : undefined} />
+          <DashboardKpiCard title="Proposals" value={counts.proposals} icon={FileText} href="/proposals" isLoading={counts.isLoading} description={overview ? `Lifetime ${overview.lifetime.proposals}` : undefined} />
+          <DashboardKpiCard title="Draft proposals" value={activeCounts?.draftProposals} icon={FileText} href="/proposals" isLoading={counts.isLoading} />
+          <DashboardKpiCard title="Sent proposals" value={activeCounts?.sentProposals} icon={Send} href="/proposals" isLoading={counts.isLoading} description="Current status, or sent in the selected period" />
+          <DashboardKpiCard title="Accepted" value={activeCounts?.acceptedProposals} icon={CheckCircle2} href="/proposals" isLoading={counts.isLoading} />
+          <DashboardKpiCard title="Rejected" value={activeCounts?.rejectedProposals} icon={FileText} href="/proposals" isLoading={counts.isLoading} />
+          <DashboardKpiCard title="Pending tasks" value={activeCounts?.pendingTasks} icon={ListTodo} href="/tasks" isLoading={counts.isLoading} />
+          <DashboardKpiCard title="Completed tasks" value={activeCounts?.completedTasks} icon={CheckCircle2} href="/tasks" isLoading={counts.isLoading} />
+          <DashboardKpiCard title="Overdue tasks" value={activeCounts?.overdueTasks} icon={ListTodo} href="/tasks" isLoading={counts.isLoading} description="Open tasks past their due time" />
+        </div>
+      )}
+
+      {isEmpty ? (
+        <Card>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            No CRM records yet. Add a company, lead, or proposal to fill this dashboard.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sales pipeline</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pipeline.isLoading ? <Skeleton className="h-28 w-full" /> : null}
+            {pipeline.isError ? (
+              <DashboardSectionError error={pipeline.error} onRetry={() => void pipeline.refetch()} />
+            ) : null}
+            {pipelineCounts ? (
+              <div className="space-y-3" aria-label="Sales pipeline">
+                {(
+                  [
+                    ['Companies', pipelineCounts.companies],
+                    ['Leads', pipelineCounts.leads],
+                    ['Prospects', pipelineCounts.prospects],
+                    ['Proposals', pipelineCounts.proposals],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span>{label}</span>
+                      <span className="tabular-nums">{value}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted">
+                      <div
+                        className="h-2 rounded-full bg-primary"
+                        style={{ width: `${Math.max(4, (value / pipelineMax) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  {pipelineCounts.companiesWithLeads} companies have leads,{' '}
+                  {pipelineCounts.leadsWithProspects} leads have prospects,{' '}
+                  {pipelineCounts.prospectsWithProposals} prospects have proposals. Each bar counts distinct records.
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Tasks</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {tasks.isLoading ? <Skeleton className="h-28 w-full" /> : null}
+            {tasks.isError ? (
+              <DashboardSectionError error={tasks.error} onRetry={() => void tasks.refetch()} />
+            ) : null}
+            {taskCounts ? (
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border p-3"><dt className="text-muted-foreground">Pending</dt><dd className="text-2xl font-semibold tabular-nums">{taskCounts.pending}</dd></div>
+                <div className="rounded-lg border p-3"><dt className="text-muted-foreground">Completed</dt><dd className="text-2xl font-semibold tabular-nums">{taskCounts.completed}</dd></div>
+                <div className="rounded-lg border p-3"><dt className="text-muted-foreground">Overdue</dt><dd className="text-2xl font-semibold tabular-nums">{taskCounts.overdue}</dd></div>
+                <div className="rounded-lg border p-3"><dt className="text-muted-foreground">Due today</dt><dd className="text-2xl font-semibold tabular-nums">{taskCounts.dueToday}</dd></div>
+                <div className="rounded-lg border p-3 sm:col-span-2"><dt className="text-muted-foreground">Due this week (UTC)</dt><dd className="text-2xl font-semibold tabular-nums">{taskCounts.dueThisWeek}</dd></div>
+              </dl>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Proposal status</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {counts.isLoading ? <Skeleton className="h-28 w-full" /> : null}
+            {proposalParts.map(([label, value]) => (
+              <div key={label} className="flex items-center gap-3 text-sm">
+                <span className="w-24">{label}</span>
+                <div className="h-2 flex-1 rounded-full bg-muted">
+                  <div className="h-2 rounded-full bg-primary" style={{ width: `${(value / proposalMax) * 100}%` }} />
+                </div>
+                <span className="w-8 text-right tabular-nums">{value}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activity.isLoading ? <Skeleton className="h-28 w-full" /> : null}
+            {activity.isError ? (
+              <DashboardSectionError error={activity.error} onRetry={() => void activity.refetch()} />
+            ) : null}
+            {activity.data && activity.data.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity in this period.</p>
+            ) : null}
+            <ul className="space-y-3">
+              {activity.data?.items.map((item) => (
+                <li key={`${item.kind}:${item.id}`} className="flex items-start justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-medium">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">{ACTIVITY_LABELS[item.kind] ?? item.kind}</p>
+                  </div>
+                  <time className="shrink-0 text-xs text-muted-foreground" dateTime={item.occurredAt}>
+                    {formatWhen(item.occurredAt)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base">Modules planned next</CardTitle>
-          <CardDescription>
-            These exist in the backend codebase but are not yet mounted in AppModule. UI pages will be built module-by-module after approval.
-          </CardDescription>
+          <CardTitle className="text-base">Communications</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {upcoming.map((item) => (
-            <div
-              key={item.href}
-              className="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm"
-            >
-              <item.icon className="size-4 text-muted-foreground" />
-              <span>{item.title}</span>
-              <Badge variant="outline" className="ml-auto text-[10px]">
-                pending
-              </Badge>
+        <CardContent className="space-y-4">
+          {communications.isError ? (
+            <DashboardSectionError error={communications.error} onRetry={() => void communications.refetch()} />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <DashboardKpiCard title="Email" value={communicationCounts?.emailConversations} description="Email conversations" icon={Send} href="/communication-hub" isLoading={communications.isLoading} />
+              <DashboardKpiCard title="SMS" value={communicationCounts?.smsConversations} description="SMS conversations" icon={Send} href="/communication-hub" isLoading={communications.isLoading} />
+              <DashboardKpiCard title="Calls" value={communicationCounts?.callConversations} description="Call conversations" icon={Phone} href="/communication-hub" isLoading={communications.isLoading} />
+              <DashboardKpiCard title="All channels" value={communicationCounts?.totalConversations} description="Same records as Communication Hub" icon={Phone} href="/communication-hub" isLoading={communications.isLoading} />
             </div>
-          ))}
+          )}
+          {communications.data && communications.data.recent.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent communications.</p>
+          ) : (
+            <ul className="space-y-2">
+              {communications.data?.recent.map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="capitalize">{item.channel}</span>
+                  <span className="min-w-0 flex-1 truncate">{item.title || 'Untitled conversation'}</span>
+                  <time className="text-xs text-muted-foreground" dateTime={item.updatedAt}>{formatWhen(item.updatedAt)}</time>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -2,7 +2,13 @@ import { apiClient } from '@/lib/api'
 import type {
   AgentStatusResponse,
   CommunicationHubStats,
+  DashboardActivity,
+  DashboardCommunications,
   DashboardConversation,
+  DashboardOverview,
+  DashboardPipeline,
+  DashboardRangeQuery,
+  DashboardTaskSummary,
   PhoneNumberSummary,
 } from '@/features/dashboard/types/dashboard.types'
 
@@ -53,6 +59,42 @@ export const dashboardApi = {
   async communicationAgentStatus(): Promise<AgentStatusResponse> {
     const { data } = await apiClient.get<AgentStatusResponse>(
       '/ai/communication/status',
+    )
+    return data
+  },
+
+  async overview(query: DashboardRangeQuery = {}): Promise<DashboardOverview> {
+    const { data } = await apiClient.get<DashboardOverview>('/dashboard/overview', {
+      params: query,
+    })
+    return data
+  },
+
+  async salesPipeline(query: DashboardRangeQuery = {}): Promise<DashboardPipeline> {
+    const { data } = await apiClient.get<DashboardPipeline>('/dashboard/sales-pipeline', {
+      params: query,
+    })
+    return data
+  },
+
+  async tasksSummary(query: DashboardRangeQuery = {}): Promise<DashboardTaskSummary> {
+    const { data } = await apiClient.get<DashboardTaskSummary>('/dashboard/tasks-summary', {
+      params: query,
+    })
+    return data
+  },
+
+  async recentActivity(query: DashboardRangeQuery = {}): Promise<DashboardActivity> {
+    const { data } = await apiClient.get<DashboardActivity>('/dashboard/recent-activity', {
+      params: query,
+    })
+    return data
+  },
+
+  async communicationsSummary(query: DashboardRangeQuery = {}): Promise<DashboardCommunications> {
+    const { data } = await apiClient.get<DashboardCommunications>(
+      '/dashboard/communications-summary',
+      { params: query },
     )
     return data
   },
