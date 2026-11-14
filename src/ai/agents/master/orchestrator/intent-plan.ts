@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { z } from 'zod';
 
+import { analyticsActions, isAnalyticsQuestion } from '../../../../modules/analytics/analytics-intent.js';
 import { isTeamQuestion } from '../../team/team-intent.js';
 
 export const ORCHESTRATION_AGENTS = [
@@ -31,6 +32,10 @@ export const ALLOWED_ACTIONS = [
   'record.delete',
   'knowledge.answer',
   'team.analyze',
+  'analytics.overview',
+  'analytics.sales',
+  'analytics.proposals',
+  'analytics.tasks',
 ] as const;
 
 export type OrchestrationAction = (typeof ALLOWED_ACTIONS)[number];
@@ -62,6 +67,10 @@ const ACTION_AGENT: Record<OrchestrationAction, OrchestrationAgent> = {
   'record.delete': 'knowledge',
   'knowledge.answer': 'knowledge',
   'team.analyze': 'team',
+  'analytics.overview': 'analytics',
+  'analytics.sales': 'analytics',
+  'analytics.proposals': 'analytics',
+  'analytics.tasks': 'analytics',
 };
 
 const READ_ACTIONS = new Set<OrchestrationAction>([
@@ -73,6 +82,10 @@ const READ_ACTIONS = new Set<OrchestrationAction>([
   'dashboard.read',
   'knowledge.answer',
   'team.analyze',
+  'analytics.overview',
+  'analytics.sales',
+  'analytics.proposals',
+  'analytics.tasks',
 ]);
 
 const SENSITIVE_ACTIONS = new Set<OrchestrationAction>([
@@ -177,14 +190,15 @@ export function detectIntents(message: string): DetectionResult {
   const wantsTask =
     /\b(?:task|follow-up|follow up)\b/i.test(text) &&
     /\b(?:create|add|schedule|set|remind)\b/i.test(text);
-  const wantsTeam = isTeamQuestion(text);
-  const wantsOverdue = /\boverdue\b/i.test(text) && /\btasks?\b/i.test(text) && !wantsTeam;
+  const wantsAnalytics = isAnalyticsQuestion(text);
+  const wantsTeam = isTeamQuestion(text) && !wantsAnalytics;
+  const wantsOverdue = /\boverdue\b/i.test(text) && /\btasks?\b/i.test(text) && !wantsTeam && !wantsAnalytics;
   const wantsComms =
     /\b(?:communications?|emails?|inbox|calls?|sms)\b/i.test(text) &&
     /\b(?:summarize|summary|recent|show)\b/i.test(text);
   const wantsProspectFollowup =
     /\bprospects?\b/i.test(text) && /\bfollow-?up\b/i.test(text);
-  const wantsDashboard = /\b(?:dashboard|kpis?|metrics|pipeline)\b/i.test(text);
+  const wantsDashboard = /\b(?:dashboard|kpis?|metrics|pipeline)\b/i.test(text) && !wantsAnalytics;
   const wantsDelete = /\b(?:delete|remove|erase|destroy)\b/i.test(text);
   const wantsKnowledge =
     /\b(?:policy|refund|document|documents|knowledge|uploaded|wiki|faq)\b/i.test(text);
@@ -206,6 +220,9 @@ export function detectIntents(message: string): DetectionResult {
   if (wantsDashboard) push('dashboard.read');
   if (wantsDelete) push('record.delete');
   if (wantsTeam) push('team.analyze');
+  if (wantsAnalytics) {
+    for (const action of analyticsActions(text)) push(action);
+  }
   if (wantsKnowledge && selected.length > 0) push('knowledge.answer');
   if (wantsKnowledge && selected.length === 0) push('knowledge.answer');
 

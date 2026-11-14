@@ -33,6 +33,12 @@ describe('MasterOrchestratorService', () => {
   const communications = { getStats: jest.fn(), getHistory: jest.fn() };
   const dashboard = { overview: jest.fn() };
   const team = { answer: jest.fn() };
+  const analytics = {
+    overviewSummary: jest.fn(),
+    salesSummary: jest.fn(),
+    proposalSummary: jest.fn(),
+    taskSummary: jest.fn(),
+  };
   const configService = { get: jest.fn().mockReturnValue(undefined) };
   const db = dbMock();
 
@@ -47,6 +53,7 @@ describe('MasterOrchestratorService', () => {
     communications as never,
     dashboard as never,
     team as never,
+    analytics as never,
     configService as never,
     db as never,
   );
@@ -71,6 +78,10 @@ describe('MasterOrchestratorService', () => {
     dashboard.overview.mockResolvedValue({
       lifetime: { companies: 1, leads: 1, prospects: 1, proposals: 1, pendingTasks: 2 },
     });
+    analytics.overviewSummary.mockResolvedValue({ summary: 'Business summary with 2 new leads and 1 accepted proposal.' });
+    analytics.salesSummary.mockResolvedValue({ summary: 'Lead-to-prospect rate is 50% (1 of 2).' });
+    analytics.proposalSummary.mockResolvedValue({ summary: 'Proposals accepted in the period: 1.' });
+    analytics.taskSummary.mockResolvedValue({ summary: 'Task snapshot: pending 1. Team workload uses open task counts.' });
     team.answer.mockResolvedValue({
       focus: 'overview',
       summary: 'Team overview: 2 active members.\nAssigned tasks: 1 total, 1 pending, 0 in progress, 0 completed, 0 cancelled, 0 overdue.',
@@ -225,5 +236,26 @@ describe('MasterOrchestratorService', () => {
       message: 'Who has the most pending tasks?',
     })).rejects.toBeInstanceOf(UnauthorizedException);
     expect(team.answer).not.toHaveBeenCalled();
+  });
+
+  it('runs sales, proposal, and task analytics in one comparison request', async () => {
+    const result = await service.run({
+      tenantId: tenantA,
+      userId,
+      conversationId,
+      message: "Compare last month's sales pipeline, proposal acceptance and team task completion.",
+    });
+
+    expect(result.orchestration.detectedIntents).toEqual([
+      'analytics.sales',
+      'analytics.proposals',
+      'analytics.tasks',
+    ]);
+    expect(analytics.salesSummary).toHaveBeenCalledWith(tenantA, expect.stringContaining('sales pipeline'));
+    expect(analytics.proposalSummary).toHaveBeenCalledWith(tenantA, expect.any(String));
+    expect(analytics.taskSummary).toHaveBeenCalledWith(tenantA, expect.any(String));
+    expect(result.orchestration.operations.every((operation) => operation.status === 'completed')).toBe(true);
+    expect(companies.create).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(tenantB);
   });
 });

@@ -3,6 +3,10 @@ import type { AssistantOrchestration } from '@/features/assistant/types/assistan
 
 const ACTION_LABELS: Record<string, string> = {
   'team.analyze': 'Team analysis',
+  'analytics.overview': 'Business summary',
+  'analytics.sales': 'Sales analytics',
+  'analytics.proposals': 'Proposal analytics',
+  'analytics.tasks': 'Task analytics',
 }
 
 const STATUS_LABELS: Record<string, string> = {

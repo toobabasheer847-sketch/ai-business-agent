@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { CommunicationHubModule } from '../../../modules/communication-hub/communication-hub.module.js';
 import { CompanyModule } from '../../../modules/company/company.module.js';
 import { ConversationModule } from '../../../modules/conversation/conversation.module';
+import { AnalyticsModule } from '../../../modules/analytics/analytics.module.js';
 import { DashboardModule } from '../../../modules/dashboard/dashboard.module.js';
 import { LeadModule } from '../../../modules/lead/lead.module.js';
 import { MasterSettingsModule } from '../../../modules/master-settings/master-settings.module';
@@ -24,6 +25,7 @@ import { MasterOrchestratorService } from './orchestrator/orchestrator.service.j
     CompanyModule,
     ConversationModule,
     DashboardModule,
+    AnalyticsModule,
     LeadModule,
     MasterSettingsModule,
     ProposalModule,

@@ -47,6 +47,17 @@ describe('intent planning', () => {
     expect(team.sensitive).toBe(false);
   });
 
+  it('routes a combined analytics comparison without replacing the task agent', () => {
+    expect(detectIntents('How many tasks are overdue?').intents).toEqual(['task.overdue']);
+    expect(detectIntents("Compare last month's sales pipeline, proposal acceptance and team task completion.").intents).toEqual([
+      'analytics.sales',
+      'analytics.proposals',
+      'analytics.tasks',
+    ]);
+    expect(detectIntents('How many proposals were accepted in the last 30 days?').intents).toEqual(['analytics.proposals']);
+    expect(shouldOrchestrate('How is my business performing this month?')).toBe(true);
+  });
+
   it('detects company, lead, prospect, proposal, and task intents', () => {
     const detected = detectIntents(
       'Create a company called ABC Technologies, add Jane Doe as a lead and CEO, create a proposal and schedule a follow-up task.',

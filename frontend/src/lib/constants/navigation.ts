@@ -3,6 +3,7 @@ import {
   Bot,
   Building2,
   CircleHelp,
+  BarChart3,
   LayoutDashboard,
   Landmark,
   ListTodo,
@@ -41,6 +42,14 @@ export const mainNav: NavItem[] = [
     icon: LayoutDashboard,
     module: 'app',
     available: true,
+  },
+  {
+    title: 'Analytics',
+    href: '/analytics',
+    icon: BarChart3,
+    module: 'analytics',
+    available: true,
+    description: 'Period comparisons and business insights',
   },
   {
     title: 'AI Assistant',
