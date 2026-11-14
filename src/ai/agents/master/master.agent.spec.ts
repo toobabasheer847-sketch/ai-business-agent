@@ -28,6 +28,7 @@ const ALL_AGENTS = {
   task_agent: {},
   communication_agent: {},
   rag_agent: {},
+  team_agent: {},
 };
 
 function messageContext(text: string) {
@@ -87,6 +88,18 @@ describe('Master Agent regex router', () => {
     await expect(
       router(ALL_AGENTS, messageContext('Show my task trends this month')),
     ).resolves.toBe('task_agent');
+  });
+
+  it('routes team workload questions to team_agent before task_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('Show me my team overview.')),
+    ).resolves.toBe('team_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Which employees have overdue tasks?')),
+    ).resolves.toBe('team_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Which tasks are approaching their deadlines?')),
+    ).resolves.toBe('team_agent');
   });
 
   it('routes plural task requests to task_agent', async () => {

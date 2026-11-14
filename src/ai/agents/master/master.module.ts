@@ -12,6 +12,7 @@ import { CommunicationAgentModule } from '../communication/communication.module.
 import { ProposalModule } from '../proposal/proposal.module.js';
 import { RagModule } from '../rag/rag.module.js';
 import { TaskModule } from '../task/task.module.js';
+import { TeamAgentModule } from '../team/team-agent.module.js';
 import { MasterAgentController } from './master.controller';
 import { MasterAgentService } from './master.service';
 import { MasterOrchestratorService } from './orchestrator/orchestrator.service.js';
@@ -29,6 +30,7 @@ import { MasterOrchestratorService } from './orchestrator/orchestrator.service.j
     ProspectModule,
     RagModule,
     TaskModule,
+    TeamAgentModule,
   ],
   controllers: [MasterAgentController],
   providers: [MasterAgentService, AdkAgentFactoryService, MasterOrchestratorService],

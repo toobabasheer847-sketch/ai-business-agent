@@ -32,6 +32,7 @@ describe('MasterOrchestratorService', () => {
   const delivery = { sendProposalEmail: jest.fn() };
   const communications = { getStats: jest.fn(), getHistory: jest.fn() };
   const dashboard = { overview: jest.fn() };
+  const team = { answer: jest.fn() };
   const configService = { get: jest.fn().mockReturnValue(undefined) };
   const db = dbMock();
 
@@ -45,6 +46,7 @@ describe('MasterOrchestratorService', () => {
     delivery as never,
     communications as never,
     dashboard as never,
+    team as never,
     configService as never,
     db as never,
   );
@@ -68,6 +70,11 @@ describe('MasterOrchestratorService', () => {
     communications.getHistory.mockResolvedValue({ data: [{ channel: 'email', title: 'Follow up' }] });
     dashboard.overview.mockResolvedValue({
       lifetime: { companies: 1, leads: 1, prospects: 1, proposals: 1, pendingTasks: 2 },
+    });
+    team.answer.mockResolvedValue({
+      focus: 'overview',
+      summary: 'Team overview: 2 active members.\nAssigned tasks: 1 total, 1 pending, 0 in progress, 0 completed, 0 cancelled, 0 overdue.',
+      activeMembers: 2,
     });
   });
 
@@ -187,5 +194,36 @@ describe('MasterOrchestratorService', () => {
     expect(delivery.sendProposalEmail).not.toHaveBeenCalled();
     expect(result.response).not.toContain('drop table');
     expect(JSON.stringify(companies.create.mock.calls)).not.toContain(tenantB);
+  });
+
+  it('reads team workload for the authenticated tenant and does not create records', async () => {
+    const result = await service.run({
+      tenantId: tenantA,
+      userId,
+      conversationId,
+      message: 'Show me my team overview.',
+    });
+
+    expect(team.answer).toHaveBeenCalledWith(tenantA, 'Show me my team overview.');
+    expect(result.orchestration.detectedIntents).toEqual(['team.analyze']);
+    expect(result.orchestration.operations[0]).toEqual(expect.objectContaining({
+      agent: 'team',
+      action: 'team.analyze',
+      status: 'completed',
+    }));
+    expect(result.response).toContain('2 active members');
+    expect(companies.create).not.toHaveBeenCalled();
+    expect(tasks.createTask).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(tenantB);
+  });
+
+  it('rejects a team question with no tenant before reading team data', async () => {
+    await expect(service.run({
+      tenantId: ' ',
+      userId,
+      conversationId,
+      message: 'Who has the most pending tasks?',
+    })).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(team.answer).not.toHaveBeenCalled();
   });
 });

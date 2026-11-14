@@ -1,6 +1,10 @@
 import { Button } from '@/components/ui/button'
 import type { AssistantOrchestration } from '@/features/assistant/types/assistant.types'
 
+const ACTION_LABELS: Record<string, string> = {
+  'team.analyze': 'Team analysis',
+}
+
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   running: 'Running',
@@ -38,7 +42,7 @@ export function OrchestrationSummary({
         {orchestration.operations.map((operation) => (
           <li key={operation.operationId} className="flex items-start justify-between gap-3 text-sm">
             <span>
-              <span className="font-medium">{operation.action}</span>
+              <span className="font-medium">{ACTION_LABELS[operation.action] ?? operation.action}</span>
               {operation.summary ? <span className="mt-0.5 block text-muted-foreground">{operation.summary}</span> : null}
             </span>
             <span className="shrink-0 text-xs text-muted-foreground">

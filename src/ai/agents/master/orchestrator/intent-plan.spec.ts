@@ -30,6 +30,21 @@ describe('intent planning', () => {
     expect(detected.intents).toEqual(['company.create']);
     expect(shouldOrchestrate('Create a company called ABC Technologies')).toBe(true);
     expect(shouldOrchestrate('Show me my tasks')).toBe(false);
+    expect(shouldOrchestrate('How many tasks are overdue?')).toBe(false);
+    expect(detectIntents('How many tasks are overdue?').intents).toEqual(['task.overdue']);
+  });
+
+  it('sends team questions to the team agent and keeps personal overdue on the task agent', () => {
+    expect(detectIntents('Show me my team overview.').intents).toEqual(['team.analyze']);
+    expect(detectIntents('How many employees are in my organization?').intents).toEqual(['team.analyze']);
+    expect(detectIntents('Which employees have overdue tasks?').intents).toEqual(['team.analyze']);
+    expect(detectIntents('Who has the most pending tasks?').intents).toEqual(['team.analyze']);
+    expect(detectIntents('Which projects are delayed?').intents).toEqual(['team.analyze']);
+    expect(shouldOrchestrate('Show me my team overview.')).toBe(true);
+    const team = detectIntents('Which employees have overdue tasks?').operations[0];
+    expect(team.selectedAgent).toBe('team');
+    expect(team.executionMode).toBe('parallel');
+    expect(team.sensitive).toBe(false);
   });
 
   it('detects company, lead, prospect, proposal, and task intents', () => {

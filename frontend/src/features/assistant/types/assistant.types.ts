@@ -6,6 +6,7 @@ export const ASSISTANT_DELEGATIONS = [
   'proposal',
   'status',
   'orchestrator',
+  'team',
 ] as const
 
 export type AssistantDelegation = (typeof ASSISTANT_DELEGATIONS)[number]
@@ -111,6 +112,7 @@ export const DELEGATION_LABELS: Record<AssistantDelegation, string> = {
   proposal: 'Proposal',
   status: 'Status',
   orchestrator: 'Orchestrator',
+  team: 'Team',
 }
 
 export function normalizeOrchestration(value: unknown): AssistantOrchestration | null {

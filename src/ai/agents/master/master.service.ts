@@ -34,6 +34,7 @@ import {
   TaskRecord,
 } from '../task/types/task.types.js';
 import { ProposalAgent } from '../proposal/proposal-agent.js';
+import { TeamAgent } from '../team/team-agent.js';
 import type { PlannedOperation } from './orchestrator/intent-plan.js';
 import {
   MasterOrchestratorService,
@@ -47,6 +48,7 @@ const AGENT_DELEGATION_LABELS: Record<string, string> = {
   rag_agent: 'rag',
   master_status_agent: 'status',
   master_chat_agent: 'chat',
+  team_agent: 'team',
 };
 
 const ASSISTANT_THREAD_LIST_LIMIT = 20;
@@ -81,6 +83,7 @@ export class MasterAgentService {
     private readonly configService: ConfigService,
     private readonly masterSettingsService: MasterSettingsService,
     private readonly adkAgentFactory: AdkAgentFactoryService,
+    @Optional() private readonly teamAgent?: TeamAgent,
     @Optional() private readonly orchestrator?: MasterOrchestratorService,
   ) {
     const communicationAgent = this.communicationAgentService.getAgent();
@@ -112,6 +115,7 @@ export class MasterAgentService {
       rag_agent: hasGemini ? { name: 'rag_agent' } : undefined,
       task_agent: { name: 'task_agent' },
       proposal_agent: { name: 'proposal_agent' },
+      team_agent: this.teamAgent ? { name: 'team_agent' } : undefined,
     };
   }
 
@@ -448,6 +452,22 @@ export class MasterAgentService {
       trimmedMessage,
       this.routeAgents,
     );
+
+    if (routeTarget === 'team_agent' && this.teamAgent) {
+      try {
+        const teamResult = await this.teamAgent.answer(tenantId, trimmedMessage);
+        return {
+          response: teamResult.summary,
+          delegation: 'team',
+        };
+      } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
+        this.logger.error('Team delegation failed', error as Error);
+        throw new InternalServerErrorException('Team request failed to process');
+      }
+    }
 
     if (routeTarget === 'task_agent') {
       try {

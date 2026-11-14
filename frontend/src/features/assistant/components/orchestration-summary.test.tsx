@@ -24,6 +24,27 @@ afterEach(() => {
 })
 
 describe('OrchestrationSummary', () => {
+  it('labels a team analysis without hiding the summary', () => {
+    render(
+      <OrchestrationSummary
+        orchestration={{
+          ...orchestration,
+          operations: [
+            {
+              operationId: 'op-team',
+              agent: 'team',
+              action: 'team.analyze',
+              status: 'completed',
+              summary: 'Team overview: 2 active members.',
+            },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('Team analysis')).toBeTruthy()
+    expect(screen.getByText('Team overview: 2 active members.')).toBeTruthy()
+  })
+
   it('shows completed, failed, and skipped operations', () => {
     render(<OrchestrationSummary orchestration={orchestration} />)
     expect(screen.getByText('company.create')).toBeTruthy()

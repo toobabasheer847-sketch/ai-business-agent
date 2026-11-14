@@ -1,6 +1,8 @@
 import { ForbiddenException } from '@nestjs/common';
 import { z } from 'zod';
 
+import { isTeamQuestion } from '../../team/team-intent.js';
+
 export const ORCHESTRATION_AGENTS = [
   'crm',
   'task',
@@ -8,6 +10,7 @@ export const ORCHESTRATION_AGENTS = [
   'communication',
   'analytics',
   'knowledge',
+  'team',
 ] as const;
 
 export type OrchestrationAgent = (typeof ORCHESTRATION_AGENTS)[number];
@@ -27,6 +30,7 @@ export const ALLOWED_ACTIONS = [
   'dashboard.read',
   'record.delete',
   'knowledge.answer',
+  'team.analyze',
 ] as const;
 
 export type OrchestrationAction = (typeof ALLOWED_ACTIONS)[number];
@@ -57,6 +61,7 @@ const ACTION_AGENT: Record<OrchestrationAction, OrchestrationAgent> = {
   'dashboard.read': 'analytics',
   'record.delete': 'knowledge',
   'knowledge.answer': 'knowledge',
+  'team.analyze': 'team',
 };
 
 const READ_ACTIONS = new Set<OrchestrationAction>([
@@ -67,6 +72,7 @@ const READ_ACTIONS = new Set<OrchestrationAction>([
   'communication.summary',
   'dashboard.read',
   'knowledge.answer',
+  'team.analyze',
 ]);
 
 const SENSITIVE_ACTIONS = new Set<OrchestrationAction>([
@@ -171,7 +177,8 @@ export function detectIntents(message: string): DetectionResult {
   const wantsTask =
     /\b(?:task|follow-up|follow up)\b/i.test(text) &&
     /\b(?:create|add|schedule|set|remind)\b/i.test(text);
-  const wantsOverdue = /\boverdue\b/i.test(text) && /\btasks?\b/i.test(text);
+  const wantsTeam = isTeamQuestion(text);
+  const wantsOverdue = /\boverdue\b/i.test(text) && /\btasks?\b/i.test(text) && !wantsTeam;
   const wantsComms =
     /\b(?:communications?|emails?|inbox|calls?|sms)\b/i.test(text) &&
     /\b(?:summarize|summary|recent|show)\b/i.test(text);
@@ -198,6 +205,7 @@ export function detectIntents(message: string): DetectionResult {
   if (wantsProspectFollowup) push('prospect.followup');
   if (wantsDashboard) push('dashboard.read');
   if (wantsDelete) push('record.delete');
+  if (wantsTeam) push('team.analyze');
   if (wantsKnowledge && selected.length > 0) push('knowledge.answer');
   if (wantsKnowledge && selected.length === 0) push('knowledge.answer');
 
@@ -240,7 +248,7 @@ export function shouldOrchestrate(message: string): boolean {
   }
   if (detected.operations.length === 1) {
     const only = detected.operations[0];
-    return only.selectedAgent === 'crm' || only.selectedAgent === 'analytics' || only.action === 'record.delete';
+    return only.selectedAgent === 'crm' || only.selectedAgent === 'analytics' || only.selectedAgent === 'team' || only.action === 'record.delete';
   }
   const agents = new Set(detected.operations.map((operation) => operation.selectedAgent));
   if (

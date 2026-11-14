@@ -1,6 +1,8 @@
 import { FunctionTool, LlmAgent, RoutedAgent } from '@google/adk';
 import { z } from 'zod';
 
+import { isTeamQuestion } from '../team/team-intent.js';
+
 const getSystemStatusTool = new FunctionTool({
   name: 'get_system_status',
 
@@ -102,6 +104,10 @@ export async function resolveMasterRoute(
     agents.proposal_agent
   ) {
     return 'proposal_agent';
+  }
+
+  if (isTeamQuestion(userTextInput) && agents.team_agent) {
+    return 'team_agent';
   }
 
   if (routeToTask.test(userText) && agents.task_agent) {
