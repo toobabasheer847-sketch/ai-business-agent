@@ -16,6 +16,7 @@ import {
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types';
 import { ChatMessageDto } from './dto/chat-message.dto';
+import { ConfirmOrchestrationDto } from './dto/confirm-orchestration.dto';
 import { MasterAgentService } from './master.service';
 
 @UseGuards(JwtAuthGuard)
@@ -77,6 +78,51 @@ export class MasterAgentController {
       dto.message,
       dto.conversationId,
     );
+  }
+
+  @Post('orchestrate')
+  @HttpCode(HttpStatus.OK)
+  async orchestrate(@Body() dto: ChatMessageDto, @Req() req: AuthenticatedRequest) {
+    const { tenantId, userId } = this.requireAuthContext(req);
+    const result = await this.masterAgentService.invoke(
+      tenantId,
+      userId,
+      dto.message,
+      dto.conversationId,
+    );
+
+    return {
+      success: result.orchestration ? result.orchestration.status !== 'failed' : true,
+      conversationId: result.conversationId,
+      message: result.response,
+      response: result.response,
+      delegation: result.delegation,
+      orchestration: result.orchestration ?? null,
+    };
+  }
+
+  @Post('orchestrate/confirm')
+  @HttpCode(HttpStatus.OK)
+  async confirmOrchestration(
+    @Body() dto: ConfirmOrchestrationDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const { tenantId, userId } = this.requireAuthContext(req);
+    const result = await this.masterAgentService.confirmOrchestration(
+      tenantId,
+      userId,
+      dto.conversationId,
+      dto.orchestrationId,
+    );
+
+    return {
+      success: true,
+      conversationId: result.conversationId,
+      message: result.response,
+      response: result.response,
+      delegation: result.delegation,
+      orchestration: result.orchestration ?? null,
+    };
   }
 
   private requireAuthContext(req: AuthenticatedRequest) {

@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -33,6 +34,11 @@ import {
   TaskRecord,
 } from '../task/types/task.types.js';
 import { ProposalAgent } from '../proposal/proposal-agent.js';
+import type { PlannedOperation } from './orchestrator/intent-plan.js';
+import {
+  MasterOrchestratorService,
+  type OrchestrationPayload,
+} from './orchestrator/orchestrator.service.js';
 
 const AGENT_DELEGATION_LABELS: Record<string, string> = {
   proposal_agent: 'proposal',
@@ -53,6 +59,7 @@ export type MasterChatResponse = {
   sources?: RagSourceMetadata[];
   usedKnowledge?: boolean;
   message?: string;
+  orchestration?: OrchestrationPayload;
 };
 
 type HistoryMessage = {
@@ -74,6 +81,7 @@ export class MasterAgentService {
     private readonly configService: ConfigService,
     private readonly masterSettingsService: MasterSettingsService,
     private readonly adkAgentFactory: AdkAgentFactoryService,
+    @Optional() private readonly orchestrator?: MasterOrchestratorService,
   ) {
     const communicationAgent = this.communicationAgentService.getAgent();
     const hasGemini = !!this.configService.get<string>('GOOGLE_GENAI_API_KEY');
@@ -161,7 +169,7 @@ export class MasterAgentService {
     const aiResult = await runWithAiContext(
       { tenantId, userId, aiModel: settings.aiModel },
       () =>
-        this.executeExistingAi(tenantId, userId, trimmedMessage, history),
+        this.dispatchAi(tenantId, userId, trimmedMessage, history, conversation.id),
     );
 
     await this.persistAssistantMessage(tenantId, conversation.id, aiResult);
@@ -340,6 +348,94 @@ export class MasterAgentService {
         'Failed to persist assistant response',
       );
     }
+  }
+
+  async confirmOrchestration(
+    tenantId: string,
+    userId: string,
+    conversationId: string,
+    orchestrationId: string,
+  ): Promise<MasterChatResponse> {
+    await this.requireOwnedAssistantConversation(tenantId, userId, conversationId);
+    if (!this.orchestrator) {
+      throw new InternalServerErrorException('Orchestrator is unavailable');
+    }
+
+    const messages = await this.conversationRepository.findMessagesByConversation(
+      conversationId,
+      tenantId,
+    );
+    const stored = [...messages].reverse().find((message) => {
+      const metadata = message.metadata as { orchestration?: OrchestrationPayload } | null;
+      return metadata?.orchestration?.id === orchestrationId;
+    });
+    const orchestration = (stored?.metadata as { orchestration?: OrchestrationPayload } | null)?.orchestration;
+    if (!orchestration) {
+      throw new NotFoundException('Orchestration not found');
+    }
+
+    const pending = orchestration.operations.filter((operation) => operation.status === 'awaiting_confirmation');
+    if (!pending.length) {
+      throw new BadRequestException('Nothing is waiting for confirmation.');
+    }
+
+    const confirmed: PlannedOperation[] = [];
+    for (const operation of pending) {
+      const planned: PlannedOperation = {
+        operationId: operation.operationId,
+        intent: operation.action as PlannedOperation['intent'],
+        selectedAgent: operation.agent as PlannedOperation['selectedAgent'],
+        action: operation.action as PlannedOperation['action'],
+        requiredInputs: operation.outputs?.recordId ? { recordId: operation.outputs.recordId } : {},
+        dependencies: [],
+        executionMode: 'sequential',
+        permissionRequirements: ['authenticated-tenant'],
+        status: 'awaiting_confirmation',
+        missing: [],
+        sensitive: true,
+        outputs: operation.outputs,
+        entityId: operation.entityId,
+      };
+      confirmed.push(await this.orchestrator.confirm({
+        tenantId,
+        userId,
+        operation: planned,
+      }));
+    }
+
+    const operations = orchestration.operations.map((operation) => {
+      const next = confirmed.find((item) => item.operationId === operation.operationId);
+      return next
+        ? { ...operation, status: next.status, summary: next.summary, entityId: next.entityId }
+        : operation;
+    });
+    const response = confirmed.map((operation) => operation.summary ?? operation.action).join('\n');
+    const result: MasterChatResponse = {
+      response,
+      delegation: 'orchestrator',
+      orchestration: { ...orchestration, status: 'completed', operations },
+    };
+    await this.persistAssistantMessage(tenantId, conversationId, result);
+    return { conversationId, ...result };
+  }
+
+  private async dispatchAi(
+    tenantId: string,
+    userId: string,
+    trimmedMessage: string,
+    history: HistoryMessage[],
+    conversationId: string,
+  ): Promise<MasterChatResponse> {
+    if (this.orchestrator?.shouldOrchestrate(trimmedMessage)) {
+      return this.orchestrator.run({
+        tenantId,
+        userId,
+        message: trimmedMessage,
+        conversationId,
+      });
+    }
+
+    return this.executeExistingAi(tenantId, userId, trimmedMessage, history);
   }
 
   private async executeExistingAi(
@@ -535,6 +631,10 @@ export class MasterAgentService {
 
     if (result.message) {
       metadata.message = result.message;
+    }
+
+    if (result.orchestration) {
+      metadata.orchestration = result.orchestration;
     }
 
     return metadata;

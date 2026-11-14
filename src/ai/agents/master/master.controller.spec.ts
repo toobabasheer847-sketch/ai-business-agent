@@ -69,6 +69,7 @@ describe('MasterAgentController', () => {
     listAssistantConversations: jest.Mock;
     getAssistantConversationMessages: jest.Mock;
     deleteAssistantConversation: jest.Mock;
+    confirmOrchestration: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -82,6 +83,11 @@ describe('MasterAgentController', () => {
       listAssistantConversations: jest.fn().mockResolvedValue([]),
       getAssistantConversationMessages: jest.fn().mockResolvedValue([]),
       deleteAssistantConversation: jest.fn().mockResolvedValue(undefined),
+      confirmOrchestration: jest.fn().mockResolvedValue({
+        conversationId: CONVERSATION_ID,
+        response: 'Proposal email was sent after confirmation.',
+        delegation: 'orchestrator',
+      }),
     };
 
     app = await initChatTestApp(
@@ -224,6 +230,63 @@ describe('MasterAgentController', () => {
         .expect(400);
 
       expect(masterAgentService.invoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /ai/orchestrate', () => {
+    it('returns 401 when no JWT is provided', async () => {
+      await request(app.getHttpServer())
+        .post('/ai/orchestrate')
+        .send({ message: 'Create a company called ABC Technologies' })
+        .expect(401);
+
+      expect(masterAgentService.invoke).not.toHaveBeenCalled();
+    });
+
+    it('uses the JWT tenant and ignores a body tenantId', async () => {
+      const token = signTestJwt(app);
+
+      await request(app.getHttpServer())
+        .post('/ai/orchestrate')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          message: 'Create a company called ABC Technologies',
+          tenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        })
+        .expect(400);
+
+      expect(masterAgentService.invoke).not.toHaveBeenCalled();
+    });
+
+    it('invokes chat orchestration with the authenticated tenant', async () => {
+      const token = signTestJwt(app);
+      masterAgentService.invoke.mockResolvedValueOnce({
+        conversationId: CONVERSATION_ID,
+        response: 'Created company ABC Technologies.',
+        delegation: 'orchestrator',
+        orchestration: {
+          id: 'orch-1',
+          status: 'completed',
+          detectedIntents: ['company.create'],
+          clarification: null,
+          operations: [],
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/ai/orchestrate')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ message: 'Create a company called ABC Technologies' })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.orchestration.status).toBe('completed');
+      expect(masterAgentService.invoke).toHaveBeenCalledWith(
+        AUTHENTICATED_TEST_USER.tenantId,
+        AUTHENTICATED_TEST_USER.userId,
+        'Create a company called ABC Technologies',
+        undefined,
+      );
     });
   });
 

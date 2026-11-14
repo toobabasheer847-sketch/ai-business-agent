@@ -4,6 +4,7 @@ import { Bot } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AssistantMarkdown } from '@/features/assistant/components/assistant-markdown'
+import { OrchestrationSummary } from '@/features/assistant/components/orchestration-summary'
 import { AssistantSourcesList } from '@/features/assistant/components/assistant-sources-list'
 import { cn } from '@/lib/utils'
 import {
@@ -14,23 +15,40 @@ import {
 type AssistantMessageListProps = {
   messages: AssistantMessage[]
   bottomRef: RefObject<HTMLDivElement | null>
+  confirmingOrchestrationId?: string | null
+  onConfirmOrchestration?: (orchestrationId: string) => void
 }
 
 export function AssistantMessageList({
   messages,
   bottomRef,
+  confirmingOrchestrationId,
+  onConfirmOrchestration,
 }: AssistantMessageListProps) {
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 md:px-6">
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          confirmingOrchestrationId={confirmingOrchestrationId}
+          onConfirmOrchestration={onConfirmOrchestration}
+        />
       ))}
       <div ref={bottomRef} />
     </div>
   )
 }
 
-function MessageBubble({ message }: { message: AssistantMessage }) {
+function MessageBubble({
+  message,
+  confirmingOrchestrationId,
+  onConfirmOrchestration,
+}: {
+  message: AssistantMessage
+  confirmingOrchestrationId?: string | null
+  onConfirmOrchestration?: (orchestrationId: string) => void
+}) {
   const isUser = message.role === 'user'
   const delegation =
     !isUser && message.delegation
@@ -78,10 +96,13 @@ function MessageBubble({ message }: { message: AssistantMessage }) {
           )}
         >
           {message.pending ? (
-            <div className="flex items-center gap-1.5 py-0.5">
-              <Skeleton className="size-1.5 rounded-full" />
-              <Skeleton className="size-1.5 rounded-full" />
-              <Skeleton className="size-1.5 rounded-full" />
+            <div className="space-y-1 py-0.5">
+              <div className="flex items-center gap-1.5">
+                <Skeleton className="size-1.5 rounded-full" />
+                <Skeleton className="size-1.5 rounded-full" />
+                <Skeleton className="size-1.5 rounded-full" />
+              </div>
+              <p className="text-xs text-muted-foreground">Understanding your request…</p>
               <span className="sr-only">Assistant is thinking</span>
             </div>
           ) : isUser || message.error ? (
@@ -90,6 +111,14 @@ function MessageBubble({ message }: { message: AssistantMessage }) {
             <AssistantMarkdown content={message.content} />
           )}
         </div>
+
+        {!isUser && !message.pending && !message.error && message.orchestration ? (
+          <OrchestrationSummary
+            orchestration={message.orchestration}
+            confirming={confirmingOrchestrationId === message.orchestration.id}
+            onConfirm={onConfirmOrchestration}
+          />
+        ) : null}
 
         {!isUser && !message.pending && !message.error && (
           <AssistantSourcesList

@@ -5,6 +5,7 @@ export const ASSISTANT_DELEGATIONS = [
   'communication',
   'proposal',
   'status',
+  'orchestrator',
 ] as const
 
 export type AssistantDelegation = (typeof ASSISTANT_DELEGATIONS)[number]
@@ -14,6 +15,31 @@ export type ChatMessageRequest = {
   conversationId?: string
 }
 
+export type OrchestrationOperationStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'awaiting_confirmation'
+
+export type OrchestrationOperation = {
+  operationId: string
+  agent: string
+  action: string
+  status: OrchestrationOperationStatus | string
+  summary?: string
+  failureCategory?: string
+}
+
+export type AssistantOrchestration = {
+  id: string
+  status: string
+  detectedIntents: string[]
+  clarification: string | null
+  operations: OrchestrationOperation[]
+}
+
 export type ChatMessageResponse = {
   conversationId: string
   response: string
@@ -21,6 +47,7 @@ export type ChatMessageResponse = {
   sources?: AssistantSource[]
   usedKnowledge?: boolean
   message?: string
+  orchestration?: AssistantOrchestration | null
 }
 
 export type AssistantSource = {
@@ -45,6 +72,7 @@ export type AssistantMessage = {
   message?: string
   pending?: boolean
   error?: boolean
+  orchestration?: AssistantOrchestration | null
 }
 
 export type AssistantConversationSummary = {
@@ -82,6 +110,35 @@ export const DELEGATION_LABELS: Record<AssistantDelegation, string> = {
   communication: 'Communication',
   proposal: 'Proposal',
   status: 'Status',
+  orchestrator: 'Orchestrator',
+}
+
+export function normalizeOrchestration(value: unknown): AssistantOrchestration | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string' || !Array.isArray(record.operations)) return null
+  const operations = record.operations.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const operation = item as Record<string, unknown>
+    if (typeof operation.operationId !== 'string' || typeof operation.action !== 'string') return []
+    return [{
+      operationId: operation.operationId,
+      agent: typeof operation.agent === 'string' ? operation.agent : 'unknown',
+      action: operation.action,
+      status: typeof operation.status === 'string' ? operation.status : 'pending',
+      summary: typeof operation.summary === 'string' ? operation.summary : undefined,
+      failureCategory: typeof operation.failureCategory === 'string' ? operation.failureCategory : undefined,
+    }]
+  })
+  return {
+    id: record.id,
+    status: typeof record.status === 'string' ? record.status : 'completed',
+    detectedIntents: Array.isArray(record.detectedIntents)
+      ? record.detectedIntents.filter((item) => typeof item === 'string')
+      : [],
+    clarification: typeof record.clarification === 'string' ? record.clarification : null,
+    operations,
+  }
 }
 
 const UUID_PATTERN =

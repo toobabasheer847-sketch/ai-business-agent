@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api'
 import {
   isConversationId,
   normalizeDelegation,
+  normalizeOrchestration,
   type AssistantConversationSummary,
   type AssistantPersistedMessage,
   type AssistantSource,
@@ -59,6 +60,7 @@ function normalizeChatResponse(data: ChatMessageResponse | undefined) {
     usedKnowledge:
       typeof data?.usedKnowledge === 'boolean' ? data.usedKnowledge : undefined,
     message: typeof data?.message === 'string' ? data.message : undefined,
+    orchestration: normalizeOrchestration(data?.orchestration),
   }
 }
 
@@ -92,5 +94,14 @@ export const assistantApi = {
 
   deleteConversation(conversationId: string) {
     return apiClient.delete(`/ai/conversations/${conversationId}`)
+  },
+
+  confirmOrchestration(conversationId: string, orchestrationId: string) {
+    return apiClient
+      .post<ChatMessageResponse>('/ai/orchestrate/confirm', {
+        conversationId,
+        orchestrationId,
+      })
+      .then((response) => normalizeChatResponse(response.data))
   },
 }

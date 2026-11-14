@@ -45,6 +45,6 @@ import { ChangeProposalStatusTool } from './tools/change-proposal-status.tool.js
     GenerateProposalTool,
     ChangeProposalStatusTool,
   ],
-  exports: [ProposalService, ProposalRepository, ProposalAgent],
+  exports: [ProposalService, ProposalRepository, ProposalAgent, ProposalDeliveryService],
 })
 export class ProposalModule {}

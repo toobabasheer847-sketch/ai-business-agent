@@ -9,5 +9,6 @@ import { DashboardService } from './dashboard.service.js';
   imports: [AuthModule],
   controllers: [DashboardController],
   providers: [DashboardService, DashboardRepository],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

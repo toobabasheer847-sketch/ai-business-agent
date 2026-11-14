@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { assistantApi } from '@/features/assistant/api/assistant.api'
 import { AssistantComposer } from '@/features/assistant/components/assistant-composer'
 import { AssistantMessageList } from '@/features/assistant/components/assistant-message-list'
 import {
@@ -52,7 +53,9 @@ export function AssistantPage() {
   const [messages, setMessages] = useState<AssistantMessage[]>([])
   const [hydrated, setHydrated] = useState(!conversationId)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const lastRequest = useRef<{ message: string; conversationId: string | null } | null>(null)
   const headingId = useId()
 
   const historyQuery = useAssistantMessages(conversationId, !hydrated)
@@ -95,12 +98,13 @@ export function AssistantPage() {
     setHydrated(true)
   }
 
-  async function handleSend() {
-    const message = draft.trim()
-    if (!message || sending) return
+  async function handleSend(nextMessage?: string) {
+    const message = (nextMessage ?? draft).trim()
+    if (!message || sending || confirmingId) return
 
     setError(null)
     setDraft('')
+    lastRequest.current = { message, conversationId }
 
     const userMessage: AssistantMessage = {
       id: createId('user'),
@@ -143,6 +147,7 @@ export function AssistantPage() {
                 sources: result.sources,
                 usedKnowledge: result.usedKnowledge,
                 message: result.message,
+                orchestration: result.orchestration,
               }
             : item,
         ),
@@ -162,6 +167,30 @@ export function AssistantPage() {
             : item,
         ),
       )
+    }
+  }
+
+  async function handleConfirm(orchestrationId: string) {
+    if (!conversationId || confirmingId) return
+    setConfirmingId(orchestrationId)
+    setError(null)
+    try {
+      const result = await assistantApi.confirmOrchestration(conversationId, orchestrationId)
+      setMessages((current) =>
+        current.map((item) =>
+          item.orchestration?.id === orchestrationId
+            ? {
+                ...item,
+                content: result.response || item.content,
+                orchestration: result.orchestration ?? item.orchestration,
+              }
+            : item,
+        ),
+      )
+    } catch (caught) {
+      setError(getAssistantErrorMessage(caught))
+    } finally {
+      setConfirmingId(null)
     }
   }
 
@@ -187,17 +216,37 @@ export function AssistantPage() {
         {messages.length === 0 ? (
           <EmptyState headingId={headingId} loading={!hydrated} />
         ) : (
-          <AssistantMessageList messages={messages} bottomRef={bottomRef} />
+          <AssistantMessageList
+            messages={messages}
+            bottomRef={bottomRef}
+            confirmingOrchestrationId={confirmingId}
+            onConfirmOrchestration={(orchestrationId) => {
+              void handleConfirm(orchestrationId)
+            }}
+          />
         )}
 
-        {error && messages.length === 0 && (
+        {error ? (
           <div className="px-4 pb-3 md:px-6">
             <Alert variant="destructive">
               <AlertTitle>Could not send message</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>{error}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const previous = lastRequest.current
+                    if (previous) void handleSend(previous.message)
+                  }}
+                >
+                  Retry
+                </Button>
+              </AlertDescription>
             </Alert>
           </div>
-        )}
+        ) : null}
 
         <AssistantComposer
           value={draft}

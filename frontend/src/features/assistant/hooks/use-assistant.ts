@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { assistantApi } from '@/features/assistant/api/assistant.api'
 import {
   normalizeDelegation,
+  normalizeOrchestration,
   type AssistantMessage,
   type AssistantPersistedMessage,
   type AssistantSource,
@@ -44,6 +45,7 @@ export function mapPersistedMessages(
             : undefined,
         message:
           typeof metadata.message === 'string' ? metadata.message : undefined,
+        orchestration: normalizeOrchestration(metadata.orchestration),
       }
     })
 }
