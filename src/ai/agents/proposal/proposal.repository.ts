@@ -78,7 +78,7 @@ export class ProposalRepository {
 
   async listProposals(
     tenantId: string,
-    filters?: { status?: ProposalStatus; prospectId?: string; search?: string },
+    filters?: { status?: ProposalStatus; prospectId?: string; search?: string; title?: string },
   ): Promise<ProposalRecord[]> {
     const clauses: SQL[] = [eq(proposals.tenantId, tenantId)];
 
@@ -88,6 +88,10 @@ export class ProposalRepository {
 
     if (filters?.prospectId) {
       clauses.push(eq(proposals.prospectId, filters.prospectId));
+    }
+
+    if (filters?.title?.trim()) {
+      clauses.push(sql`lower(trim(${proposals.title})) = ${filters.title.trim().toLowerCase()}`);
     }
 
     if (filters?.search) {
@@ -186,6 +190,73 @@ export class ProposalRepository {
       status: row.status,
       notes: row.notes,
     };
+  }
+
+  async findProspectsByEmail(
+    email: string,
+    tenantId: string,
+  ): Promise<ProspectContext[]> {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !tenantId?.trim()) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select()
+      .from(prospects)
+      .where(
+        and(
+          eq(prospects.tenantId, tenantId),
+          sql`lower(trim(${prospects.email})) = ${normalizedEmail}`,
+        ),
+      )
+      .limit(10);
+
+    return rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      email: row.email,
+      phone: row.phone,
+      jobTitle: row.jobTitle,
+      status: row.status,
+      notes: row.notes,
+    }));
+  }
+
+  async findProspectsByName(
+    name: string,
+    tenantId: string,
+  ): Promise<ProspectContext[]> {
+    const normalizedName = name.trim();
+    if (!normalizedName || !tenantId?.trim()) {
+      return [];
+    }
+
+    const pattern = `%${normalizedName}%`;
+    const rows = await this.db
+      .select()
+      .from(prospects)
+      .where(
+        and(
+          eq(prospects.tenantId, tenantId),
+          sql`concat_ws(' ', ${prospects.firstName}, ${prospects.lastName}) ILIKE ${pattern}`,
+        ),
+      )
+      .limit(10);
+
+    return rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      email: row.email,
+      phone: row.phone,
+      jobTitle: row.jobTitle,
+      status: row.status,
+      notes: row.notes,
+    }));
   }
 
   async getCompany(companyId: string, tenantId: string): Promise<CompanyContext | null> {

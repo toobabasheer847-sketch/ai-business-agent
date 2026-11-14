@@ -5,6 +5,7 @@ import { ProposalDeliveryService } from './proposal-delivery.service';
 describe('ProposalDeliveryService', () => {
   const tenantId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const otherTenantId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const userId = 'user-1';
 
   const proposal = {
     id: '11111111-1111-4111-8111-111111111111',
@@ -21,6 +22,10 @@ describe('ProposalDeliveryService', () => {
 
   const proposalRepository = {
     getProspect: jest.fn(),
+    getProspectCompanyId: jest.fn(),
+    getCompany: jest.fn(),
+    getBrand: jest.fn(),
+    writeAuditLog: jest.fn(),
   };
 
   const gmailService = {
@@ -29,6 +34,10 @@ describe('ProposalDeliveryService', () => {
     mailOperations: {
       sendEmail: jest.fn(),
     },
+  };
+
+  const proposalPdfService = {
+    generateProposalPdf: jest.fn(),
   };
 
   let service: ProposalDeliveryService;
@@ -42,6 +51,10 @@ describe('ProposalDeliveryService', () => {
       lastName: 'Lovelace',
       email: 'ada@example.com',
     });
+    proposalRepository.getProspectCompanyId.mockResolvedValue('company-1');
+    proposalRepository.getCompany.mockResolvedValue({ id: 'company-1', name: 'Acme Corp' });
+    proposalRepository.getBrand.mockResolvedValue({ id: 'brand-1', name: 'Acme Brand' });
+    proposalRepository.writeAuditLog.mockResolvedValue(undefined);
     gmailService.findActiveCredentialsForTenant.mockResolvedValue({
       configId: 'cfg-1',
       tenantId,
@@ -49,6 +62,11 @@ describe('ProposalDeliveryService', () => {
       accessToken: 'access-token-secret',
       refreshToken: 'refresh-token-secret',
       tokenExpiry: new Date(Date.now() + 60_000),
+    });
+    proposalPdfService.generateProposalPdf.mockResolvedValue({
+      buffer: Buffer.from('%PDF-1.4 sample'),
+      filename: 'NimbusForge-Implementation.pdf',
+      contentType: 'application/pdf',
     });
     gmailService.mailOperations.sendEmail.mockResolvedValue({
       messageId: 'msg-1',
@@ -58,24 +76,28 @@ describe('ProposalDeliveryService', () => {
     service = new ProposalDeliveryService(
       proposalRepository as any,
       gmailService as any,
+      proposalPdfService as any,
     );
   });
 
-  it('sends proposal email using JWT tenant Gmail and prospect email', async () => {
+  it('generates a PDF and sends Gmail with attachment', async () => {
     const result = await service.sendProposalEmail({
       proposal: proposal as any,
       tenantId,
+      userId,
     });
 
-    expect(gmailService.findActiveCredentialsForTenant).toHaveBeenCalledWith(
-      tenantId,
-      undefined,
-    );
+    expect(proposalPdfService.generateProposalPdf).toHaveBeenCalled();
     expect(gmailService.mailOperations.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'ada@example.com',
         subject: proposal.title,
-        body: proposal.content,
+        attachments: [
+          expect.objectContaining({
+            filename: 'NimbusForge-Implementation.pdf',
+            contentType: 'application/pdf',
+          }),
+        ],
       }),
     );
     expect(result).toEqual({
@@ -83,6 +105,7 @@ describe('ProposalDeliveryService', () => {
       to: 'ada@example.com',
       subject: proposal.title,
       fromEmail: 'sender@tenant.com',
+      pdfFilename: 'NimbusForge-Implementation.pdf',
     });
     expect(JSON.stringify(result)).not.toContain('access-token-secret');
     expect(JSON.stringify(result)).not.toContain('refresh-token-secret');
@@ -96,6 +119,24 @@ describe('ProposalDeliveryService', () => {
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('blocks duplicate sends for already-sent proposals', async () => {
+    await expect(
+      service.sendProposalEmail({
+        proposal: { ...proposal, status: 'sent' } as any,
+        tenantId,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(proposalPdfService.generateProposalPdf).not.toHaveBeenCalled();
+  });
+
+  it('does not mark sent when Gmail delivery fails', async () => {
+    gmailService.mailOperations.sendEmail.mockRejectedValue(new Error('Gmail API failed'));
+
+    await expect(
+      service.sendProposalEmail({ proposal: proposal as any, tenantId }),
+    ).rejects.toThrow(/not marked as sent/i);
   });
 
   it('rejects when prospect has no email', async () => {
@@ -117,7 +158,7 @@ describe('ProposalDeliveryService', () => {
 
     await expect(
       service.sendProposalEmail({ proposal: proposal as any, tenantId }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toThrow(/Gmail is not configured/i);
     expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
   });
 

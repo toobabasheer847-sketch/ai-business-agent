@@ -10,6 +10,7 @@ export type AdkEphemeralResult = {
   finalText: string;
   authors: string[];
   branches: string[];
+  lastToolResult?: unknown;
 };
 
 export async function runAdkEphemeral(options: {
@@ -26,6 +27,7 @@ export async function runAdkEphemeral(options: {
   let finalText = '';
   const branches = new Set<string>();
   const authors = new Set<string>();
+  let lastToolResult: unknown;
 
   for await (const event of runner.runEphemeral({
     userId: options.userId,
@@ -42,6 +44,12 @@ export async function runAdkEphemeral(options: {
     }
 
     if (event.content?.parts?.length) {
+      for (const part of event.content.parts as Array<any>) {
+        if (part?.functionResponse?.response !== undefined) {
+          lastToolResult = part.functionResponse.response;
+        }
+      }
+
       const text = event.content.parts
         .filter((part) => part?.text)
         .map((part) => part.text)
@@ -57,5 +65,6 @@ export async function runAdkEphemeral(options: {
     finalText,
     authors: [...authors],
     branches: [...branches],
+    lastToolResult,
   };
 }

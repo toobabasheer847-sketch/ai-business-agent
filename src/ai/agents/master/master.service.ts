@@ -81,11 +81,16 @@ export class MasterAgentService {
     const missingAgents: string[] = [];
     if (!communicationAgent) missingAgents.push('communication_agent');
     if (!hasGemini) missingAgents.push('rag_agent');
-    if (!hasGemini) missingAgents.push('proposal_agent');
 
     if (missingAgents.length) {
       this.logger.warn(
         `MasterAgent is starting without the following specialized agents: ${missingAgents.join(', ')}`,
+      );
+    }
+
+    if (!hasGemini) {
+      this.logger.warn(
+        'GOOGLE_GENAI_API_KEY is not configured — LLM-backed proposal and RAG routes use deterministic fallbacks where available.',
       );
     }
 
@@ -98,7 +103,7 @@ export class MasterAgentService {
         : undefined,
       rag_agent: hasGemini ? { name: 'rag_agent' } : undefined,
       task_agent: { name: 'task_agent' },
-      proposal_agent: hasGemini ? { name: 'proposal_agent' } : undefined,
+      proposal_agent: { name: 'proposal_agent' },
     };
   }
 
@@ -411,6 +416,27 @@ export class MasterAgentService {
       }
     }
 
+    if (routeTarget === 'proposal_agent') {
+      try {
+        const proposalResult = await this.proposalAgent.processRequest(
+          { tenantId, userId },
+          trimmedMessage,
+        );
+
+        return {
+          response:
+            proposalResult.message?.trim() ||
+            'I could not complete the proposal request. Please try again.',
+          delegation: 'proposal',
+        };
+      } catch (error) {
+        this.logger.error('Proposal delegation failed', error as Error);
+        throw new InternalServerErrorException(
+          'Proposal request failed to process',
+        );
+      }
+    }
+
     const modelInput = this.formatHistoryForModel(history, trimmedMessage);
     const { aiModel } = getTrustedAiContext();
     const masterAgent = this.adkAgentFactory.getMasterAgent(aiModel);
@@ -426,7 +452,10 @@ export class MasterAgentService {
         userId,
         message: modelInput,
       });
-      finalText = adkResult.finalText;
+      finalText = adkResult.finalText || this.formatEmptyAdkResponse(
+        adkResult.lastToolResult,
+        trimmedMessage,
+      );
       adkResult.authors.forEach((author) => authors.add(author));
       adkResult.branches.forEach((branch) => branches.add(branch));
     } catch (error) {
@@ -440,6 +469,33 @@ export class MasterAgentService {
       response: finalText,
       delegation: this.resolveDelegation([...authors], [...branches]),
     };
+  }
+
+  private formatEmptyAdkResponse(
+    toolResult: unknown,
+    request: string,
+  ): string {
+    if (toolResult && typeof toolResult === 'object') {
+      const wrappedResult = toolResult as { result?: unknown };
+      const result = (wrappedResult.result ?? toolResult) as {
+        message?: unknown;
+        data?: { recipient?: unknown; status?: unknown };
+      };
+      if (typeof result.message === 'string' && result.message.trim()) {
+        return result.message;
+      }
+      if (
+        result.data?.status === 'sent' &&
+        typeof result.data.recipient === 'string'
+      ) {
+        return `Proposal sent successfully to ${result.data.recipient}`;
+      }
+    }
+
+    if (/proposal/i.test(request)) {
+      return 'I could not complete the proposal request. Please try again.';
+    }
+    return 'I could not complete that request. Please try again.';
   }
 
   private formatHistoryForModel(

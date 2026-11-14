@@ -12,6 +12,7 @@ import {
   ProposalStatus,
   ProposalTone,
   ProposalLength,
+  ProposalSendResult,
 } from './types/proposal.types.js';
 
 @Injectable()
@@ -209,6 +210,30 @@ export class ProposalAgent {
       },
     });
 
+    const sendProposalToEmailTool = new FunctionTool({
+      name: 'send_proposal_to_email',
+      description:
+        'Resolve a prospect by email within the authenticated tenant, find its unambiguous proposal, generate content when needed, and send it through the tenant Gmail account.',
+      parameters: z.object({
+        email: z.string().trim().email().optional().describe('The prospect recipient email address.'),
+        prospectName: z.string().trim().min(2).optional().describe('The prospect name when no email is provided.'),
+        proposalId: z.string().trim().optional().describe('Optional proposal ID to send.'),
+        proposalTitle: z.string().trim().min(2).optional().describe('Optional exact proposal title to send.'),
+      }).refine((input) => Boolean(input.email || input.prospectName), {
+        message: 'Provide a prospect email address or name.',
+      }),
+      execute: async ({ email, prospectName, proposalId, proposalTitle }: { email?: string; prospectName?: string; proposalId?: string; proposalTitle?: string }) => {
+        const context = getTrustedAiContext();
+        return this.sendProposalToEmail(
+          email,
+          { ...context, email: context.email ?? undefined },
+          prospectName,
+          proposalId,
+          proposalTitle,
+        );
+      },
+    });
+
     return [
       createProposalTool,
       getProposalTool,
@@ -216,6 +241,7 @@ export class ProposalAgent {
       updateProposalTool,
       generateProposalTool,
       changeProposalStatusTool,
+      sendProposalToEmailTool,
     ];
   }
 
@@ -239,6 +265,10 @@ export class ProposalAgent {
     request: string,
   ): Promise<ProposalAgentResponse> {
     const fallback = this.parseNaturalLanguage(request, context);
+
+    if (fallback.action === 'send') {
+      return this.runFallback(fallback, context);
+    }
 
     if (this.agent) {
       try {
@@ -300,12 +330,24 @@ export class ProposalAgent {
         return 'generate';
       case 'change_proposal_status':
         return 'change_status';
+      case 'send_proposal_to_email':
+        return 'send';
       default:
         return 'get';
     }
   }
 
   private async runFallback(fallback: any, context: ProposalContext): Promise<ProposalAgentResponse> {
+    if (fallback.action === 'send') {
+      return this.sendProposalToEmail(
+        fallback.data.email,
+        context,
+        fallback.data.prospectName,
+        fallback.data.proposalId,
+        fallback.data.proposalTitle,
+      );
+    }
+
     if (fallback.action === 'create') {
       const created = await this.proposalRepository.createProposal({
         tenantId: context.tenantId,
@@ -412,6 +454,26 @@ export class ProposalAgent {
   private parseNaturalLanguage(request: string, context: ProposalContext): any {
     const lower = request.toLowerCase();
 
+    const email = this.extractEmail(request);
+    if (
+      (lower.includes('send') || lower.includes('email')) &&
+      (lower.includes('proposal') ||
+        lower.includes('quotation') ||
+        /\bquote\b/.test(lower) ||
+        lower.includes('business proposal'))
+    ) {
+      const invalidAddress = request.match(/(?:to|email)\s+([^\s]+@[^\s]+)/i)?.[1];
+      return {
+        action: 'send',
+        data: {
+          email: email ?? invalidAddress,
+          prospectName: email ? undefined : invalidAddress ? undefined : this.extractProspectName(request),
+          proposalId: this.extractProposalId(request),
+          proposalTitle: this.extractProposalTitle(request),
+        },
+      };
+    }
+
     const id = this.extractId(request);
 
     if (lower.includes('status') || lower.includes('mark as') || lower.includes('accept') || lower.includes('reject') || lower.includes('send') || lower.includes('view') || lower.includes('cancel') || lower.includes('expire')) {
@@ -509,6 +571,174 @@ export class ProposalAgent {
   private extractId(request: string): string | undefined {
     const match = request.match(/([a-f0-9-]{8,})/i);
     return match ? match[1] : undefined;
+  }
+
+  private extractEmail(request: string): string | undefined {
+    const match = request.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return match?.[0]?.trim().toLowerCase();
+  }
+
+  private extractProposalId(request: string): string | undefined {
+    const match = request.match(/\bproposal\s+([a-f0-9-]{8,})\b/i);
+    return match?.[1];
+  }
+
+  private extractProposalTitle(request: string): string | undefined {
+    const match = request.match(/\b(?:send|email)\s+(?:my\s+|the\s+)?(.+?)\s+proposal\s+to\b/i);
+    const title = match?.[1]?.trim();
+    return title && !/^the$/i.test(title) ? title : undefined;
+  }
+
+  private extractProspectName(request: string): string | undefined {
+    const match = request.match(/\bto\s+(.+?)(?:\s+please)?$/i);
+    const name = match?.[1]?.trim();
+    return name && !name.includes('@') ? name : undefined;
+  }
+
+  private isSendableProposal(proposal: { status: ProposalStatus }): boolean {
+    return proposal.status !== 'sent';
+  }
+
+  private async sendProposalToEmail(
+    email: string | undefined,
+    context: ProposalContext,
+    prospectName?: string,
+    proposalId?: string,
+    proposalTitle?: string,
+  ): Promise<ProposalAgentResponse> {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email !== undefined && !emailPattern.test(email)) {
+      return { action: 'send', data: null, message: 'Please provide a valid email address.' };
+    }
+
+    try {
+      const prospects = email
+        ? await this.proposalRepository.findProspectsByEmail(email, context.tenantId)
+        : await this.proposalRepository.findProspectsByName(prospectName ?? '', context.tenantId);
+
+      if (prospects.length === 0) {
+        return {
+          action: 'send',
+          data: null,
+          message: email
+            ? "I couldn't find a prospect with that email address."
+            : "I couldn't find a prospect with that name. Please create the prospect first.",
+        };
+      }
+
+      if (prospects.length > 1) {
+        return {
+          action: 'send',
+          data: null,
+          message: 'I found multiple prospects with that email address. Please specify which prospect to use.',
+        };
+      }
+
+      const prospect = prospects[0];
+      const explicitProposal = proposalId
+        ? await this.proposalRepository.getProposal(proposalId, context.tenantId)
+        : null;
+
+      if (proposalId && !explicitProposal) {
+        return { action: 'send', data: null, message: 'I could not find that proposal for this tenant.' };
+      }
+
+      if (proposalId && explicitProposal && explicitProposal.prospectId !== prospect.id) {
+        return { action: 'send', data: null, message: 'I could not find that proposal for this prospect.' };
+      }
+
+      if (explicitProposal && !this.isSendableProposal(explicitProposal)) {
+        await this.proposalRepository.writeAuditLog({
+          tenantId: context.tenantId,
+          userId: context.userId,
+          action: 'proposal.duplicate_send_rejected',
+          entityType: 'proposal',
+          entityId: explicitProposal.id,
+          description: 'Duplicate proposal send rejected',
+        }).catch(() => undefined);
+        return { action: 'send', data: null, message: 'This proposal has already been sent to that prospect.' };
+      }
+
+      const proposals = explicitProposal
+        ? [explicitProposal]
+        : await this.proposalRepository.listProposals(context.tenantId, {
+            prospectId: prospect.id,
+            title: proposalTitle,
+          });
+
+      const sendable = proposals.filter((item) => this.isSendableProposal(item));
+
+      if (sendable.length === 0) {
+        if (proposals.some((item) => item.status === 'sent')) {
+          return {
+            action: 'send',
+            data: null,
+            message: 'All proposals for this prospect have already been sent.',
+          };
+        }
+        return { action: 'send', data: null, message: 'I found the prospect, but there is no proposal to send yet. Please create a proposal first.' };
+      }
+
+      if (sendable.length > 1) {
+        return {
+          action: 'send',
+          data: null,
+          message: 'I found multiple sendable proposals. Please provide the proposal title or ID.',
+        };
+      }
+
+      let proposal = sendable[0];
+
+      if (!proposal.content?.trim()) {
+        proposal =
+          (await this.generateWithGemini(proposal.id, context.tenantId, proposal.prospectId)) ??
+          proposal;
+      }
+
+      if (!proposal.content?.trim()) {
+        return {
+          action: 'send',
+          data: null,
+          message: "I couldn't generate proposal content, so the email was not sent.",
+        };
+      }
+
+      await this.proposalDelivery.sendProposalEmail({
+        proposal,
+        tenantId: context.tenantId,
+        userId: context.userId,
+      });
+
+      await this.proposalRepository.updateProposal(proposal.id, context.tenantId, {
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+      });
+
+      const recipient = prospect.email!.trim();
+      return {
+        action: 'send',
+        data: {
+          success: true,
+          proposalId: proposal.id,
+          prospectId: prospect.id,
+          recipient,
+          status: 'sent',
+        } satisfies ProposalSendResult,
+        message: `Proposal '${proposal.title}' was successfully emailed to ${recipient} with the PDF attached.`,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (/already been sent/i.test(message)) {
+        return { action: 'send', data: null, message: 'This proposal has already been sent to that prospect.' };
+      }
+      if (/generate the proposal pdf/i.test(message)) {
+        return { action: 'send', data: null, message: "I couldn't generate the proposal PDF, so the email was not sent." };
+      }
+      if (/gmail is not configured|not configured for this account/i.test(message)) {
+        return { action: 'send', data: null, message: 'Gmail is not configured for this account.' };
+      }
+      return { action: 'send', data: null, message: "I couldn't send the proposal email right now. The proposal was not marked as sent." };
+    }
   }
 
   private async generateWithGemini(

@@ -92,6 +92,7 @@ describe('MasterAgentService', () => {
   const proposalAgent = {
     getAgentInstance: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
     buildLlmAgent: jest.fn().mockReturnValue({ name: 'proposal_agent' }),
+    processRequest: jest.fn(),
   };
   const masterSettingsService = {
     getOrCreate: jest.fn().mockResolvedValue({ aiModel: null }),
@@ -131,6 +132,7 @@ describe('MasterAgentService', () => {
     adkAgentFactory.getRagAgent.mockReset();
     adkAgentFactory.getRagAgent.mockReturnValue({ name: 'rag_agent' });
     taskAgent.delegateNaturalLanguage.mockReset();
+    proposalAgent.processRequest.mockReset();
     (InMemoryRunner as any).lastOptions = null;
 
     conversationRepository = {
@@ -509,6 +511,71 @@ describe('MasterAgentService', () => {
       conversationId,
       response: 'I can help draft that email.',
       delegation: 'communication',
+    });
+  });
+
+  it('delegates proposal send requests without requiring Gemini configuration', async () => {
+    configService.get.mockImplementation((key: string) => {
+      if (key === 'GOOGLE_GENAI_API_KEY') return undefined;
+      if (key === 'AI_CHAT_HISTORY_LIMIT') return 20;
+      return undefined;
+    });
+
+    const serviceWithoutGemini = new MasterAgentService(
+      communicationAgentService as any,
+      ragAgent as any,
+      taskAgent as any,
+      proposalAgent as any,
+      conversationRepository as any,
+      configService as any,
+      masterSettingsService as any,
+      adkAgentFactory as any,
+    );
+
+    proposalAgent.processRequest.mockResolvedValue({
+      action: 'send',
+      data: null,
+      message: "Proposal 'Test' was successfully emailed to client@example.com with the PDF attached.",
+    });
+
+    const result = await serviceWithoutGemini.invoke(
+      tenantId,
+      userId,
+      'Send the proposal to client@example.com',
+    );
+
+    expect(proposalAgent.processRequest).toHaveBeenCalled();
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result.delegation).toBe('proposal');
+    expect(result.response).toContain('PDF attached');
+  });
+
+  it('delegates proposal requests directly to the tenant-scoped proposal agent', async () => {
+    proposalAgent.processRequest.mockResolvedValue({
+      action: 'send',
+      data: {
+        success: true,
+        recipient: 'toobabasheer847@gmail.com',
+        status: 'sent',
+      },
+      message: 'Proposal emailed to the prospect and marked as sent.',
+    });
+
+    const result = await service.invoke(
+      tenantId,
+      userId,
+      'Send the proposal to toobabasheer847@gmail.com',
+    );
+
+    expect(proposalAgent.processRequest).toHaveBeenCalledWith(
+      { tenantId, userId },
+      'Send the proposal to toobabasheer847@gmail.com',
+    );
+    expect(mockRunEphemeral).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      conversationId,
+      response: 'Proposal emailed to the prospect and marked as sent.',
+      delegation: 'proposal',
     });
   });
 

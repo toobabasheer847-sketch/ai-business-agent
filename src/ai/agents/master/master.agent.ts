@@ -86,6 +86,8 @@ export async function resolveMasterRoute(
     return 'master_status_agent';
   }
 
+  const routeToProposalSend =
+    /\b(?:send|email)\b[\s\S]{0,80}\b(?:the\s+)?(?:business\s+)?(?:project\s+)?(?:proposal|quotation|quote|estimate|bid|rfp)\b|\b(?:send|email)\b[\s\S]{0,40}\b(?:proposal|quotation|quote)\b[\s\S]{0,40}\bto\b/;
   const routeToProposal =
     /\b(?:project proposal|business proposal|implementation proposal|scope and pricing|quotation|quote|estimate|bid|rfp|proposal content|generate proposal|send proposal|create proposal|write proposal|professional proposal|proposal for|proposal)\b/;
   const routeToTask =
@@ -95,7 +97,10 @@ export async function resolveMasterRoute(
   const routeToRag =
     /\b(search|knowledge|document|wiki|faq|information|what is|who is|how to|where|tell me about|uploaded|contain|contains|pdf|explain|describe|summarize|find|lookup|according|content|answer|policy|refund)\b/;
 
-  if (routeToProposal.test(userText) && agents.proposal_agent) {
+  if (
+    (routeToProposalSend.test(userText) || routeToProposal.test(userText)) &&
+    agents.proposal_agent
+  ) {
     return 'proposal_agent';
   }
 

@@ -6,6 +6,7 @@ import { GmailModule } from '../communication/gmail/gmail.module.js';
 import { ProposalController } from './proposal.controller.js';
 import { ProposalService } from './proposal.service.js';
 import { ProposalAgent } from './proposal-agent.js';
+import { ProposalPdfService } from './proposal-pdf.service.js';
 import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
 import { CreateProposalTool } from './tools/create-proposal.tool.js';
@@ -25,6 +26,7 @@ import { ChangeProposalStatusTool } from './tools/change-proposal-status.tool.js
   providers: [
     ProposalService,
     ProposalAgent,
+    ProposalPdfService,
     ProposalDeliveryService,
     ProposalRepository,
     CreateProposalTool,

@@ -41,6 +41,18 @@ function messageContext(text: string) {
 describe('Master Agent regex router', () => {
   const router = buildMasterRouter();
 
+  it('routes send proposal requests to proposal_agent before communication_agent', async () => {
+    await expect(
+      router(ALL_AGENTS, messageContext('Send the proposal to client@example.com')),
+    ).resolves.toBe('proposal_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Email this business proposal to client@example.com')),
+    ).resolves.toBe('proposal_agent');
+    await expect(
+      router(ALL_AGENTS, messageContext('Send quotation to client@example.com')),
+    ).resolves.toBe('proposal_agent');
+  });
+
   it('routes an explicit singular task request to task_agent', async () => {
     await expect(
       router(ALL_AGENTS, messageContext('Create a task for Sarah')),

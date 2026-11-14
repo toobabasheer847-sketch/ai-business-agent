@@ -4,6 +4,12 @@ import { gmail_v1 } from 'googleapis';
 import { GmailOAuthService } from './gmail-oauth';
 import { GmailTokenService } from './gmail-tokens';
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface ComposeEmailInput {
   to: string;
   subject: string;
@@ -11,6 +17,7 @@ export interface ComposeEmailInput {
   cc?: string;
   bcc?: string;
   contentType?: 'text/plain' | 'text/html';
+  attachments?: EmailAttachment[];
 }
 
 export interface ListMessagesOptions {
@@ -37,20 +44,54 @@ export interface MailDraft {
   body: string;
 }
 
-function encodeRfc2822(input: ComposeEmailInput): string {
-  const contentType = input.contentType ?? 'text/plain';
-  const subjectEncoded = `=?utf-8?B?${Buffer.from(input.subject, 'utf-8').toString('base64')}?=`;
+function wrapBase64(base64: string): string {
   const lines: string[] = [];
-  lines.push(`To: ${input.to}`);
-  if (input.cc) lines.push(`Cc: ${input.cc}`);
-  if (input.bcc) lines.push(`Bcc: ${input.bcc}`);
-  lines.push(`Subject: ${subjectEncoded}`);
-  lines.push(`MIME-Version: 1.0`);
-  lines.push(`Content-Type: ${contentType}; charset=\"UTF-8\"`);
-  lines.push(`Content-Transfer-Encoding: 7bit`);
-  lines.push('');
-  lines.push(input.body);
+  for (let i = 0; i < base64.length; i += 76) {
+    lines.push(base64.slice(i, i + 76));
+  }
   return lines.join('\r\n');
+}
+
+function encodeRfc2822(input: ComposeEmailInput): string {
+  const subjectEncoded = `=?utf-8?B?${Buffer.from(input.subject, 'utf-8').toString('base64')}?=`;
+  const headers: string[] = [];
+  headers.push(`To: ${input.to}`);
+  if (input.cc) headers.push(`Cc: ${input.cc}`);
+  if (input.bcc) headers.push(`Bcc: ${input.bcc}`);
+  headers.push(`Subject: ${subjectEncoded}`);
+  headers.push('MIME-Version: 1.0');
+
+  const hasAttachments = Boolean(input.attachments?.length);
+  if (hasAttachments) {
+    const boundary = `mixed_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    const contentType = input.contentType ?? 'text/plain';
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+
+    const parts: string[] = [];
+    parts.push(`--${boundary}`);
+    parts.push(`Content-Type: ${contentType}; charset="UTF-8"`);
+    parts.push('Content-Transfer-Encoding: 7bit');
+    parts.push('');
+    parts.push(input.body);
+
+    for (const attachment of input.attachments ?? []) {
+      const safeFilename = attachment.filename.replace(/"/g, '');
+      parts.push(`--${boundary}`);
+      parts.push(`Content-Type: ${attachment.contentType}; name="${safeFilename}"`);
+      parts.push(`Content-Disposition: attachment; filename="${safeFilename}"`);
+      parts.push('Content-Transfer-Encoding: base64');
+      parts.push('');
+      parts.push(wrapBase64(attachment.content.toString('base64')));
+    }
+    parts.push(`--${boundary}--`);
+
+    return [...headers, '', parts.join('\r\n')].join('\r\n');
+  }
+
+  const contentType = input.contentType ?? 'text/plain';
+  headers.push(`Content-Type: ${contentType}; charset="UTF-8"`);
+  headers.push('Content-Transfer-Encoding: 7bit');
+  return [...headers, '', input.body].join('\r\n');
 }
 
 function base64UrlEncode(raw: string): string {
@@ -67,6 +108,11 @@ export class MailOperationsService {
     private readonly gmailOAuthService: GmailOAuthService,
     private readonly gmailTokenService: GmailTokenService,
   ) {}
+
+  /** Exposed for unit tests validating RFC2822 encoding. */
+  encodeMessage(input: ComposeEmailInput): string {
+    return encodeRfc2822(input);
+  }
 
   private async resolveGmailClient(args: {
     accessToken: string | null;

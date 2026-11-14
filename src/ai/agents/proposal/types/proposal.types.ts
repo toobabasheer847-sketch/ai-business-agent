@@ -39,9 +39,17 @@ export interface ProposalContext {
 }
 
 export interface ProposalAgentResponse {
-  action: 'create' | 'get' | 'list' | 'update' | 'generate' | 'change_status';
-  data: ProposalRecord | ProposalRecord[] | null;
+  action: 'create' | 'get' | 'list' | 'update' | 'generate' | 'change_status' | 'send';
+  data: ProposalRecord | ProposalRecord[] | ProposalSendResult | null;
   message?: string;
+}
+
+export interface ProposalSendResult {
+  success: true;
+  proposalId: string;
+  prospectId: string;
+  recipient: string;
+  status: 'sent';
 }
 
 export interface ProspectContext {
