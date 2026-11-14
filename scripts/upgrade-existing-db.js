@@ -30,6 +30,47 @@ function drizzleHash(sql) {
   return createHash('sha256').update(sql).digest('hex');
 }
 
+function splitSqlStatements(sql) {
+  const statements = [];
+  let current = '';
+  let inDollar = false;
+
+  for (const line of sql.split('\n')) {
+    const trimmed = line.trim();
+    if (!inDollar && trimmed.startsWith('--')) {
+      continue;
+    }
+
+    current += `${line}\n`;
+    if (trimmed.includes('$$')) {
+      inDollar = !inDollar;
+    }
+    if (!inDollar && trimmed.endsWith(';')) {
+      const statement = current.trim();
+      if (statement) {
+        statements.push(statement);
+      }
+      current = '';
+    }
+  }
+
+  const tail = current.trim();
+  if (tail) {
+    statements.push(tail);
+  }
+  return statements;
+}
+
+async function applySqlFile(client, filePath) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Migration file not found: ${filePath}`);
+  }
+  const sql = fs.readFileSync(filePath, 'utf8');
+  for (const statement of splitSqlStatements(sql)) {
+    await client.query(statement);
+  }
+}
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -273,6 +314,20 @@ async function main() {
     await client.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS "task_dependencies_pair_unique" ON "task_dependencies" USING btree ("tenant_id", "task_id", "depends_on_task_id")`,
     );
+
+    await applySqlFile(
+      client,
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'database',
+        'drizzle',
+        'migrations',
+        '0001_proposal_public_access.sql',
+      ),
+    );
+    console.log('Applied 0001_proposal_public_access.sql');
 
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`

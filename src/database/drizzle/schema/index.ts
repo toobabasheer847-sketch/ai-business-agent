@@ -9,6 +9,7 @@ export * from './master-settings.schema';
 export * from './message.schema';
 export * from './phone-number.schema';
 export * from './proposal.schema';
+export * from './proposal-access-token.schema';
 export * from './prospect.schema';
 export * from './task.schema';
 export * from './task-dependency.schema';

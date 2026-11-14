@@ -28,6 +28,7 @@ export interface ProposalRecord {
   viewedAt?: Date | string | null;
   acceptedAt?: Date | string | null;
   rejectedAt?: Date | string | null;
+  rejectionReason?: string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }

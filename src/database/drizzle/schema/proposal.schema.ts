@@ -91,6 +91,8 @@ export const proposals = pgTable(
       withTimezone: true,
     }),
 
+    rejectionReason: text('rejection_reason'),
+
     createdAt: timestamp('created_at', {
       withTimezone: true,
     })

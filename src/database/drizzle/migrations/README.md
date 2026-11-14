@@ -3,9 +3,13 @@
 This directory contains versioned SQL migrations generated from
 `src/database/drizzle/schema/` via `npm run db:generate`.
 
-Generated SQL, `meta/_journal.json`, and snapshot files are **local-only**.
-Do not commit or push them. The TypeScript schema under
+Generated baseline SQL, `meta/_journal.json`, and snapshot files are **local-only**.
+Do not commit or push `0000_calm_magma.sql`. The TypeScript schema under
 `src/database/drizzle/schema/` is the source of truth in Git.
+
+`0001_proposal_public_access.sql` is a committed, idempotent migration for
+public proposal links. `node scripts/upgrade-existing-db.js` applies it
+without dropping existing rows.
 
 Do not hand-write replacement SQL for the baseline. Review generated files
 before using them locally.

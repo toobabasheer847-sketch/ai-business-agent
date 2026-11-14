@@ -889,7 +889,7 @@ export function reminderJobId(
   reminderType: TaskReminderType,
   scheduledAt: Date,
 ): string {
-  return `task-reminder:${taskId}:${reminderType}:${scheduledAt.getTime()}`;
+  return `task-reminder-${taskId}-${reminderType}-${scheduledAt.getTime()}`;
 }
 
 export function normalizeScheduledAt(date: Date): Date {

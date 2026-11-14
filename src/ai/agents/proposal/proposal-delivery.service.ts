@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { GmailService } from '../communication/gmail/gmail.service.js';
 import { ProposalPdfService } from './proposal-pdf.service.js';
 import { ProposalRepository } from './proposal.repository.js';
+import { PublicProposalAccessService } from './public-proposal-access.service.js';
 import type { ProposalRecord } from './types/proposal.types.js';
 
 export type ProposalDeliveryResult = {
@@ -23,6 +24,7 @@ export class ProposalDeliveryService {
     private readonly proposalRepository: ProposalRepository,
     private readonly gmailService: GmailService,
     private readonly proposalPdfService: ProposalPdfService,
+    private readonly publicProposalAccess: PublicProposalAccessService,
   ) {}
 
   async sendProposalEmail(params: {
@@ -112,8 +114,11 @@ export class ProposalDeliveryService {
       }
 
       const subject = proposal.title?.trim() || 'Business Proposal';
-      const body = this.buildEmailBody(creds.email, brandName);
-      const sent = await this.gmailService.mailOperations.sendEmail({
+      const link = await this.publicProposalAccess.issueForDelivery(proposal, tenantId);
+      const body = this.buildEmailBody(creds.email, brandName, link.url, link.expiresAt);
+      let sent;
+      try {
+        sent = await this.gmailService.mailOperations.sendEmail({
         to,
         subject,
         body,
@@ -132,6 +137,12 @@ export class ProposalDeliveryService {
           await this.gmailService.refreshAndSave(creds, refreshed);
         },
       });
+      } catch (sendError) {
+        await this.publicProposalAccess
+          .revokeIssued(link.tokenId, tenantId, proposal.id)
+          .catch(() => undefined);
+        throw sendError;
+      }
 
       await this.proposalRepository.writeAuditLog({
         tenantId,
@@ -173,12 +184,22 @@ export class ProposalDeliveryService {
     }
   }
 
-  private buildEmailBody(fromEmail: string, brandName?: string): string {
+  private buildEmailBody(
+    fromEmail: string,
+    brandName: string | undefined,
+    reviewUrl: string,
+    expiresAt: Date,
+  ): string {
     const sender = brandName?.trim() || fromEmail.trim();
     return [
       'Hello,',
       '',
       'Please find attached the requested business proposal.',
+      '',
+      'You can review and respond here:',
+      reviewUrl,
+      '',
+      `This link expires on ${expiresAt.toUTCString()}.`,
       '',
       'Best regards,',
       sender,

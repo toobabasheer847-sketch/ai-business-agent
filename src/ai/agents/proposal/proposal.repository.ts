@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNotNull, lt, ne, SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, ne, SQL, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module.js';
 import type { DrizzleDb } from '../../../database/database.service.js';
 import { proposals } from '../../../database/drizzle/schema/proposal.schema.js';
+import { proposalAccessTokens } from '../../../database/drizzle/schema/proposal-access-token.schema.js';
 import { prospects } from '../../../database/drizzle/schema/prospect.schema.js';
 import { companies } from '../../../database/drizzle/schema/company.schema.js';
 import { leads } from '../../../database/drizzle/schema/lead.schema.js';
@@ -375,6 +376,156 @@ export class ProposalRepository {
     };
   }
 
+  async issueProposalAccessToken(input: {
+    tenantId: string;
+    proposalId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<{ id: string; expiresAt: Date }> {
+    return this.db.transaction(async (tx) => {
+      const now = new Date();
+      await tx
+        .update(proposalAccessTokens)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(proposalAccessTokens.proposalId, input.proposalId),
+            eq(proposalAccessTokens.tenantId, input.tenantId),
+            isNull(proposalAccessTokens.revokedAt),
+          ),
+        );
+
+      const [row] = await tx
+        .insert(proposalAccessTokens)
+        .values({
+          tenantId: input.tenantId,
+          proposalId: input.proposalId,
+          tokenHash: input.tokenHash,
+          expiresAt: input.expiresAt,
+        })
+        .returning({
+          id: proposalAccessTokens.id,
+          expiresAt: proposalAccessTokens.expiresAt,
+        });
+
+      return row;
+    });
+  }
+
+  async findProposalAccessByHash(tokenHash: string): Promise<{
+    id: string;
+    tenantId: string;
+    proposalId: string;
+    expiresAt: Date;
+    revokedAt: Date | null;
+  } | null> {
+    const [row] = await this.db
+      .select({
+        id: proposalAccessTokens.id,
+        tenantId: proposalAccessTokens.tenantId,
+        proposalId: proposalAccessTokens.proposalId,
+        expiresAt: proposalAccessTokens.expiresAt,
+        revokedAt: proposalAccessTokens.revokedAt,
+      })
+      .from(proposalAccessTokens)
+      .where(eq(proposalAccessTokens.tokenHash, tokenHash))
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  async revokeProposalAccessToken(tokenId: string, tenantId: string): Promise<void> {
+    await this.db
+      .update(proposalAccessTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(proposalAccessTokens.id, tokenId),
+          eq(proposalAccessTokens.tenantId, tenantId),
+          isNull(proposalAccessTokens.revokedAt),
+        ),
+      );
+  }
+
+  async markProposalViewedIfFirst(
+    proposalId: string,
+    tenantId: string,
+  ): Promise<ProposalRecord | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(proposals)
+      .set({
+        status: 'viewed',
+        viewedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(proposals.id, proposalId),
+          eq(proposals.tenantId, tenantId),
+          eq(proposals.status, 'sent'),
+          isNull(proposals.viewedAt),
+        ),
+      )
+      .returning();
+
+    return row ? this.mapRow(row) : null;
+  }
+
+  async markProposalAcceptedIfOpen(
+    proposalId: string,
+    tenantId: string,
+  ): Promise<ProposalRecord | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(proposals)
+      .set({
+        status: 'accepted',
+        acceptedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(proposals.id, proposalId),
+          eq(proposals.tenantId, tenantId),
+          inArray(proposals.status, ['sent', 'viewed']),
+          isNull(proposals.acceptedAt),
+          isNull(proposals.rejectedAt),
+        ),
+      )
+      .returning();
+
+    return row ? this.mapRow(row) : null;
+  }
+
+  async markProposalRejectedIfOpen(
+    proposalId: string,
+    tenantId: string,
+    reason: string,
+  ): Promise<ProposalRecord | null> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(proposals)
+      .set({
+        status: 'rejected',
+        rejectedAt: now,
+        rejectionReason: reason,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(proposals.id, proposalId),
+          eq(proposals.tenantId, tenantId),
+          inArray(proposals.status, ['sent', 'viewed']),
+          isNull(proposals.acceptedAt),
+          isNull(proposals.rejectedAt),
+        ),
+      )
+      .returning();
+
+    return row ? this.mapRow(row) : null;
+  }
+
   async writeAuditLog(input: {
     tenantId: string;
     userId?: string | null;
@@ -448,6 +599,7 @@ export class ProposalRepository {
       viewedAt: (row.viewedAt as Date | string | null) ?? null,
       acceptedAt: (row.acceptedAt as Date | string | null) ?? null,
       rejectedAt: (row.rejectedAt as Date | string | null) ?? null,
+      rejectionReason: (row.rejectionReason as string | null) ?? null,
       createdAt: (row.createdAt as Date | string | null) ?? null,
       updatedAt: (row.updatedAt as Date | string | null) ?? null,
     };

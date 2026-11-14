@@ -40,6 +40,12 @@ describe('ProposalDeliveryService', () => {
     generateProposalPdf: jest.fn(),
   };
 
+  const publicProposalAccess = {
+    issueForDelivery: jest.fn(),
+    revokeIssued: jest.fn(),
+  };
+
+  const reviewUrl = 'http://localhost:5173/p/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN12';
   let service: ProposalDeliveryService;
 
   beforeEach(() => {
@@ -73,10 +79,17 @@ describe('ProposalDeliveryService', () => {
       to: 'ada@example.com',
       subject: proposal.title,
     });
+    publicProposalAccess.issueForDelivery.mockResolvedValue({
+      url: reviewUrl,
+      expiresAt: new Date('2026-12-01T00:00:00.000Z'),
+      tokenId: 'token-row-1',
+    });
+    publicProposalAccess.revokeIssued.mockResolvedValue(undefined);
     service = new ProposalDeliveryService(
       proposalRepository as any,
       gmailService as any,
       proposalPdfService as any,
+      publicProposalAccess as any,
     );
   });
 
@@ -92,6 +105,7 @@ describe('ProposalDeliveryService', () => {
       expect.objectContaining({
         to: 'ada@example.com',
         subject: proposal.title,
+        body: expect.stringContaining(reviewUrl),
         attachments: [
           expect.objectContaining({
             filename: 'NimbusForge-Implementation.pdf',
@@ -109,6 +123,7 @@ describe('ProposalDeliveryService', () => {
     });
     expect(JSON.stringify(result)).not.toContain('access-token-secret');
     expect(JSON.stringify(result)).not.toContain('refresh-token-secret');
+    expect(publicProposalAccess.revokeIssued).not.toHaveBeenCalled();
   });
 
   it('rejects when proposal belongs to another tenant', async () => {
@@ -137,6 +152,11 @@ describe('ProposalDeliveryService', () => {
     await expect(
       service.sendProposalEmail({ proposal: proposal as any, tenantId }),
     ).rejects.toThrow(/not marked as sent/i);
+    expect(publicProposalAccess.revokeIssued).toHaveBeenCalledWith(
+      'token-row-1',
+      tenantId,
+      proposal.id,
+    );
   });
 
   it('rejects when prospect has no email', async () => {
@@ -160,6 +180,7 @@ describe('ProposalDeliveryService', () => {
       service.sendProposalEmail({ proposal: proposal as any, tenantId }),
     ).rejects.toThrow(/Gmail is not configured/i);
     expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
+    expect(publicProposalAccess.issueForDelivery).not.toHaveBeenCalled();
   });
 
   it('always uses trusted tenantId for Gmail lookup', async () => {

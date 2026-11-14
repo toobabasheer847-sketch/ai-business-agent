@@ -1,4 +1,7 @@
-import { TaskReminderService } from './task-reminder.service';
+import {
+  reminderJobId,
+  TaskReminderService,
+} from './task-reminder.service';
 
 describe('TaskReminderService', () => {
   const tenantA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -8,6 +11,12 @@ describe('TaskReminderService', () => {
   const taskId = '33333333-3333-4333-8333-333333333333';
   const reminderId = '44444444-4444-4444-8444-444444444444';
   const dueAt = new Date('2027-08-21T15:00:00.000Z');
+
+  it('creates BullMQ-compatible reminder job IDs', () => {
+    expect(reminderJobId(taskId, 'upcoming', dueAt)).toBe(
+      `task-reminder-${taskId}-upcoming-${dueAt.getTime()}`,
+    );
+  });
 
   const pendingTask = {
     id: taskId,

@@ -19,6 +19,7 @@ import { ConversationsPage } from '@/features/conversations/pages/conversations-
 import { CommunicationHubPage } from '@/features/communication-hub/pages/communication-hub-page'
 import { GmailConfigurationPage } from '@/features/gmail-configuration/pages/gmail-configuration-page'
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
+import { PublicProposalPage } from '@/features/public-proposal/pages/public-proposal-page'
 import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
 import { UsersPage } from '@/features/users/pages/users-page'
 import { TasksPage } from '@/features/tasks/pages/tasks-page'
@@ -57,6 +58,8 @@ export function AppRouter() {
           <Route path="/master-settings" element={<MasterSettingsPage />} />
         </Route>
       </Route>
+
+      <Route path="/p/:token" element={<PublicProposalPage />} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

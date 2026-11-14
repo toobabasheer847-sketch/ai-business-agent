@@ -13,6 +13,8 @@ export type ProposalPdfContext = {
   companyName?: string | null;
   prospectName?: string | null;
   brandName?: string | null;
+  /** Email PDFs keep the short reference. Public downloads omit internal ids. */
+  includeReference?: boolean;
 };
 
 const PAGE_WIDTH = 612;
@@ -84,7 +86,9 @@ export class ProposalPdfService {
       meta.push(`From: ${context.brandName.trim()}`);
     }
     meta.push(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`);
-    meta.push(`Reference: ${proposal.id.slice(0, 8).toUpperCase()}`);
+    if (context.includeReference !== false && proposal.id) {
+      meta.push(`Reference: ${proposal.id.slice(0, 8).toUpperCase()}`);
+    }
 
     for (const line of meta) {
       drawLine(line, 10, regular, 12);

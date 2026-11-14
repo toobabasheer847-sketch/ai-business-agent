@@ -20,6 +20,9 @@ export default function appConfig() {
     JWT_SECRET: process.env.JWT_SECRET,
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN ?? '7d',
     CORS_ORIGINS: parseCorsOrigins(process.env.CORS_ORIGINS),
+    APP_PUBLIC_URL: (
+      process.env.APP_PUBLIC_URL?.trim() || 'http://localhost:5173'
+    ).replace(/\/+$/, ''),
     TASK_REMINDER_MINUTES_BEFORE: parseReminderMinutesBefore(
       process.env.TASK_REMINDER_MINUTES_BEFORE,
     ),
