@@ -11,6 +11,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
+import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
+import { runWithMonitoring } from '../../monitoring/monitoring-context';
 import { AdkAgentFactoryService } from '../../adk/adk-agent.factory.js';
 import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
@@ -87,6 +89,7 @@ export class MasterAgentService {
     private readonly adkAgentFactory: AdkAgentFactoryService,
     @Optional() private readonly teamAgent?: TeamAgent,
     @Optional() private readonly orchestrator?: MasterOrchestratorService,
+    @Optional() private readonly runTracker?: AgentRunTracker,
   ) {
     const communicationAgent = this.communicationAgentService.getAgent();
     const hasGemini = !!this.configService.get<string>('GOOGLE_GENAI_API_KEY');
@@ -173,10 +176,13 @@ export class MasterAgentService {
 
     const settings = await this.masterSettingsService.getOrCreate(tenantId);
 
-    const aiResult = await runWithAiContext(
-      { tenantId, userId, role, aiModel: settings.aiModel },
-      () =>
-        this.dispatchAi(tenantId, userId, trimmedMessage, history, conversation.id, role),
+    const aiResult = await runWithMonitoring(
+      { tenantId, userId, agentName: 'master' },
+      () => runWithAiContext(
+        { tenantId, userId, role, aiModel: settings.aiModel },
+        () =>
+          this.dispatchAi(tenantId, userId, trimmedMessage, history, conversation.id, role),
+      ),
     );
 
     await this.persistAssistantMessage(tenantId, conversation.id, aiResult);
@@ -578,12 +584,23 @@ export class MasterAgentService {
     const branches = new Set<string>();
     const authors = new Set<string>();
 
+    const startedAt = new Date();
+    const modelName = aiModel || this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash';
     try {
       const adkResult = await runAdkEphemeral({
         appName: 'master-agent',
         agent: masterAgent,
         userId,
         message: modelInput,
+      });
+      await this.runTracker?.recordAdkOutcome({
+        tenantId,
+        userId,
+        agentName: 'master-agent',
+        provider: 'google',
+        model: modelName,
+        startedAt,
+        usages: adkResult.providerUsages,
       });
       finalText = adkResult.finalText || this.formatEmptyAdkResponse(
         adkResult.lastToolResult,
@@ -592,6 +609,16 @@ export class MasterAgentService {
       adkResult.authors.forEach((author) => authors.add(author));
       adkResult.branches.forEach((branch) => branches.add(branch));
     } catch (error) {
+      await this.runTracker?.recordAdkOutcome({
+        tenantId,
+        userId,
+        agentName: 'master-agent',
+        provider: 'google',
+        model: modelName,
+        startedAt,
+        usages: [],
+        error,
+      });
       this.logger.error('MasterAgent invoke error', error as Error);
       throw new InternalServerErrorException(
         'Master Agent failed to process the request',

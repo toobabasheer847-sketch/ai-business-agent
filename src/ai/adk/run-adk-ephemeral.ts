@@ -1,9 +1,16 @@
 import { InMemoryRunner } from '@google/adk';
 
+import { extractGeminiUsage, type ProviderUsage } from '../monitoring/gemini-usage';
+
 export type AdkEphemeralEvent = {
   author?: string;
   branch?: string;
   content?: { parts?: Array<{ text?: string }> };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
 };
 
 export type AdkEphemeralResult = {
@@ -11,6 +18,7 @@ export type AdkEphemeralResult = {
   authors: string[];
   branches: string[];
   lastToolResult?: unknown;
+  providerUsages: ProviderUsage[];
 };
 
 export async function runAdkEphemeral(options: {
@@ -27,6 +35,7 @@ export async function runAdkEphemeral(options: {
   let finalText = '';
   const branches = new Set<string>();
   const authors = new Set<string>();
+  const providerUsages: ProviderUsage[] = [];
   let lastToolResult: unknown;
 
   for await (const event of runner.runEphemeral({
@@ -41,6 +50,10 @@ export async function runAdkEphemeral(options: {
 
     if (event.author) {
       authors.add(event.author);
+    }
+
+    if (event.usageMetadata) {
+      providerUsages.push(extractGeminiUsage(event));
     }
 
     if (event.content?.parts?.length) {
@@ -66,5 +79,6 @@ export async function runAdkEphemeral(options: {
     authors: [...authors],
     branches: [...branches],
     lastToolResult,
+    providerUsages,
   };
 }

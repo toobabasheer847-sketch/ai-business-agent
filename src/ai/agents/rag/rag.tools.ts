@@ -1,9 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../database/database.module';
+import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
+import { getMonitoringContext } from '../../monitoring/monitoring-context';
 import type { DrizzleDb } from '../../../database/database.service';
 import { knowledgeChunks, knowledgeDocuments } from '../../../database/drizzle/schema';
 import { RetrievedChunk } from './types/rag.types';
@@ -59,6 +61,7 @@ export class RagTools {
   constructor(
     private readonly configService: ConfigService,
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+    @Optional() private readonly tracker?: AgentRunTracker,
   ) {}
 
   async embedText(text: string): Promise<number[]> {
@@ -71,14 +74,24 @@ export class RagTools {
     }
 
     const client = new GoogleGenAI({ apiKey });
-
-    const response = await client.models.embedContent({
+    const frame = getMonitoringContext();
+    const request = () => client.models.embedContent({
       model: this.embeddingModel,
       contents: text,
       config: {
         outputDimensionality: EMBEDDING_DIMENSIONS,
       },
     });
+    const response = this.tracker && frame
+      ? await this.tracker.recordEmbedding({
+        tenantId: frame.tenantId,
+        userId: frame.userId,
+        agentName: 'knowledge-embedding',
+        correlationId: frame.correlationId,
+        provider: 'google',
+        model: this.embeddingModel,
+      }, request)
+      : await request();
 
     const embedding = response.embeddings?.[0]?.values;
 

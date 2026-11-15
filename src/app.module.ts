@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { HealthController } from './health.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
+import { AiMonitoringModule } from './ai/monitoring/ai-monitoring.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
@@ -54,6 +55,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     MasterSettingsModule,
     PhoneNumberModule,
     TwilioWebhooksModule,
+    AiMonitoringModule,
     AiModule,
   ],
   controllers: [AppController, HealthController],

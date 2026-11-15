@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -6,6 +6,8 @@ import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../context/ai-request-context.js';
 import { Permission } from '../../../modules/authorization/permissions';
 import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
+import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
+import { getMonitoringContext } from '../../monitoring/monitoring-context';
 import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
 import {
@@ -27,6 +29,7 @@ export class ProposalAgent {
     private readonly proposalRepository: ProposalRepository,
     private readonly proposalDelivery: ProposalDeliveryService,
     private readonly configService: ConfigService,
+    @Optional() private readonly runTracker?: AgentRunTracker,
   ) {
     this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? null;
 
@@ -799,7 +802,18 @@ export class ProposalAgent {
       const { Gemini } = require('@google/adk');
       const model = new Gemini({ model: modelName, apiKey });
       const prompt = this.buildPrompt(existing, context, instructions, tone, length);
-      const response = await model.generateContent(prompt);
+      const frame = getMonitoringContext();
+      const request = () => model.generateContent(prompt);
+      const response = this.runTracker
+        ? await this.runTracker.observe({
+          tenantId,
+          userId: frame?.userId ?? null,
+          agentName: 'proposal-agent',
+          correlationId: frame?.correlationId,
+          provider: 'google',
+          model: modelName,
+        }, request)
+        : await request();
       generatedContent =
         response?.text?.() ??
         this.buildFallbackContent(existing, context, instructions, tone, length);

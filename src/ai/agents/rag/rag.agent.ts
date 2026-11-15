@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Gemini, FunctionTool, LlmAgent } from '@google/adk';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 
 import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
+import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
+import { getMonitoringContext } from '../../monitoring/monitoring-context';
 import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { currentAiRole, getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
 import { Permission } from '../../../modules/authorization/permissions';
@@ -40,6 +42,7 @@ export class RagAgent {
   constructor(
     private readonly ragTools: RagTools,
     private readonly configService: ConfigService,
+    @Optional() private readonly tracker?: AgentRunTracker,
   ) {
     this.modelName = resolveAdkModelName(this.configService);
     const rawKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY')?.trim();
@@ -143,12 +146,22 @@ export class RagAgent {
   ): Promise<RagResponse> {
     return runWithAiContext({ tenantId, userId, role: currentAiRole() }, () =>
       runWithRagDelegationState(async () => {
+        const startedAt = new Date();
         try {
           const adkResult = await runAdkEphemeral({
             appName: 'rag-agent',
             agent,
             userId,
             message: query,
+          });
+          await this.tracker?.recordAdkOutcome({
+            tenantId,
+            userId,
+            agentName: 'knowledge-agent',
+            provider: 'google',
+            model: this.modelName,
+            startedAt,
+            usages: adkResult.providerUsages,
           });
 
           const answer = adkResult.finalText.trim();
@@ -171,8 +184,17 @@ export class RagAgent {
               usedKnowledge: true,
             };
           }
-        } catch {
-          // Fall back to deterministic grounded answer path.
+        } catch (error) {
+          await this.tracker?.recordAdkOutcome({
+            tenantId,
+            userId,
+            agentName: 'knowledge-agent',
+            provider: 'google',
+            model: this.modelName,
+            startedAt,
+            usages: [],
+            error,
+          });
         }
 
         return this.answerQuery(tenantId, query, options);
@@ -221,7 +243,7 @@ export class RagAgent {
     let modelError: string | undefined;
 
     try {
-      finalText = await this.generateGroundedAnswer(prompt);
+      finalText = await this.generateGroundedAnswer(tenantId, prompt);
     } catch (error) {
       modelError = error instanceof Error ? error.message : 'Unknown model error';
       finalText = '';
@@ -266,17 +288,28 @@ export class RagAgent {
     );
   }
 
-  private async generateGroundedAnswer(prompt: string): Promise<string> {
+  private async generateGroundedAnswer(tenantId: string, prompt: string): Promise<string> {
     const apiKey = this.apiKey;
     if (!apiKey) {
       throw new Error('GOOGLE_GENAI_API_KEY is not configured');
     }
 
     const client = new GoogleGenAI({ apiKey });
-    const response = await client.models.generateContent({
+    const frame = getMonitoringContext();
+    const request = () => client.models.generateContent({
       model: this.modelName,
       contents: prompt,
     });
+    const response = this.tracker
+      ? await this.tracker.observe({
+        tenantId,
+        userId: frame?.userId ?? null,
+        agentName: 'knowledge-agent',
+        correlationId: frame?.correlationId,
+        provider: 'google',
+        model: this.modelName,
+      }, request)
+      : await request();
 
     return response.text?.trim() ?? '';
   }

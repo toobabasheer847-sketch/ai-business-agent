@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { Permission } from '../../../../modules/authorization/permissions';
+import { AgentRunTracker } from '../../../monitoring/agent-run.tracker';
+import { getMonitoringContext } from '../../../monitoring/monitoring-context';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -13,6 +15,7 @@ export class GenerateProposalTool extends FunctionTool<any> {
   constructor(
     private readonly proposalRepository: ProposalRepository,
     private readonly configService: ConfigService,
+    @Optional() private readonly runTracker?: AgentRunTracker,
   ) {
     super({
       name: 'generate_proposal',
@@ -66,7 +69,18 @@ export class GenerateProposalTool extends FunctionTool<any> {
       const { Gemini } = require('@google/adk');
       const model = new Gemini({ model: modelName, apiKey });
       const prompt = this.buildPrompt(existing, context, instructions, tone, length);
-      const response = await model.generateContent(prompt);
+      const frame = getMonitoringContext();
+      const request = () => model.generateContent(prompt);
+      const response = this.runTracker
+        ? await this.runTracker.observe({
+          tenantId,
+          userId: frame?.userId ?? null,
+          agentName: 'proposal-tool',
+          correlationId: frame?.correlationId,
+          provider: 'google',
+          model: modelName,
+        }, request)
+        : await request();
       generatedContent = response?.text?.() ?? this.buildFallbackContent(existing, context, instructions, tone, length);
     }
 

@@ -145,4 +145,8 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'PhoneNumberController.remove': [Permission.IntegrationManage],
 
   'AuditLogController.list': [Permission.AuditView],
+
+  'AgentRunController.summary': [Permission.AuditView, Permission.AssistantUse],
+  'AgentRunController.find': [Permission.AuditView, Permission.AssistantUse],
+  'AgentRunController.list': [Permission.AuditView, Permission.AssistantUse],
 };

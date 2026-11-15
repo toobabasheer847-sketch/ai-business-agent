@@ -4,10 +4,13 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
+import { getMonitoringContext } from '../../monitoring/monitoring-context';
 import { CreateProposalDto } from './dto/create-proposal.dto.js';
 import { UpdateProposalDto } from './dto/update-proposal.dto.js';
 import { ProposalQueryDto } from './dto/proposal-query.dto.js';
@@ -31,6 +34,7 @@ export class ProposalService {
     private readonly proposalRepository: ProposalRepository,
     private readonly proposalDelivery: ProposalDeliveryService,
     private readonly configService: ConfigService,
+    @Optional() private readonly runTracker?: AgentRunTracker,
   ) {}
 
   async createProposal(dto: CreateProposalDto, context: ProposalContext): Promise<ProposalRecord> {
@@ -180,7 +184,18 @@ export class ProposalService {
       const { Gemini } = require('@google/adk');
       const model = new Gemini({ model: modelName, apiKey });
       const prompt = this.buildPrompt(existing, genCtx, dto.instructions, tone, length);
-      const response = await model.generateContent(prompt);
+      const frame = getMonitoringContext();
+      const request = () => model.generateContent(prompt);
+      const response = this.runTracker
+        ? await this.runTracker.observe({
+          tenantId: context.tenantId,
+          userId: context.userId,
+          agentName: 'proposal',
+          correlationId: frame?.correlationId,
+          provider: 'google',
+          model: modelName,
+        }, request)
+        : await request();
       generatedContent =
         response?.text?.() ?? this.buildFallbackContent(existing, genCtx, dto.instructions, tone, length);
     }

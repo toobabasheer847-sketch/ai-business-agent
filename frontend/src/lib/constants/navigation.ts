@@ -4,6 +4,7 @@ import {
   Bot,
   Building2,
   CircleHelp,
+  Activity,
   BarChart3,
   LayoutDashboard,
   Landmark,
@@ -53,6 +54,15 @@ export const mainNav: NavItem[] = [
     available: true,
     description: 'Period comparisons and business insights',
     permissions: ['analytics.view', 'analytics.view_own'],
+  },
+  {
+    title: 'AI Monitoring',
+    href: '/ai-monitoring',
+    icon: Activity,
+    module: 'ai-monitoring',
+    available: true,
+    description: 'Provider runs, token usage, and estimated cost',
+    permissions: ['audit.view', 'assistant.use'],
   },
   {
     title: 'AI Assistant',
@@ -177,7 +187,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
@@ -188,7 +198,5 @@ export const navSections: Array<{ id: string; label: string; hrefs: string[] }> 
 export const plannedModules = [
   { id: 'approvals', title: 'Approval Center' },
   { id: 'exceptions', title: 'Business Exceptions' },
-  { id: 'ai-cost', title: 'AI Cost and Performance' },
   { id: 'workflows', title: 'Automation Workflows' },
-  { id: 'agent-monitoring', title: 'Agent Monitoring' },
 ] as const

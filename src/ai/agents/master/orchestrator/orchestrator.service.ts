@@ -9,10 +9,12 @@ import {
   Logger,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 
 import { hasAnyPermission, Permission, type PermissionName } from '../../../../modules/authorization/permissions';
 import { ConfigService } from '@nestjs/config';
+import { AgentRunTracker } from '../../../monitoring/agent-run.tracker';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../../database/database.module.js';
@@ -81,6 +83,7 @@ export class MasterOrchestratorService {
     private readonly analytics: AnalyticsService,
     private readonly configService: ConfigService,
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
+    @Optional() private readonly runTracker?: AgentRunTracker,
   ) {}
 
   shouldOrchestrate(message: string): boolean {
@@ -97,7 +100,7 @@ export class MasterOrchestratorService {
     this.assertContext(input.tenantId, input.userId);
     const started = Date.now();
     const orchestrationId = randomUUID();
-    const detected = await this.detect(input.message);
+    const detected = await this.detect(input.message, input.tenantId, input.userId);
     assertTenantScopedInputs(detected.operations, input.tenantId);
 
     const executed = await executePlan({
@@ -207,7 +210,7 @@ export class MasterOrchestratorService {
     throw new BadRequestException('This operation cannot be confirmed.');
   }
 
-  private async detect(message: string) {
+  private async detect(message: string, tenantId: string, userId: string) {
     const detected = detectIntents(message);
     const apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY');
     if (!apiKey) return detected;
@@ -216,7 +219,7 @@ export class MasterOrchestratorService {
       const { GoogleGenAI } = require('@google/genai');
       const client = new GoogleGenAI({ apiKey });
       const model = this.configService.get<string>('GEMINI_MODEL') ?? 'gemini-2.0-flash';
-      const response = await client.models.generateContent({
+      const request = () => client.models.generateContent({
         model,
         contents: [{
           role: 'user',
@@ -233,6 +236,15 @@ export class MasterOrchestratorService {
         }],
         config: { responseMimeType: 'application/json', temperature: 0 },
       });
+      const response = this.runTracker
+        ? await this.runTracker.observe({
+          tenantId,
+          userId,
+          agentName: 'orchestrator',
+          provider: 'google',
+          model,
+        }, request)
+        : await request();
       const text = typeof response?.text === 'function' ? response.text() : response?.text;
       const validated = validateModelIntentPayload(text, message);
       if (!validated.ok) {

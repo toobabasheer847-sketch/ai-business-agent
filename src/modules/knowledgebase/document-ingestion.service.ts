@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Injectable, Logger } from '@nestjs/common';
 
 import { RagTools } from '../../ai/agents/rag/rag.tools';
+import { runWithMonitoring } from '../../ai/monitoring/monitoring-context';
 import { DocumentChunkerService } from './document-chunker.service';
 import {
   DocumentParserService,
@@ -98,22 +99,27 @@ export class DocumentIngestionService {
         embedding: number[];
         embeddingModel: string;
       }> = [];
-      for (let index = 0; index < chunks.length; index += 1) {
-        const content = chunks[index];
-        const embedding = await this.ragTools.embedText(content);
-        rows.push({
-          tenantId: document.tenantId,
-          knowledgeBaseId: document.knowledgeBaseId,
-          documentId: document.id,
-          source: document.source,
-          sourceType,
-          docType: document.mimeType,
-          content,
-          chunkIndex: String(index),
-          embedding,
-          embeddingModel: KNOWLEDGE_EMBEDDING_MODEL,
-        });
-      }
+      await runWithMonitoring(
+        { tenantId: document.tenantId, userId: null, agentName: 'knowledge-ingestion' },
+        async () => {
+          for (let index = 0; index < chunks.length; index += 1) {
+            const content = chunks[index];
+            const embedding = await this.ragTools.embedText(content);
+            rows.push({
+              tenantId: document.tenantId,
+              knowledgeBaseId: document.knowledgeBaseId,
+              documentId: document.id,
+              source: document.source,
+              sourceType,
+              docType: document.mimeType,
+              content,
+              chunkIndex: String(index),
+              embedding,
+              embeddingModel: KNOWLEDGE_EMBEDDING_MODEL,
+            });
+          }
+        },
+      );
 
       await this.documents.insertChunks(rows);
       await this.documents.updateStatus(document.id, document.tenantId, {
