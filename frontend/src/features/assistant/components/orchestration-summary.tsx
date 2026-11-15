@@ -1,3 +1,4 @@
+import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import type { AssistantOrchestration } from '@/features/assistant/types/assistant.types'
 
@@ -49,9 +50,10 @@ export function OrchestrationSummary({
               <span className="font-medium">{ACTION_LABELS[operation.action] ?? operation.action}</span>
               {operation.summary ? <span className="mt-0.5 block text-muted-foreground">{operation.summary}</span> : null}
             </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {STATUS_LABELS[operation.status] ?? operation.status}
-            </span>
+            <StatusBadge
+              status={operation.status}
+              label={STATUS_LABELS[operation.status] ?? operation.status}
+            />
           </li>
         ))}
       </ul>

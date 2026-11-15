@@ -151,7 +151,7 @@ export function CommunicationHubPage() {
     <div className="space-y-6">
       <PageHeader
         title="Communication Hub"
-        description="Unified view of email, SMS, and call activity across your active prospects."
+        description="Stored email, SMS, call, and web conversations. Sending email depends on the tenant Gmail connection. SMS depends on a configured phone number. This page does not mark either integration as connected."
         actions={
           <Button variant="outline" size="sm" onClick={() => historyQuery.refetch()}>
             <RefreshCcw className="size-4" />

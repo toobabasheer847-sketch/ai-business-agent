@@ -128,7 +128,7 @@ export const mainNav: NavItem[] = [
     available: true,
   },
   {
-    title: 'Knowledgebase',
+    title: 'Knowledge Base',
     href: '/knowledgebases',
     icon: BookOpen,
     module: 'knowledgebase',
@@ -152,7 +152,7 @@ export const mainNav: NavItem[] = [
     permissions: ['integration.manage'],
   },
   {
-    title: 'Users',
+    title: 'Team',
     href: '/users',
     icon: BriefcaseBusiness,
     module: 'user',
@@ -175,3 +175,20 @@ export const mainNav: NavItem[] = [
     description: 'Backend connectivity & foundation checks',
   },
 ]
+
+export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics'] },
+  { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
+  { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
+  { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
+  { id: 'settings', label: 'Settings', hrefs: ['/gmail-configuration', '/phone-numbers', '/tenant', '/master-settings', '/system'] },
+]
+
+/** Named so later phases can add routes. These are not rendered as links. */
+export const plannedModules = [
+  { id: 'approvals', title: 'Approval Center' },
+  { id: 'exceptions', title: 'Business Exceptions' },
+  { id: 'ai-cost', title: 'AI Cost and Performance' },
+  { id: 'workflows', title: 'Automation Workflows' },
+  { id: 'agent-monitoring', title: 'Agent Monitoring' },
+] as const

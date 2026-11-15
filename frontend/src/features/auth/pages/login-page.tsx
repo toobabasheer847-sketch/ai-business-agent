@@ -63,7 +63,7 @@ export function LoginPage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+          <Button type="submit" className="h-10 w-full" disabled={loginMutation.isPending}>
             {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
           </Button>
           <p className="text-sm text-muted-foreground">

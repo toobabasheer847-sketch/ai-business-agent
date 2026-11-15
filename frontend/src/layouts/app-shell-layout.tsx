@@ -1,17 +1,17 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { LogOut, Menu, PanelLeft } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { LogOut, Menu, Moon, PanelLeft, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { useState } from 'react'
 
 import { Permission } from '@/features/authorization/permissions'
 import { usePermissions } from '@/features/authorization/use-permissions'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { APP_NAME } from '@/lib/constants/app'
-import { mainNav } from '@/lib/constants/navigation'
+import { mainNav, navSections, type NavItem } from '@/lib/constants/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -21,8 +21,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 
 function useVisibleNav() {
   const { canAccess, isBootstrapping } = usePermissions()
@@ -30,178 +38,211 @@ function useVisibleNav() {
   return mainNav.filter((item) => canAccess(item.permissions))
 }
 
-function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+function NavItems({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const items = useVisibleNav()
+  const byHref = new Map(items.map((item) => [item.href, item]))
+
   return (
-    <nav className="flex flex-col gap-1 p-2">
-      {items.map((item) => (
-        <NavLink
-          key={item.href}
-          to={item.href}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              isActive
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
-              !item.available && 'opacity-70',
-            )
-          }
-        >
-          <item.icon className="size-4 shrink-0" />
-          <span className="flex-1 truncate">{item.title}</span>
-          {!item.available && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              soon
-            </Badge>
-          )}
-        </NavLink>
-      ))}
+    <nav className={cn('flex flex-col gap-4', collapsed ? 'items-center p-2' : 'p-3')}>
+      {navSections.map((section) => {
+        const sectionItems = section.hrefs
+          .map((href) => byHref.get(href))
+          .filter((item): item is NavItem => Boolean(item))
+        if (!sectionItems.length) return null
+        return (
+          <div key={section.id} className="flex w-full flex-col gap-1">
+            {collapsed ? null : (
+              <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                {section.label}
+              </p>
+            )}
+            {sectionItems.map((item) => {
+              const link = (
+                <NavLink
+                  key={item.href}
+                  to={item.href}
+                  title={collapsed ? item.title : undefined}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-lg text-sm transition-colors',
+                      collapsed ? 'size-10 justify-center' : 'min-h-10 px-3',
+                      isActive
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
+                    )
+                  }
+                >
+                  <item.icon className="size-4 shrink-0" />
+                  {collapsed ? <span className="sr-only">{item.title}</span> : <span className="truncate">{item.title}</span>}
+                </NavLink>
+              )
+              if (!collapsed) return link
+              return (
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.title}</TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
+        )
+      })}
     </nav>
   )
 }
 
-function SidebarBrand() {
+function SidebarBrand({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <Link to="/dashboard" className="flex items-center gap-2 px-4 py-4">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
+    <Link to="/dashboard" className={cn('flex items-center gap-2 px-4 py-4', collapsed && 'justify-center px-2')}>
+      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
         AI
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold tracking-tight">{APP_NAME}</p>
-        <p className="truncate text-xs text-muted-foreground">Tenant workspace</p>
-      </div>
+      {collapsed ? null : (
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold tracking-tight">{APP_NAME}</p>
+          <p className="truncate text-xs text-muted-foreground">Operations</p>
+        </div>
+      )}
     </Link>
   )
 }
 
-export function AppShellLayout() {
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const dark = resolvedTheme === 'dark'
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
+      onClick={() => setTheme(dark ? 'light' : 'dark')}
+    >
+      {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  )
+}
+
+function ShellHeader({ onOpenMobile }: { onOpenMobile: () => void }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { hasPermission } = usePermissions()
-  const navigate = useNavigate()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-  const navItems = useVisibleNav()
-
+  const items = useVisibleNav()
+  const current = [...items].sort((a, b) => b.href.length - a.href.length).find((item) =>
+    location.pathname === item.href || location.pathname.startsWith(`${item.href}/`),
+  )
   const initials =
     user?.name
       ?.split(' ')
-      .map((p) => p[0])
+      .map((part) => part[0])
       .join('')
       .slice(0, 2)
       .toUpperCase() || 'U'
 
   return (
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur md:px-4">
+      <Button variant="ghost" size="icon" className="md:hidden" onClick={onOpenMobile} aria-label="Open navigation">
+        <Menu className="size-4" />
+      </Button>
+      <Breadcrumb className="min-w-0">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/dashboard">Workspace</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          {current && current.href !== '/dashboard' ? (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{current.title}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          ) : null}
+        </BreadcrumbList>
+      </Breadcrumb>
+      <div className="ml-auto flex items-center gap-1">
+        <ThemeToggle />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0" aria-label="Account menu">
+              <Avatar className="size-9">
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <div className="flex flex-col gap-1">
+                <span>{user?.name}</span>
+                <span className="text-xs font-normal text-muted-foreground">{user?.email}</span>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {hasPermission(Permission.TenantManage) ? (
+              <DropdownMenuItem onClick={() => navigate('/master-settings')}>Account settings</DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={logout}>
+              <LogOut className="mr-2 size-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  )
+}
+
+export function AppShellLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+
+  return (
     <div className="flex min-h-svh w-full bg-background">
       <aside
         className={cn(
-          'hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex md:flex-col transition-[width] duration-200',
+          'hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex md:flex-col',
           collapsed ? 'w-[72px]' : 'w-64',
         )}
       >
-        <SidebarBrand />
+        <SidebarBrand collapsed={collapsed} />
         <Separator />
         <ScrollArea className="flex-1">
-          {collapsed ? (
-            <nav className="flex flex-col items-center gap-1 p-2">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.href}
-                  to={item.href}
-                  title={item.title}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex size-10 items-center justify-center rounded-lg',
-                      isActive ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent/70',
-                    )
-                  }
-                >
-                  <item.icon className="size-4" />
-                </NavLink>
-              ))}
-            </nav>
-          ) : (
-            <NavItems />
-          )}
+          <NavItems collapsed={collapsed} />
         </ScrollArea>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="size-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0">
-              <SheetHeader className="px-2 pt-2">
-                <SheetTitle className="sr-only">Navigation</SheetTitle>
-              </SheetHeader>
-              <SidebarBrand />
-              <Separator />
-              <NavItems onNavigate={() => setMobileOpen(false)} />
-            </SheetContent>
-          </Sheet>
-
+        <div className="border-t p-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="hidden md:inline-flex"
-            onClick={() => setCollapsed((v) => !v)}
+            size={collapsed ? 'icon' : 'sm'}
+            className={cn('w-full', !collapsed && 'justify-start')}
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <PanelLeft className="size-4" />
+            {collapsed ? null : <span>Collapse</span>}
           </Button>
+        </div>
+      </aside>
 
-          <div className="ml-auto flex items-center gap-2">
-            {user && (
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium leading-none">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
-                  <Avatar className="size-9">
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col gap-1">
-                    <span>{user?.name}</span>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Tenant: {user?.tenantId?.slice(0, 8)}…
-                    </span>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {hasPermission(Permission.TenantManage) ? (
-                  <DropdownMenuItem onClick={() => navigate('/master-settings')}>
-                    Settings
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem onClick={logout}>
-                  <LogOut className="mr-2 size-4" />
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation</SheetTitle>
+          </SheetHeader>
+          <SidebarBrand />
+          <Separator />
+          <NavItems onNavigate={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
 
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ShellHeader onOpenMobile={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="mx-auto w-full max-w-7xl"
-          >
+          <div className="mx-auto w-full max-w-7xl">
             <Outlet />
-          </motion.div>
+          </div>
         </main>
       </div>
     </div>

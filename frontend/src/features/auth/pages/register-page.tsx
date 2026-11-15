@@ -80,7 +80,7 @@ export function RegisterPage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
+          <Button type="submit" className="h-10 w-full" disabled={registerMutation.isPending}>
             {registerMutation.isPending ? 'Creating…' : 'Create account'}
           </Button>
           <p className="text-sm text-muted-foreground">

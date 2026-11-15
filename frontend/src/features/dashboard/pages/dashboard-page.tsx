@@ -22,6 +22,7 @@ import {
   useDashboardTasks,
 } from '@/features/dashboard/hooks/use-dashboard'
 import type { DashboardRangeQuery } from '@/features/dashboard/types/dashboard.types'
+import { EmptyState } from '@/components/common/empty-state'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -210,12 +211,27 @@ export function DashboardPage() {
         </div>
       )}
 
-      {isEmpty ? (
+      {taskCounts && (taskCounts.overdue > 0 || taskCounts.dueToday > 0) ? (
         <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">
-            No CRM records yet. Add a company, lead, or proposal to fill this dashboard.
+          <CardHeader>
+            <CardTitle className="text-base">Needs attention</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {taskCounts.overdue} overdue and {taskCounts.dueToday} due today. These counts come from the task summary.
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/tasks">Review tasks</Link>
+            </Button>
           </CardContent>
         </Card>
+      ) : null}
+
+      {isEmpty ? (
+        <EmptyState
+          title="No CRM records yet"
+          description="Add a company, lead, or proposal to fill this dashboard."
+        />
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -243,10 +259,10 @@ export function DashboardPage() {
                       <span>{label}</span>
                       <span className="tabular-nums">{value}</span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-muted" title={`${label}: ${value}`}>
                       <div
-                        className="h-2 rounded-full bg-primary"
-                        style={{ width: `${Math.max(4, (value / pipelineMax) * 100)}%` }}
+                        className="h-2 rounded-full bg-chart-1"
+                        style={{ width: `${value === 0 ? 0 : (value / pipelineMax) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -293,8 +309,8 @@ export function DashboardPage() {
             {proposalParts.map(([label, value]) => (
               <div key={label} className="flex items-center gap-3 text-sm">
                 <span className="w-24">{label}</span>
-                <div className="h-2 flex-1 rounded-full bg-muted">
-                  <div className="h-2 rounded-full bg-primary" style={{ width: `${(value / proposalMax) * 100}%` }} />
+                <div className="h-2 flex-1 rounded-full bg-muted" title={`${label}: ${value}`}>
+                  <div className="h-2 rounded-full bg-chart-2" style={{ width: `${value === 0 ? 0 : (value / proposalMax) * 100}%` }} />
                 </div>
                 <span className="w-8 text-right tabular-nums">{value}</span>
               </div>
