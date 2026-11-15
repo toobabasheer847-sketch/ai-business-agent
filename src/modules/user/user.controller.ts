@@ -45,7 +45,8 @@ export class UserController {
     @Req() req: Request,
     @Body() dto: CreateUserDto,
   ) {
-    return this.userService.create(this.getUser(req).tenantId, dto);
+    const actor = this.getUser(req);
+    return this.userService.create(actor.tenantId, dto, actor);
   }
 
   /**
@@ -83,7 +84,8 @@ export class UserController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
   ) {
-    return this.userService.update(this.getUser(req).tenantId, id, dto);
+    const actor = this.getUser(req);
+    return this.userService.update(actor.tenantId, id, dto, actor);
   }
 
   /**
@@ -96,7 +98,7 @@ export class UserController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const user = this.getUser(req);
-    return this.userService.remove(user.tenantId, user.userId, id);
+    const actor = this.getUser(req);
+    return this.userService.remove(actor.tenantId, actor, id);
   }
 }

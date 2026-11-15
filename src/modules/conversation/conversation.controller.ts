@@ -17,6 +17,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { hasPermission, Permission } from '../authorization/permissions';
 import { ConversationService } from './conversation.service';
 import { CreateConversationDto, ConversationChannel, ConversationStatus } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
@@ -31,6 +32,10 @@ export class ConversationController {
 
   private getUser(req: Request): AuthenticatedUser {
     return req.user as AuthenticatedUser;
+  }
+
+  private scopeUserId(user: AuthenticatedUser): string | undefined {
+    return hasPermission(user.role, Permission.CommunicationView) ? undefined : user.userId;
   }
 
   // ─── Conversations ────────────────────────────────────────────────────────
@@ -62,11 +67,13 @@ export class ConversationController {
     @Query('prospectId') prospectId?: string,
     @Query('search') search?: string,
   ) {
-    return this.conversationService.findAll(this.getUser(req).tenantId, {
+    const user = this.getUser(req);
+    return this.conversationService.findAll(user.tenantId, {
       channel,
       status,
       prospectId,
       search,
+      userId: this.scopeUserId(user),
     });
   }
 
@@ -79,7 +86,8 @@ export class ConversationController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.conversationService.findOne(this.getUser(req).tenantId, id);
+    const user = this.getUser(req);
+    return this.conversationService.findOne(user.tenantId, id, this.scopeUserId(user));
   }
 
   /**
@@ -119,7 +127,8 @@ export class ConversationController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.conversationService.getMessages(this.getUser(req).tenantId, id);
+    const user = this.getUser(req);
+    return this.conversationService.getMessages(user.tenantId, id, this.scopeUserId(user));
   }
 
   /**
@@ -134,6 +143,6 @@ export class ConversationController {
     @Body() dto: CreateMessageDto,
   ) {
     const user = this.getUser(req);
-    return this.conversationService.addMessage(user.tenantId, id, user.userId, dto);
+    return this.conversationService.addMessage(user.tenantId, id, user.userId, dto, this.scopeUserId(user));
   }
 }

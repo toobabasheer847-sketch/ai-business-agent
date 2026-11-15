@@ -12,7 +12,9 @@ import { ConfigService } from '@nestjs/config';
 
 import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
 import { AdkAgentFactoryService } from '../../adk/adk-agent.factory.js';
+import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
+import { hasPermission, Permission } from '../../../modules/authorization/permissions';
 
 import {
   DEFAULT_AI_CHAT_HISTORY_LIMIT,
@@ -137,6 +139,7 @@ export class MasterAgentService {
     userId: string,
     message: string,
     conversationId?: string,
+    role?: string,
   ): Promise<MasterChatResponse> {
     if (!tenantId || !userId) {
       throw new UnauthorizedException('Tenant context is required');
@@ -171,9 +174,9 @@ export class MasterAgentService {
     const settings = await this.masterSettingsService.getOrCreate(tenantId);
 
     const aiResult = await runWithAiContext(
-      { tenantId, userId, aiModel: settings.aiModel },
+      { tenantId, userId, role, aiModel: settings.aiModel },
       () =>
-        this.dispatchAi(tenantId, userId, trimmedMessage, history, conversation.id),
+        this.dispatchAi(tenantId, userId, trimmedMessage, history, conversation.id, role),
     );
 
     await this.persistAssistantMessage(tenantId, conversation.id, aiResult);
@@ -359,6 +362,7 @@ export class MasterAgentService {
     userId: string,
     conversationId: string,
     orchestrationId: string,
+    role?: string,
   ): Promise<MasterChatResponse> {
     await this.requireOwnedAssistantConversation(tenantId, userId, conversationId);
     if (!this.orchestrator) {
@@ -403,6 +407,7 @@ export class MasterAgentService {
       confirmed.push(await this.orchestrator.confirm({
         tenantId,
         userId,
+        role,
         operation: planned,
       }));
     }
@@ -429,6 +434,7 @@ export class MasterAgentService {
     trimmedMessage: string,
     history: HistoryMessage[],
     conversationId: string,
+    role?: string,
   ): Promise<MasterChatResponse> {
     if (this.orchestrator?.shouldOrchestrate(trimmedMessage)) {
       return this.orchestrator.run({
@@ -436,10 +442,11 @@ export class MasterAgentService {
         userId,
         message: trimmedMessage,
         conversationId,
+        role,
       });
     }
 
-    return this.executeExistingAi(tenantId, userId, trimmedMessage, history);
+    return this.executeExistingAi(tenantId, userId, trimmedMessage, history, role);
   }
 
   private async executeExistingAi(
@@ -447,6 +454,7 @@ export class MasterAgentService {
     userId: string,
     trimmedMessage: string,
     history: HistoryMessage[],
+    role?: string,
   ): Promise<MasterChatResponse> {
     const routeTarget = await resolveMasterRoute(
       trimmedMessage,
@@ -455,7 +463,9 @@ export class MasterAgentService {
 
     if (routeTarget === 'team_agent' && this.teamAgent) {
       try {
-        const teamResult = await this.teamAgent.answer(tenantId, trimmedMessage);
+        assertRolePermission(role, [Permission.TeamInsightsView, Permission.TeamInsightsViewOwn]);
+        const scopeUserId = hasPermission(role, Permission.TeamInsightsView) ? undefined : userId;
+        const teamResult = await this.teamAgent.answer(tenantId, trimmedMessage, scopeUserId);
         return {
           response: teamResult.summary,
           delegation: 'team',
@@ -473,7 +483,7 @@ export class MasterAgentService {
       try {
         const taskResult = await this.taskAgent.delegateNaturalLanguage(
           trimmedMessage,
-          { tenantId, userId },
+          { tenantId, userId, ...(role ? { role } : {}) },
         );
 
         return {
@@ -494,6 +504,7 @@ export class MasterAgentService {
 
     if (routeTarget === 'rag_agent' && this.routeAgents.rag_agent) {
       try {
+        assertRolePermission(role, [Permission.KnowledgeManage]);
         const { aiModel } = getTrustedAiContext();
         const ragAgentInstance = this.adkAgentFactory.getRagAgent(
           aiModel,
@@ -525,6 +536,9 @@ export class MasterAgentService {
           message: ragResult.message,
         };
       } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
         this.logger.error('RAG delegation failed', error as Error);
         throw new InternalServerErrorException(
           'Knowledge retrieval failed to process the request',
@@ -535,7 +549,7 @@ export class MasterAgentService {
     if (routeTarget === 'proposal_agent') {
       try {
         const proposalResult = await this.proposalAgent.processRequest(
-          { tenantId, userId },
+          { tenantId, userId, ...(role ? { role } : {}) },
           trimmedMessage,
         );
 
@@ -546,6 +560,9 @@ export class MasterAgentService {
           delegation: 'proposal',
         };
       } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
         this.logger.error('Proposal delegation failed', error as Error);
         throw new InternalServerErrorException(
           'Proposal request failed to process',

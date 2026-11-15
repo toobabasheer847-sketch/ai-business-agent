@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../context/ai-request-context.js';
+import { Permission } from '../../../modules/authorization/permissions';
 import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
@@ -182,7 +184,12 @@ export class ProposalAgent {
         fromEmail: z.string().email().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
+        if (input.status === 'sent') {
+          assertRolePermission(trusted.role, [Permission.ProposalSend]);
+        }
+        const tenantId = trusted.tenantId;
         const existing = await this.proposalRepository.getProposal(
           input.proposalId,
           tenantId,
@@ -224,9 +231,15 @@ export class ProposalAgent {
       }),
       execute: async ({ email, prospectName, proposalId, proposalTitle }: { email?: string; prospectName?: string; proposalId?: string; proposalTitle?: string }) => {
         const context = getTrustedAiContext();
+        assertRolePermission(context.role, [Permission.ProposalSend]);
         return this.sendProposalToEmail(
           email,
-          { ...context, email: context.email ?? undefined },
+          {
+            tenantId: context.tenantId,
+            userId: context.userId,
+            email: context.email ?? undefined,
+            role: context.role ?? undefined,
+          },
           prospectName,
           proposalId,
           proposalTitle,
@@ -339,6 +352,7 @@ export class ProposalAgent {
 
   private async runFallback(fallback: any, context: ProposalContext): Promise<ProposalAgentResponse> {
     if (fallback.action === 'send') {
+      assertRolePermission(context.role, [Permission.ProposalSend]);
       return this.sendProposalToEmail(
         fallback.data.email,
         context,
@@ -349,6 +363,7 @@ export class ProposalAgent {
     }
 
     if (fallback.action === 'create') {
+      assertRolePermission(context.role, [Permission.ProposalCreate]);
       const created = await this.proposalRepository.createProposal({
         tenantId: context.tenantId,
         createdBy: context.userId,
@@ -377,7 +392,11 @@ export class ProposalAgent {
     }
 
     if (fallback.action === 'change_status' && fallback.data.id) {
+      assertRolePermission(context.role, [Permission.ProposalManage]);
       const status: ProposalStatus = fallback.data.status;
+      if (status === 'sent') {
+        assertRolePermission(context.role, [Permission.ProposalSend]);
+      }
       const existing = await this.proposalRepository.getProposal(
         fallback.data.id,
         context.tenantId,
@@ -420,6 +439,7 @@ export class ProposalAgent {
     }
 
     if (fallback.action === 'generate' && fallback.data.id) {
+      assertRolePermission(context.role, [Permission.ProposalManage]);
       const updated = await this.generateWithGemini(
         fallback.data.id,
         context.tenantId,
@@ -436,6 +456,10 @@ export class ProposalAgent {
     }
 
     if (fallback.action === 'update' && fallback.data.id) {
+      assertRolePermission(context.role, [Permission.ProposalManage]);
+      if (fallback.data.updateInput?.status === 'sent') {
+        assertRolePermission(context.role, [Permission.ProposalSend]);
+      }
       const updated = await this.proposalRepository.updateProposal(
         fallback.data.id,
         context.tenantId,
@@ -606,6 +630,7 @@ export class ProposalAgent {
     proposalId?: string,
     proposalTitle?: string,
   ): Promise<ProposalAgentResponse> {
+    assertRolePermission(context.role, [Permission.ProposalSend]);
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email !== undefined && !emailPattern.test(email)) {
       return { action: 'send', data: null, message: 'Please provide a valid email address.' };

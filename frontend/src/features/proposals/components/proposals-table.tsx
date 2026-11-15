@@ -16,8 +16,8 @@ import {
 type ProposalsTableProps = {
   items: Proposal[]
   prospectNameById: Map<string, string>
-  onEdit: (item: Proposal) => void
-  onDelete: (item: Proposal) => void
+  onEdit?: (item: Proposal) => void
+  onDelete?: (item: Proposal) => void
 }
 
 function formatDate(value: string) {
@@ -91,6 +91,7 @@ export function ProposalsTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    {onEdit ? (
                     <Button
                       type="button"
                       size="icon-sm"
@@ -100,6 +101,8 @@ export function ProposalsTable({
                     >
                       <Pencil className="size-4" />
                     </Button>
+                    ) : null}
+                    {onDelete ? (
                     <Button
                       type="button"
                       size="icon-sm"
@@ -109,6 +112,7 @@ export function ProposalsTable({
                     >
                       <Trash2 className="size-4 text-destructive" />
                     </Button>
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>

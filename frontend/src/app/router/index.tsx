@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { GuestRoute, ProtectedRoute } from '@/app/router/guards'
+import { GuestRoute, Permit, ProtectedRoute } from '@/app/router/guards'
+import { Permission } from '@/features/authorization/permissions'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { AppShellLayout } from '@/layouts/app-shell-layout'
 import { LoginPage } from '@/features/auth/pages/login-page'
@@ -44,7 +45,7 @@ export function AppRouter() {
           <Route path="/tasks/analytics" element={<TaskAnalyticsPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/system" element={<SystemStatusPage />} />
-          <Route path="/tenant" element={<TenantPage />} />
+          <Route path="/tenant" element={<Permit permissions={[Permission.TenantManage]}><TenantPage /></Permit>} />
 
           <Route path="/brands" element={<BrandsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
@@ -53,11 +54,11 @@ export function AppRouter() {
           <Route path="/conversations" element={<ConversationsPage />} />
           <Route path="/communication-hub" element={<CommunicationHubPage />} />
           <Route path="/proposals" element={<ProposalsPage />} />
-          <Route path="/knowledgebases" element={<KnowledgebasesPage />} />
-          <Route path="/gmail-configuration" element={<GmailConfigurationPage />} />
-          <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
+          <Route path="/knowledgebases" element={<Permit permissions={[Permission.KnowledgeManage]}><KnowledgebasesPage /></Permit>} />
+          <Route path="/gmail-configuration" element={<Permit permissions={[Permission.IntegrationManage]}><GmailConfigurationPage /></Permit>} />
+          <Route path="/phone-numbers" element={<Permit permissions={[Permission.IntegrationManage]}><PhoneNumbersPage /></Permit>} />
           <Route path="/users" element={<UsersPage />} />
-          <Route path="/master-settings" element={<MasterSettingsPage />} />
+          <Route path="/master-settings" element={<Permit permissions={[Permission.TenantManage]}><MasterSettingsPage /></Permit>} />
         </Route>
       </Route>
 

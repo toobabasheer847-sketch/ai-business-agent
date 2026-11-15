@@ -29,7 +29,7 @@ type TasksTableProps = {
   onEdit: (item: Task) => void
   onComplete: (item: Task) => void
   onCancel: (item: Task) => void
-  onDelete: (item: Task) => void
+  onDelete?: (item: Task) => void
   onViewActivity: (item: Task) => void
   onManageReminders: (item: Task) => void
   onManageDependencies: (item: Task) => void
@@ -268,13 +268,15 @@ export function TasksTable({
                           Cancel task
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuSeparator />
+                      {onDelete ? <DropdownMenuSeparator /> : null}
+                      {onDelete ? (
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={() => onDelete(item)}
                       >
                         Delete
                       </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

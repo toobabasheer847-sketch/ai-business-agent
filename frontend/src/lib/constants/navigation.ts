@@ -1,3 +1,4 @@
+import type { PermissionName } from '@/features/authorization/permissions'
 import type { LucideIcon } from 'lucide-react'
 import {
   Bot,
@@ -29,6 +30,7 @@ export type NavItem = {
   /** Whether routes are currently live in AppModule */
   available: boolean
   description?: string
+  permissions?: PermissionName[]
 }
 
 /**
@@ -50,6 +52,7 @@ export const mainNav: NavItem[] = [
     module: 'analytics',
     available: true,
     description: 'Period comparisons and business insights',
+    permissions: ['analytics.view', 'analytics.view_own'],
   },
   {
     title: 'AI Assistant',
@@ -73,6 +76,7 @@ export const mainNav: NavItem[] = [
     icon: Landmark,
     module: 'tenant',
     available: true,
+    permissions: ['tenant.manage'],
   },
   {
     title: 'Brand',
@@ -129,6 +133,7 @@ export const mainNav: NavItem[] = [
     icon: BookOpen,
     module: 'knowledgebase',
     available: true,
+    permissions: ['knowledge.manage'],
   },
   {
     title: 'Gmail',
@@ -136,6 +141,7 @@ export const mainNav: NavItem[] = [
     icon: Mail,
     module: 'gmail-configuration',
     available: true,
+    permissions: ['integration.manage'],
   },
   {
     title: 'Phone Numbers',
@@ -143,6 +149,7 @@ export const mainNav: NavItem[] = [
     icon: Phone,
     module: 'phone-number',
     available: true,
+    permissions: ['integration.manage'],
   },
   {
     title: 'Users',
@@ -157,6 +164,7 @@ export const mainNav: NavItem[] = [
     icon: Settings,
     module: 'master-settings',
     available: true,
+    permissions: ['tenant.manage'],
   },
   {
     title: 'System Status',

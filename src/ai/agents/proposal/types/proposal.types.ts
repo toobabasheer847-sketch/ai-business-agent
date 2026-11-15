@@ -37,6 +37,7 @@ export interface ProposalContext {
   userId: string;
   tenantId: string;
   email?: string;
+  role?: string;
 }
 
 export interface ProposalAgentResponse {

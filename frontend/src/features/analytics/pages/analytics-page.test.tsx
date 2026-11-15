@@ -6,6 +6,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { analyticsApi } from '@/features/analytics/api/analytics.api'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
 
+vi.mock('@/features/authorization/use-permissions', () => ({
+  usePermissions: () => ({
+    role: 'owner',
+    isBootstrapping: false,
+    hasRole: () => true,
+    hasPermission: () => true,
+    canAccess: () => true,
+  }),
+}))
+
 vi.mock('@/features/analytics/api/analytics.api', () => ({
   analyticsApi: {
     sales: vi.fn(),

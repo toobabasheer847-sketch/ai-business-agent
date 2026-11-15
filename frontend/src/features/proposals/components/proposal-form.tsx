@@ -12,6 +12,8 @@ import {
   type Proposal,
 } from '@/features/proposals/types/proposal.types'
 import type { Prospect } from '@/features/prospects/types/prospect.types'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -70,6 +72,8 @@ export function ProposalForm({
   onCancel,
 }: ProposalFormProps) {
   const schema = mode === 'create' ? createProposalSchema : updateProposalSchema
+  const { hasPermission } = usePermissions()
+  const statuses = PROPOSAL_STATUSES.filter((item) => item !== 'sent' || hasPermission(Permission.ProposalSend))
 
   const {
     register,
@@ -217,7 +221,7 @@ export function ProposalForm({
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                {PROPOSAL_STATUSES.map((item) => (
+                {statuses.map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
                   </SelectItem>

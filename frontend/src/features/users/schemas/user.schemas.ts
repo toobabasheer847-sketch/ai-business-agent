@@ -16,6 +16,7 @@ export const createUserSchema = z.object({
     .string()
     .min(8, 'Password must be at least 8 characters'),
   isActive: z.boolean().optional(),
+  role: z.enum(['owner', 'admin', 'member']).optional(),
 })
 
 export type CreateUserFormValues = z.infer<typeof createUserSchema>
@@ -41,6 +42,7 @@ export const updateUserSchema = z.object({
       'Password must be at least 8 characters',
     ),
   isActive: z.boolean().optional(),
+  role: z.enum(['owner', 'admin', 'member']).optional(),
 })
 
 export type UpdateUserFormValues = z.infer<typeof updateUserSchema>

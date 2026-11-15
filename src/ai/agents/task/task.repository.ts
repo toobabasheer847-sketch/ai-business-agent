@@ -109,7 +109,7 @@ export class TaskRepository {
   async findByIdAndTenantAndUser(
     taskId: string,
     tenantId: string,
-    userId: string,
+    userId: string | null,
   ): Promise<TaskRecord | null> {
     const [row] = await this.crmQuery()
       .where(and(eq(tasks.id, taskId), this.accessFilter(tenantId, userId)))
@@ -128,7 +128,7 @@ export class TaskRepository {
 
   async findAllByTenantAndUser(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     filters?: TaskListFilters,
   ): Promise<TaskRecord[]> {
     const clauses: SQL[] = [this.accessFilter(tenantId, userId)];
@@ -264,7 +264,7 @@ export class TaskRepository {
   async findByTitleAndTenantAndUser(
     title: string,
     tenantId: string,
-    userId: string,
+    userId: string | null,
   ): Promise<TaskRecord[]> {
     const rows = await this.crmQuery()
       .where(
@@ -281,7 +281,7 @@ export class TaskRepository {
   async updateTask(
     taskId: string,
     tenantId: string,
-    userId: string,
+    userId: string | null,
     input: Partial<
       Pick<
         TaskRecord,
@@ -353,7 +353,7 @@ export class TaskRepository {
   async deleteTask(
     taskId: string,
     tenantId: string,
-    userId: string,
+    userId: string | null,
   ): Promise<boolean> {
     const result = await this.db
       .delete(tasks)
@@ -414,7 +414,8 @@ export class TaskRepository {
     )!;
   }
 
-  private accessFilter(tenantId: string, userId: string) {
+  private accessFilter(tenantId: string, userId: string | null) {
+    if (!userId) return eq(tasks.tenantId, tenantId);
     return and(
       eq(tasks.tenantId, tenantId),
       or(eq(tasks.createdBy, userId), eq(tasks.assignedTo, userId))!,

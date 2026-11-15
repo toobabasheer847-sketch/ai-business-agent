@@ -179,6 +179,7 @@ describe('MasterAgentController', () => {
         AUTHENTICATED_TEST_USER.userId,
         'Show me my tasks',
         undefined,
+        undefined,
       );
     });
 
@@ -199,6 +200,7 @@ describe('MasterAgentController', () => {
         AUTHENTICATED_TEST_USER.userId,
         'Follow up',
         CONVERSATION_ID,
+        undefined,
       );
     });
 
@@ -285,6 +287,7 @@ describe('MasterAgentController', () => {
         AUTHENTICATED_TEST_USER.tenantId,
         AUTHENTICATED_TEST_USER.userId,
         'Create a company called ABC Technologies',
+        undefined,
         undefined,
       );
     });

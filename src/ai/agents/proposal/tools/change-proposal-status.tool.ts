@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { ProposalDeliveryService } from '../proposal-delivery.service.js';
 import { ProposalRepository } from '../proposal.repository.js';
 import { ProposalStatus } from '../types/proposal.types.js';
@@ -25,7 +27,12 @@ export class ChangeProposalStatusTool extends FunctionTool<any> {
         fromEmail: z.string().email().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
+        if (input.status === 'sent') {
+          assertRolePermission(trusted.role, [Permission.ProposalSend]);
+        }
+        const tenantId = trusted.tenantId;
         const existing = await this.proposalRepository.getProposal(
           input.proposalId,
           tenantId,

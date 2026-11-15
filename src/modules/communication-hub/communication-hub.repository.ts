@@ -23,6 +23,7 @@ interface ListHistoryOptions {
   search?: string;
   page: number;
   limit: number;
+  userId?: string;
 }
 
 @Injectable()
@@ -36,6 +37,9 @@ export class CommunicationHubRepository {
     const offset = (page - 1) * limit;
 
     const conditions = [eq(conversations.tenantId, tenantId)];
+    if (options.userId) {
+      conditions.push(eq(conversations.userId, options.userId));
+    }
 
     // Filter by channel (excluding 'all')
     if (channel && channel !== CommunicationChannel.ALL) {
@@ -108,11 +112,12 @@ export class CommunicationHubRepository {
     };
   }
 
-  async findConversationById(tenantId: string, conversationId: string) {
+  async findConversationById(tenantId: string, conversationId: string, userId?: string) {
     const conversation = await this.db.query.conversations.findFirst({
       where: and(
         eq(conversations.id, conversationId),
         eq(conversations.tenantId, tenantId),
+        userId ? eq(conversations.userId, userId) : undefined,
       ),
     });
 

@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { LogOut, Menu, PanelLeft } from 'lucide-react'
 import { useState } from 'react'
 
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { APP_NAME } from '@/lib/constants/app'
 import { mainNav } from '@/lib/constants/navigation'
@@ -22,10 +24,17 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
+function useVisibleNav() {
+  const { canAccess, isBootstrapping } = usePermissions()
+  if (isBootstrapping) return []
+  return mainNav.filter((item) => canAccess(item.permissions))
+}
+
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const items = useVisibleNav()
   return (
     <nav className="flex flex-col gap-1 p-2">
-      {mainNav.map((item) => (
+      {items.map((item) => (
         <NavLink
           key={item.href}
           to={item.href}
@@ -69,9 +78,11 @@ function SidebarBrand() {
 
 export function AppShellLayout() {
   const { user, logout } = useAuth()
+  const { hasPermission } = usePermissions()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const navItems = useVisibleNav()
 
   const initials =
     user?.name
@@ -94,7 +105,7 @@ export function AppShellLayout() {
         <ScrollArea className="flex-1">
           {collapsed ? (
             <nav className="flex flex-col items-center gap-1 p-2">
-              {mainNav.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.href}
                   to={item.href}
@@ -168,9 +179,11 @@ export function AppShellLayout() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/master-settings')}>
-                  Settings
-                </DropdownMenuItem>
+                {hasPermission(Permission.TenantManage) ? (
+                  <DropdownMenuItem onClick={() => navigate('/master-settings')}>
+                    Settings
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 size-4" />
                   Log out

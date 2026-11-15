@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 
 import { DashboardKpiCard } from '@/features/dashboard/components/dashboard-kpi-card'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import {
   useCommunicationHubDetail,
   useCommunicationHubEmailThreads,
@@ -92,6 +94,8 @@ function titleFromHistory(item: CommunicationHubHistoryItem) {
 }
 
 export function CommunicationHubPage() {
+  const { hasPermission } = usePermissions()
+  const fullCommunication = hasPermission(Permission.CommunicationView)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState<'all' | CommunicationChannel>('all')
   const [prospectId, setProspectId] = useState('')
@@ -109,10 +113,10 @@ export function CommunicationHubPage() {
     [channel, page, prospectId, search],
   )
 
-  const statsQuery = useCommunicationHubStats()
+  const statsQuery = useCommunicationHubStats(fullCommunication)
   const historyQuery = useCommunicationHubHistory(listQuery)
-  const emailThreadsQuery = useCommunicationHubEmailThreads({ page: 1, limit: 4 })
-  const smsThreadsQuery = useCommunicationHubSmsThreads({ page: 1, limit: 4 })
+  const emailThreadsQuery = useCommunicationHubEmailThreads({ page: 1, limit: 4 }, fullCommunication)
+  const smsThreadsQuery = useCommunicationHubSmsThreads({ page: 1, limit: 4 }, fullCommunication)
   const detailQuery = useCommunicationHubDetail(selectedId ?? undefined, Boolean(selectedId))
   const prospectsQuery = useProspects()
 
@@ -156,7 +160,13 @@ export function CommunicationHubPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      {!fullCommunication ? (
+        <p className="text-sm text-muted-foreground">
+          Tenant-wide communication totals and channel directories are limited to owners and admins. The history below is only your conversations.
+        </p>
+      ) : null}
+
+      {fullCommunication ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <DashboardKpiCard
           title="Total conversations"
           value={stats?.totalConversations}
@@ -202,7 +212,7 @@ export function CommunicationHubPage() {
           isError={statsQuery.isError}
           errorMessage={statsQuery.error ? 'Could not load activity.' : undefined}
         />
-      </div>
+      </div> : null}
 
       <Card>
         <CardHeader>
@@ -373,7 +383,7 @@ export function CommunicationHubPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {fullCommunication ? <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Email threads</CardTitle>
@@ -439,7 +449,7 @@ export function CommunicationHubPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </div> : null}
 
       <Dialog open={Boolean(selectedId)} onOpenChange={(open) => !open && setSelectedId(null)}>
         <DialogContent className="max-w-2xl">

@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -34,4 +35,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['owner', 'admin', 'member'])
+  role?: 'owner' | 'admin' | 'member';
 }

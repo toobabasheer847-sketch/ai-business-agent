@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -20,8 +22,9 @@ export class ListProposalsTool extends FunctionTool<any> {
         search: z.string().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
-        return this.proposalRepository.listProposals(tenantId, {
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalView]);
+        return this.proposalRepository.listProposals(trusted.tenantId, {
           status: input.status,
           prospectId: input.prospectId,
           search: input.search,

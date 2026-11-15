@@ -16,8 +16,8 @@ import {
 type UsersTableProps = {
   items: User[]
   currentUserId?: string | null
-  onEdit: (item: User) => void
-  onDelete: (item: User) => void
+  onEdit?: (item: User) => void
+  onDelete?: (item: User) => void
 }
 
 function formatDate(value: string) {
@@ -49,6 +49,7 @@ export function UsersTable({
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="hidden md:table-cell">Created At</TableHead>
             <TableHead className="hidden lg:table-cell">Updated At</TableHead>
@@ -70,6 +71,9 @@ export function UsersTable({
                 <TableCell className="text-muted-foreground">
                   {item.email}
                 </TableCell>
+                <TableCell className="capitalize text-muted-foreground">
+                  {item.role ?? 'member'}
+                </TableCell>
                 <TableCell>
                   <UserStatusBadge isActive={item.isActive} />
                 </TableCell>
@@ -81,6 +85,7 @@ export function UsersTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    {onEdit ? (
                     <Button
                       type="button"
                       size="icon-sm"
@@ -90,6 +95,8 @@ export function UsersTable({
                     >
                       <Pencil className="size-4" />
                     </Button>
+                    ) : null}
+                    {onDelete ? (
                     <Button
                       type="button"
                       size="icon-sm"
@@ -111,6 +118,7 @@ export function UsersTable({
                         className={`size-4 ${isSelf ? '' : 'text-destructive'}`}
                       />
                     </Button>
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>

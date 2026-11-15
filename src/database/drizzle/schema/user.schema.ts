@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   pgTable,
   timestamp,
   uuid,
@@ -32,6 +33,8 @@ export const users = pgTable('users', {
 
   isActive: boolean('is_active').default(true).notNull(),
 
+  role: varchar('role', { length: 20 }).notNull().default('member'),
+
   createdAt: timestamp('created_at', {
     withTimezone: true,
   })
@@ -43,4 +46,6 @@ export const users = pgTable('users', {
   })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  index('users_tenant_role_idx').on(table.tenantId, table.role),
+]);

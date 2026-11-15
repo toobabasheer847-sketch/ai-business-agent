@@ -3,7 +3,9 @@ import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -24,7 +26,9 @@ export class GenerateProposalTool extends FunctionTool<any> {
         length: z.enum(['short', 'medium', 'detailed']).optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
+        const tenantId = trusted.tenantId;
         return this.generateWithGemini(
           input.proposalId,
           tenantId,

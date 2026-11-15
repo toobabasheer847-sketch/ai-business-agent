@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -9,6 +10,8 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+
+import { hasPermission, Permission } from '../../../modules/authorization/permissions';
 
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard.js';
 import type { AuthenticatedRequest } from '../../../modules/auth/types/auth.types.js';
@@ -68,6 +71,9 @@ export class ProposalController {
     @Body() dto: ChangeProposalStatusDto,
     @Req() req: AuthenticatedRequest,
   ) {
+    if (dto.status === 'sent' && !hasPermission(req.user?.role, Permission.ProposalSend)) {
+      throw new ForbiddenException('You do not have permission to send proposals.');
+    }
     const context = this.buildContext(req);
     return this.proposalService.changeProposalStatus(proposalId, dto, context);
   }

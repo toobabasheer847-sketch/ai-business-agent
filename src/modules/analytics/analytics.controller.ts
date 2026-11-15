@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req, UnauthorizedException, UseGuards } from '@
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { AuthenticatedRequest } from '../auth/types/auth.types.js';
+import { hasPermission, Permission } from '../authorization/permissions';
 import { AnalyticsService } from './analytics.service.js';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto.js';
 
@@ -27,7 +28,11 @@ export class AnalyticsController {
 
   @Get('tasks')
   tasks(@Req() req: AuthenticatedRequest, @Query() query: AnalyticsQueryDto) {
-    return this.analyticsService.tasks(this.tenantId(req), query);
+    const scope = this.ownScope(req);
+    const tenantId = this.tenantId(req);
+    return scope
+      ? this.analyticsService.tasks(tenantId, query, scope)
+      : this.analyticsService.tasks(tenantId, query);
   }
 
   @Get('team')
@@ -42,12 +47,20 @@ export class AnalyticsController {
 
   @Get('trends')
   trends(@Req() req: AuthenticatedRequest, @Query() query: AnalyticsQueryDto) {
-    return this.analyticsService.trends(this.tenantId(req), query);
+    const scope = this.ownScope(req);
+    const tenantId = this.tenantId(req);
+    return scope
+      ? this.analyticsService.trends(tenantId, query, scope)
+      : this.analyticsService.trends(tenantId, query);
   }
 
   @Get('insights')
   insights(@Req() req: AuthenticatedRequest, @Query() query: AnalyticsQueryDto) {
     return this.analyticsService.insights(this.tenantId(req), query);
+  }
+
+  private ownScope(req: AuthenticatedRequest): string | undefined {
+    return hasPermission(req.user?.role, Permission.AnalyticsView) ? undefined : req.user.userId;
   }
 
   private tenantId(req: AuthenticatedRequest): string {

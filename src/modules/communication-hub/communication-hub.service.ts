@@ -13,7 +13,7 @@ export class CommunicationHubService {
     private readonly communicationHubRepository: CommunicationHubRepository,
   ) {}
 
-  async getHistory(tenantId: string, dto: GetCommunicationHistoryDto) {
+  async getHistory(tenantId: string, dto: GetCommunicationHistoryDto, userId?: string) {
     return this.communicationHubRepository.listHistory(tenantId, {
       channel: dto.channel,
       direction: dto.direction,
@@ -21,13 +21,15 @@ export class CommunicationHubService {
       search: dto.search,
       page: dto.page ?? 1,
       limit: dto.limit ?? 20,
+      userId,
     });
   }
 
-  async getConversationDetail(tenantId: string, conversationId: string) {
+  async getConversationDetail(tenantId: string, conversationId: string, userId?: string) {
     const detail = await this.communicationHubRepository.findConversationById(
       tenantId,
       conversationId,
+      userId,
     );
 
     if (!detail) {

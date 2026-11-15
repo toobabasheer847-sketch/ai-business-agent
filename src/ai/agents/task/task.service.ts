@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
+import { hasPermission, Permission } from '../../../modules/authorization/permissions';
 import { UserRepository } from '../../../modules/user/user.repository';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
@@ -131,7 +132,7 @@ export class TaskService {
     const task = await this.taskRepository.findByIdAndTenantAndUser(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
     );
 
     if (!task) {
@@ -163,7 +164,7 @@ export class TaskService {
 
     const rows = await this.taskRepository.findAllByTenantAndUser(
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       {
         status: dto.status as TaskStatus | undefined,
         priority: dto.priority as TaskPriority | undefined,
@@ -201,7 +202,7 @@ export class TaskService {
     const filters = await this.buildAnalyticsFilters(dto, context, { now });
     return this.requireAnalytics().getSummary(
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       filters,
       now,
     );
@@ -223,7 +224,7 @@ export class TaskService {
     const to = filters.to ?? now;
     const trends = await this.requireAnalytics().getTrends(
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       filters,
       groupBy,
       from,
@@ -284,7 +285,7 @@ export class TaskService {
     const filters = await this.buildAnalyticsFilters(dto, context, { now });
     const rows = await this.requireAnalytics().listExportRows(
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       filters,
     );
     const reminderByTaskId = new Map<string, string>();
@@ -443,7 +444,7 @@ export class TaskService {
     const updated = await this.taskRepository.updateTask(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       {
         title: dto.title,
         description: dto.description,
@@ -488,7 +489,7 @@ export class TaskService {
     const updated = await this.taskRepository.updateTask(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       {
         status: 'completed',
         completedAt: new Date().toISOString(),
@@ -520,7 +521,7 @@ export class TaskService {
     const updated = await this.taskRepository.updateTask(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
       {
         status: 'cancelled',
       },
@@ -552,7 +553,7 @@ export class TaskService {
     const deleted = await this.taskRepository.deleteTask(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
     );
 
     if (!deleted) {
@@ -1173,7 +1174,7 @@ export class TaskService {
     const existing = await this.taskRepository.findByIdAndTenantAndUser(
       taskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
     );
 
     if (!existing) {
@@ -1636,7 +1637,7 @@ export class TaskService {
     const prerequisite = await this.taskRepository.findByIdAndTenantAndUser(
       dependsOnTaskId,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
     );
     if (!prerequisite) {
       throw new NotFoundException('Prerequisite task not found');
@@ -1823,13 +1824,13 @@ export class TaskService {
       return this.taskRepository.findByIdAndTenantAndUser(
         uuid,
         context.tenantId,
-        context.userId,
+        this.taskScope(context),
       );
     }
     const matches = await this.taskRepository.findByTitleAndTenantAndUser(
       searchTerm,
       context.tenantId,
-      context.userId,
+      this.taskScope(context),
     );
     const exact = matches.filter((item) =>
       titleMatchesSearch(item.title, searchTerm),
@@ -1866,6 +1867,10 @@ export class TaskService {
         console.error('TaskService activity write failed (non-fatal)', error);
       }
     }
+  }
+
+  private taskScope(context: TaskContext): string | null {
+    return hasPermission(context.role, Permission.TaskViewAll) ? null : context.userId;
   }
 
   private requireAuthContext(context: TaskContext) {

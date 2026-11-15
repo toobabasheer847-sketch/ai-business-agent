@@ -344,6 +344,8 @@ describe('MasterAgentService', () => {
       tenantId,
       userId,
       'What information is contained in the uploaded document?',
+      undefined,
+      'owner',
     );
 
     expect(conversationRepository.createMessage).toHaveBeenNthCalledWith(
@@ -408,7 +410,7 @@ describe('MasterAgentService', () => {
     ]);
 
     const query = 'What information is contained in the uploaded document?';
-    const result = await service.invoke(tenantId, userId, query, conversationId);
+    const result = await service.invoke(tenantId, userId, query, conversationId, 'owner');
 
     expect(ragAgent.delegateAdkQuery).toHaveBeenCalledWith(
       tenantId,
@@ -445,6 +447,8 @@ describe('MasterAgentService', () => {
       tenantId,
       userId,
       'What information is contained in the uploaded document?',
+      undefined,
+      'owner',
     );
 
     expect(ragAgent.delegateAdkQuery).toHaveBeenCalledTimes(1);
@@ -480,6 +484,8 @@ describe('MasterAgentService', () => {
       tenantId,
       userId,
       'What is the capital of Mars colony 7?',
+      undefined,
+      'owner',
     );
 
     expect(result.delegation).toBe('rag');
@@ -625,6 +631,8 @@ describe('MasterAgentService', () => {
         tenantId,
         userId,
         'What is in the uploaded document?',
+        undefined,
+        'owner',
       ),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
 
@@ -633,6 +641,8 @@ describe('MasterAgentService', () => {
         tenantId,
         userId,
         'What is in the uploaded document?',
+        undefined,
+        'owner',
       );
     } catch (error) {
       expect(JSON.stringify(error)).not.toContain('DATABASE_URL');

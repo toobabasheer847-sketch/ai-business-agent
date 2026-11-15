@@ -43,6 +43,7 @@ interface ListConversationsOptions {
   status?: ConversationStatus;
   prospectId?: string;
   search?: string;
+  userId?: string;
 }
 
 @Injectable()
@@ -54,9 +55,13 @@ export class ConversationRepository {
   // ─── Conversations ────────────────────────────────────────────────────────
 
   async findAllByTenant(tenantId: string, options: ListConversationsOptions = {}) {
-    const { channel, status, prospectId, search } = options;
+    const { channel, status, prospectId, search, userId } = options;
 
     const conditions = [eq(conversations.tenantId, tenantId)];
+
+    if (userId) {
+      conditions.push(eq(conversations.userId, userId));
+    }
 
     if (channel) {
       conditions.push(eq(conversations.channel, channel));

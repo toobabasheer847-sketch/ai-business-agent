@@ -5,6 +5,7 @@ export type AiRequestContext = {
   tenantId: string;
   userId: string;
   email?: string | null;
+  role?: string | null;
   aiModel?: string | null;
 };
 

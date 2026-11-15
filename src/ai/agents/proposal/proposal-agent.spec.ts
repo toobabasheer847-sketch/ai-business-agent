@@ -1,3 +1,5 @@
+import { ForbiddenException } from '@nestjs/common';
+
 import { ProposalAgent } from './proposal-agent';
 
 describe('ProposalAgent Phase 22 delivery', () => {
@@ -60,7 +62,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
   it('resolves an email and sends the tenant proposal', async () => {
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       'Send the proposal to TOOBABASHEER847@GMAIL.COM',
     );
 
@@ -86,7 +88,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     ]);
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send the proposal to ${prospect.email}`,
     );
 
@@ -100,7 +102,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     ]);
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send the proposal to ${prospect.email}`,
     );
 
@@ -112,7 +114,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     proposalRepository.findProspectsByEmail.mockResolvedValue([]);
 
     const result = await agent.processRequest(
-      { userId: 'user-b', tenantId: tenantB },
+      { userId: 'user-b', tenantId: tenantB, role: 'owner' },
       'Email the proposal to toobabasheer847@gmail.com',
     );
 
@@ -126,7 +128,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
   it('never returns an empty assistant message', async () => {
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       'Send the proposal to unknown@example.com',
     );
 
@@ -138,7 +140,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     proposalRepository.listProposals.mockResolvedValue([proposal, { ...proposal, id: '33333333-3333-4333-8333-333333333333' }]);
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send the proposal to ${prospect.email}`,
     );
 
@@ -150,7 +152,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     proposalRepository.listProposals.mockResolvedValue([{ ...proposal, status: 'sent' }]);
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send the proposal to ${prospect.email}`,
     );
 
@@ -163,7 +165,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     proposalRepository.getProposal = jest.fn().mockResolvedValue(proposal);
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Email proposal ${proposal.id} to ${prospect.email}`,
     );
 
@@ -185,7 +187,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     });
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send proposal ${proposal.id} to ${prospect.email}`,
     );
 
@@ -199,7 +201,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
     );
 
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send the proposal to ${prospect.email}`,
     );
 
@@ -210,7 +212,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
   it('resolves a named prospect when no email is provided', async () => {
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       'Send the proposal to Bashir Khan',
     );
 
@@ -223,7 +225,7 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
   it('routes send quotation phrasing through the send flow', async () => {
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       `Send quotation to ${prospect.email}`,
     );
 
@@ -233,11 +235,20 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
   it('returns validation feedback for an invalid email', async () => {
     const result = await agent.processRequest(
-      { userId: 'user-a', tenantId: tenantA },
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
       'Send the proposal to invalid@address',
     );
 
     expect(proposalRepository.findProspectsByEmail).not.toHaveBeenCalled();
     expect(result.message).toContain('valid email address');
+  });
+
+  it('rejects a member send before looking up the prospect', async () => {
+    await expect(agent.processRequest(
+      { userId: 'user-a', tenantId: tenantA, role: 'member' },
+      `Send the proposal to ${prospect.email}`,
+    )).rejects.toBeInstanceOf(ForbiddenException);
+    expect(proposalRepository.findProspectsByEmail).not.toHaveBeenCalled();
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
   });
 });

@@ -243,6 +243,7 @@ export class TaskController {
       userId: user.userId,
       tenantId: user.tenantId,
       email: user.email,
+      role: user.role,
     };
   }
 }

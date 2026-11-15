@@ -68,7 +68,8 @@ export class CompanyController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCompanyDto,
   ) {
-    return this.companyService.update(this.getTenantId(req), id, dto);
+    const actor = this.getUser(req);
+    return this.companyService.update(actor.tenantId, id, dto, actor);
   }
 
   @Delete(':id')

@@ -48,6 +48,7 @@ export class AuthRepository {
           email: input.email,
           passwordHash: input.passwordHash,
           isActive: true,
+          role: 'owner',
         })
         .returning({
           id: users.id,
@@ -55,6 +56,7 @@ export class AuthRepository {
           name: users.name,
           email: users.email,
           isActive: users.isActive,
+          role: users.role,
         });
 
       return { tenant, user };

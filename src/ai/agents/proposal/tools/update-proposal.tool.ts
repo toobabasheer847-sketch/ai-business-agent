@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -27,7 +29,12 @@ export class UpdateProposalTool extends FunctionTool<any> {
         content: z.string().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
+        if (input.status === 'sent') {
+          assertRolePermission(trusted.role, [Permission.ProposalSend]);
+        }
+        const tenantId = trusted.tenantId;
         const { proposalId, ...patch } = input;
         return this.proposalRepository.updateProposal(proposalId, tenantId, patch);
       },

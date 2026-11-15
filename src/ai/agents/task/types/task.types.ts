@@ -53,6 +53,7 @@ export interface TaskContext {
   userId: string;
   tenantId: string;
   email?: string;
+  role?: string;
 }
 
 export type TaskAnalyticsGroupBy = 'day' | 'week' | 'month';

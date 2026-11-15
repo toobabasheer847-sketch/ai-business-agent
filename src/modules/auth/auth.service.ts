@@ -10,6 +10,7 @@ import { AuthRepository } from './auth.repository';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { resolveJwtSecret } from './jwt-secret.util';
+import { isTenantRole } from '../authorization/permissions';
 import {
   AuthenticatedUser,
   JwtPayload,
@@ -59,6 +60,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         isActive: user.isActive,
+        role: user.role,
       },
 
       tenant: {
@@ -112,6 +114,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         isActive: user.isActive,
+        role: user.role,
       },
 
       accessToken,
@@ -124,7 +127,7 @@ export class AuthService {
     const user =
       await this.authRepository.findUserById(userId);
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !isTenantRole(user.role)) {
       return null;
     }
 
@@ -133,6 +136,7 @@ export class AuthService {
       tenantId: user.tenantId,
       email: user.email,
       name: user.name,
+      role: user.role,
     };
   }
 

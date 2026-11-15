@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { ProposalRepository } from '../proposal.repository.js';
 
 @Injectable()
@@ -23,6 +25,7 @@ export class CreateProposalTool extends FunctionTool<any> {
       }),
       execute: async (input: any) => {
         const context = getTrustedAiContext();
+        assertRolePermission(context.role, [Permission.ProposalCreate]);
         const prospect = await this.proposalRepository.getProspect(
           input.prospectId,
           context.tenantId,

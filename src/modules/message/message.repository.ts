@@ -32,7 +32,7 @@ export class MessageRepository {
         eq(conversations.id, conversationId),
         eq(conversations.tenantId, tenantId),
       ),
-      columns: { id: true },
+      columns: { id: true, userId: true },
     });
   }
 

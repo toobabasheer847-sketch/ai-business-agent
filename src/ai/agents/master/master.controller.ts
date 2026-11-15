@@ -77,6 +77,7 @@ export class MasterAgentController {
       userId,
       dto.message,
       dto.conversationId,
+      req.user.role,
     );
   }
 
@@ -89,6 +90,7 @@ export class MasterAgentController {
       userId,
       dto.message,
       dto.conversationId,
+      req.user.role,
     );
 
     return {
@@ -113,6 +115,7 @@ export class MasterAgentController {
       userId,
       dto.conversationId,
       dto.orchestrationId,
+      req.user.role,
     );
 
     return {

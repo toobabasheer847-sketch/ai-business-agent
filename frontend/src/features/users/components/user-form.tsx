@@ -8,6 +8,8 @@ import {
   type UpdateUserFormValues,
 } from '@/features/users/schemas/user.schemas'
 import type { User } from '@/features/users/types/user.types'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +32,7 @@ function emptyValues(): CreateUserFormValues {
     email: '',
     password: '',
     isActive: true,
+    role: 'member',
   }
 }
 
@@ -39,6 +42,7 @@ function fromUser(user: User): UpdateUserFormValues {
     email: user.email,
     password: '',
     isActive: user.isActive,
+    role: user.role ?? 'member',
   }
 }
 
@@ -50,6 +54,8 @@ export function UserForm({
   onSubmit,
   onCancel,
 }: UserFormProps) {
+  const { hasPermission } = usePermissions()
+  const canChangeRole = hasPermission(Permission.TeamChangeRole)
   const schema = mode === 'create' ? createUserSchema : updateUserSchema
 
   const {
@@ -74,6 +80,7 @@ export function UserForm({
             email: values.email.trim(),
             password: values.password,
             isActive: values.isActive ?? true,
+            ...(canChangeRole && values.role ? { role: values.role } : {}),
           })
           return
         }
@@ -84,6 +91,7 @@ export function UserForm({
           email: values.email.trim(),
           password: values.password?.trim() || '',
           isActive: values.isActive,
+          ...(canChangeRole && values.role ? { role: values.role } : {}),
         })
       })}
     >
@@ -143,6 +151,25 @@ export function UserForm({
           </p>
         )}
       </div>
+
+      {canChangeRole ? (
+        <div className="space-y-2">
+          <Label htmlFor="user-role">Role</Label>
+          <select
+            id="user-role"
+            disabled={submitting}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            {...register('role')}
+          >
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Only an owner can change roles. The tenant must keep one active owner.
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between rounded-lg border px-3 py-2">
         <div className="space-y-0.5">

@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -54,6 +56,7 @@ function toCreatePayload(values: CreateUserFormValues): CreateUserRequest {
     email: values.email.trim().toLowerCase(),
     password: values.password,
     isActive: values.isActive ?? true,
+    ...(values.role ? { role: values.role } : {}),
   }
 }
 
@@ -62,6 +65,7 @@ function toUpdatePayload(values: UpdateUserFormValues): UpdateUserRequest {
     name: values.name.trim(),
     email: values.email.trim().toLowerCase(),
     isActive: values.isActive,
+    ...(values.role ? { role: values.role } : {}),
   }
 
   if (values.password?.trim()) {
@@ -118,6 +122,8 @@ export function UsersPage() {
   }, [debouncedSearch, isActive])
 
   const listQuery = useUsers(listQueryInput)
+  const { hasPermission } = usePermissions()
+  const canManageTeam = hasPermission(Permission.TeamManage)
   const createMutation = useCreateUser()
   const updateMutation = useUpdateUser()
   const deleteMutation = useDeleteUser()
@@ -189,10 +195,12 @@ export function UsersPage() {
               />
               Refresh
             </Button>
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" />
-              Add user
-            </Button>
+            {canManageTeam ? (
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <Plus className="size-4" />
+                Add user
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -245,7 +253,7 @@ export function UsersPage() {
               ? 'No users match your search or filters. Try adjusting them.'
               : 'Create a user for this tenant. The account is scoped from your JWT.'}
           </p>
-          {!hasFilters && (
+          {!hasFilters && canManageTeam && (
             <Button
               type="button"
               className="mt-4"
@@ -260,8 +268,8 @@ export function UsersPage() {
         <UsersTable
           items={items}
           currentUserId={currentUser?.id}
-          onEdit={setEditing}
-          onDelete={setDeleting}
+          onEdit={canManageTeam ? setEditing : undefined}
+          onDelete={canManageTeam ? setDeleting : undefined}
         />
       )}
 

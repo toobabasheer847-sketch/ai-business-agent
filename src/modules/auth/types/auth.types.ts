@@ -27,6 +27,7 @@ export interface RegisterResponse {
     name: string;
     email: string;
     isActive: boolean;
+    role: string;
   };
   tenant: {
     id: string;

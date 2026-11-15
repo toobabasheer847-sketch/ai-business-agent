@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, getErrorMessage } from '@/lib/api'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { DeleteTaskDialog } from '@/features/tasks/components/delete-task-dialog'
 import { TaskConfirmDialog } from '@/features/tasks/components/task-confirm-dialog'
 import { TaskFilters } from '@/features/tasks/components/task-filters'
@@ -175,6 +177,8 @@ function taskErrorMessage(error: unknown): string {
 }
 
 export function TasksPage() {
+  const { hasPermission } = usePermissions()
+  const canDelete = hasPermission(Permission.TaskDelete)
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState(searchParams.get('status') ?? '')
@@ -499,7 +503,7 @@ export function TasksPage() {
           onEdit={setEditing}
           onComplete={(task) => setConfirming({ task, action: 'complete' })}
           onCancel={(task) => setConfirming({ task, action: 'cancel' })}
-          onDelete={setDeleting}
+          onDelete={canDelete ? setDeleting : undefined}
           onViewActivity={setActivityTask}
           onManageReminders={setReminderTask}
           onManageDependencies={setDependenciesTask}

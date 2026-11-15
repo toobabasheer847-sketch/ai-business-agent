@@ -1,8 +1,11 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
+import { hasPermission, Permission } from '../authorization/permissions';
 
 import { CompanyRepository } from './company.repository';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -63,7 +66,12 @@ export class CompanyService {
     return company;
   }
 
-  async update(tenantId: string, id: string, dto: UpdateCompanyDto) {
+  async update(
+    tenantId: string,
+    id: string,
+    dto: UpdateCompanyDto,
+    actor: { userId: string; role?: string },
+  ) {
     const existing = await this.companyRepository.findByIdAndTenant(
       id,
       tenantId,
@@ -71,6 +79,10 @@ export class CompanyService {
 
     if (!existing) {
       throw new NotFoundException('Company not found');
+    }
+
+    if (!hasPermission(actor.role, Permission.CompanyUpdateAny) && existing.userId !== actor.userId) {
+      throw new ForbiddenException('You can only update companies assigned to you.');
     }
 
     // If the name is being changed, check for duplicates

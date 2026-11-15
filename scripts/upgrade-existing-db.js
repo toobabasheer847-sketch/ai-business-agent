@@ -329,6 +329,20 @@ async function main() {
     );
     console.log('Applied 0001_proposal_public_access.sql');
 
+    await applySqlFile(
+      client,
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'database',
+        'drizzle',
+        'migrations',
+        '0002_user_roles.sql',
+      ),
+    );
+    console.log('Applied 0002_user_roles.sql');
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (

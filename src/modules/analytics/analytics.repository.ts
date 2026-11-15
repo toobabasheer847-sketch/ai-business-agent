@@ -1,5 +1,5 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, or, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../database/database.module.js';
 import type { DrizzleDb } from '../../database/database.service.js';
@@ -95,7 +95,7 @@ export class AnalyticsRepository {
     };
   }
 
-  async taskStatus(tenantId: string, window: DashboardWindow): Promise<TaskStatusCounts> {
+  async taskStatus(tenantId: string, window: DashboardWindow, userId?: string): Promise<TaskStatusCounts> {
     this.assertTenant(tenantId);
     const from = window.from;
     const to = window.to;
@@ -110,7 +110,10 @@ export class AnalyticsRepository {
         createdInPeriod: sql<number>`count(*) filter (where ${tasks.createdAt} >= ${from} and ${tasks.createdAt} <= ${to})::int`,
       })
       .from(tasks)
-      .where(eq(tasks.tenantId, tenantId));
+      .where(and(
+        eq(tasks.tenantId, tenantId),
+        userId ? or(eq(tasks.createdBy, userId), eq(tasks.assignedTo, userId)) : undefined,
+      ));
     return {
       assigned: this.number(row?.assigned),
       pending: this.number(row?.pending),
@@ -127,6 +130,7 @@ export class AnalyticsRepository {
     table: 'leads' | 'prospects' | 'proposals' | 'tasks' | 'conversations',
     window: DashboardWindow,
     completed = false,
+    userId?: string,
   ): Promise<TrendPoint[]> {
     this.assertTenant(tenantId);
     const source = table === 'leads'
@@ -147,6 +151,7 @@ export class AnalyticsRepository {
       .from(source)
       .where(and(
         eq(source.tenantId, tenantId),
+        userId && table === 'tasks' ? or(eq(tasks.createdBy, userId), eq(tasks.assignedTo, userId)) : undefined,
         gte(column, window.from ?? new Date(0)),
         lte(column, window.to ?? new Date()),
         completed && table === 'tasks' ? eq(tasks.status, 'completed') : undefined,

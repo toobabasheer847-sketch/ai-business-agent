@@ -15,7 +15,7 @@ import {
 type CompaniesTableProps = {
   items: Company[]
   onEdit: (item: Company) => void
-  onDelete: (item: Company) => void
+  onDelete?: (item: Company) => void
 }
 
 function formatDate(value: string) {
@@ -108,6 +108,7 @@ export function CompaniesTable({ items, onEdit, onDelete }: CompaniesTableProps)
                   >
                     <Pencil className="size-4" />
                   </Button>
+                  {onDelete ? (
                   <Button
                     type="button"
                     size="icon-sm"
@@ -117,6 +118,7 @@ export function CompaniesTable({ items, onEdit, onDelete }: CompaniesTableProps)
                   >
                     <Trash2 className="size-4 text-destructive" />
                   </Button>
+                  ) : null}
                 </div>
               </TableCell>
             </TableRow>

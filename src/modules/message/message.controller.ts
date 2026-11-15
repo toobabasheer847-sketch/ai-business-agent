@@ -17,6 +17,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { hasPermission, Permission } from '../authorization/permissions';
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
@@ -33,6 +34,10 @@ export class MessageController {
     return req.user as AuthenticatedUser;
   }
 
+  private scopeUserId(user: AuthenticatedUser): string | undefined {
+    return hasPermission(user.role, Permission.CommunicationView) ? undefined : user.userId;
+  }
+
   /**
    * GET /api/messages?conversationId=<uuid>&role=<role>
    * List all messages in a conversation (tenant-scoped).
@@ -43,7 +48,8 @@ export class MessageController {
     @Req() req: Request,
     @Query() query: MessageQueryDto,
   ) {
-    return this.messageService.findAll(this.getUser(req).tenantId, query);
+    const user = this.getUser(req);
+    return this.messageService.findAll(user.tenantId, query, this.scopeUserId(user));
   }
 
   /**
@@ -55,7 +61,8 @@ export class MessageController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.messageService.findOne(this.getUser(req).tenantId, id);
+    const user = this.getUser(req);
+    return this.messageService.findOne(user.tenantId, id, this.scopeUserId(user));
   }
 
   /**
@@ -70,7 +77,7 @@ export class MessageController {
     @Body() dto: CreateMessageDto,
   ) {
     const user = this.getUser(req);
-    return this.messageService.create(user.tenantId, user.userId, dto);
+    return this.messageService.create(user.tenantId, user.userId, dto, this.scopeUserId(user));
   }
 
   /**
@@ -84,7 +91,8 @@ export class MessageController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateMessageDto,
   ) {
-    return this.messageService.update(this.getUser(req).tenantId, id, dto);
+    const user = this.getUser(req);
+    return this.messageService.update(user.tenantId, id, dto, this.scopeUserId(user));
   }
 
   /**
@@ -97,6 +105,7 @@ export class MessageController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.messageService.remove(this.getUser(req).tenantId, id);
+    const user = this.getUser(req);
+    return this.messageService.remove(user.tenantId, id, this.scopeUserId(user));
   }
 }

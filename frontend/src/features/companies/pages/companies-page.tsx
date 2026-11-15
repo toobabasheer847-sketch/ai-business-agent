@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, getErrorMessage } from '@/lib/api'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { CompaniesFilters } from '@/features/companies/components/companies-filters'
 import { CompaniesTable } from '@/features/companies/components/companies-table'
 import { CompanyDeleteDialog } from '@/features/companies/components/company-delete-dialog'
@@ -68,6 +70,8 @@ function toUpdatePayload(values: UpdateCompanyFormValues): UpdateCompanyRequest 
 }
 
 export function CompaniesPage() {
+  const { hasPermission } = usePermissions()
+  const canDelete = hasPermission(Permission.CompanyDelete)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -220,7 +224,7 @@ export function CompaniesPage() {
         <CompaniesTable
           items={items}
           onEdit={setEditing}
-          onDelete={setDeleting}
+          onDelete={canDelete ? setDeleting : undefined}
         />
       )}
 

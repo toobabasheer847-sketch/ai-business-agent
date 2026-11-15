@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, getErrorMessage } from '@/lib/api'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { ProposalDeleteDialog } from '@/features/proposals/components/proposal-delete-dialog'
 import { ProposalForm } from '@/features/proposals/components/proposal-form'
 import { ProposalsFilters } from '@/features/proposals/components/proposals-filters'
@@ -95,6 +97,8 @@ function proposalErrorMessage(error: unknown): string {
 }
 
 export function ProposalsPage() {
+  const { hasPermission } = usePermissions()
+  const canManage = hasPermission(Permission.ProposalManage)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [prospectId, setProspectId] = useState('')
@@ -315,8 +319,8 @@ export function ProposalsPage() {
             <ProposalsTable
               items={items}
               prospectNameById={prospectNameById}
-              onEdit={setEditing}
-              onDelete={setDeleting}
+              onEdit={canManage ? setEditing : undefined}
+              onDelete={canManage ? setDeleting : undefined}
             />
           )}
         </>

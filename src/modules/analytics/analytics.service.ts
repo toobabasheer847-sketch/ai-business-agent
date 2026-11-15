@@ -126,12 +126,29 @@ export class AnalyticsService {
     };
   }
 
-  async tasks(tenantId: string, query: { range?: string; from?: string; to?: string }) {
+  async tasks(tenantId: string, query: { range?: string; from?: string; to?: string }, scopeUserId?: string) {
     this.assertTenant(tenantId);
     const windows = this.windows(query);
+    if (scopeUserId) {
+      const status = await this.analytics.taskStatus(tenantId, windows.current, scopeUserId);
+      return {
+        window: this.serialize(windows.current),
+        previousWindow: windows.previous ? this.serialize(windows.previous) : null,
+        snapshot: status,
+        status,
+        completionRate: rate(status.completed, status.pending + status.inProgress + status.completed, COMPLETION),
+        periodCompletionRate: rate(status.completed, status.createdInPeriod, PERIOD_COMPLETION),
+        comparisons: {
+          completed: compareMetric(status.completed, null),
+          overdue: compareMetric(status.overdue, null),
+          pendingCreated: compareMetric(status.createdInPeriod, null),
+        },
+        note: 'This view includes only tasks you created or that are assigned to you. Tenant-wide task totals are not included.',
+      };
+    }
     const [snapshot, status, currentFiltered, previousFiltered] = await Promise.all([
       this.dashboard.taskSnapshot(tenantId),
-      this.analytics.taskStatus(tenantId, windows.current),
+      this.analytics.taskStatus(tenantId, windows.current, scopeUserId),
       this.dashboard.filteredTaskCounts(tenantId, windows.current),
       windows.previous ? this.dashboard.filteredTaskCounts(tenantId, windows.previous) : Promise.resolve(null),
     ]);
@@ -206,16 +223,16 @@ export class AnalyticsService {
     };
   }
 
-  async trends(tenantId: string, query: { range?: string; from?: string; to?: string }) {
+  async trends(tenantId: string, query: { range?: string; from?: string; to?: string }, scopeUserId?: string) {
     this.assertTenant(tenantId);
     const windows = this.windows(query);
     const [leads, prospects, proposals, tasksCreated, tasksCompleted, conversations] = await Promise.all([
-      this.analytics.createdTrend(tenantId, 'leads', windows.current),
-      this.analytics.createdTrend(tenantId, 'prospects', windows.current),
-      this.analytics.createdTrend(tenantId, 'proposals', windows.current),
-      this.analytics.createdTrend(tenantId, 'tasks', windows.current),
-      this.analytics.createdTrend(tenantId, 'tasks', windows.current, true),
-      this.analytics.createdTrend(tenantId, 'conversations', windows.current),
+      scopeUserId ? Promise.resolve([]) : this.analytics.createdTrend(tenantId, 'leads', windows.current),
+      scopeUserId ? Promise.resolve([]) : this.analytics.createdTrend(tenantId, 'prospects', windows.current),
+      scopeUserId ? Promise.resolve([]) : this.analytics.createdTrend(tenantId, 'proposals', windows.current),
+      this.analytics.createdTrend(tenantId, 'tasks', windows.current, false, scopeUserId),
+      this.analytics.createdTrend(tenantId, 'tasks', windows.current, true, scopeUserId),
+      scopeUserId ? Promise.resolve([]) : this.analytics.createdTrend(tenantId, 'conversations', windows.current),
     ]);
     return {
       window: this.serialize(windows.current),
@@ -268,6 +285,11 @@ export class AnalyticsService {
   async proposalSummary(tenantId: string, message: string) {
     const proposals = await this.proposals(tenantId, windowFromMessage(message));
     return { summary: this.proposalText(proposals) };
+  }
+
+  async scopedTaskSummary(tenantId: string, message: string, userId: string) {
+    const tasks = await this.tasks(tenantId, windowFromMessage(message), userId);
+    return { summary: this.taskText(tasks) };
   }
 
   async taskSummary(tenantId: string, message: string) {

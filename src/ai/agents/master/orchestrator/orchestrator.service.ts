@@ -7,8 +7,11 @@ import {
   UnauthorizedException,
   Injectable,
   Logger,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+
+import { hasAnyPermission, Permission, type PermissionName } from '../../../../modules/authorization/permissions';
 import { ConfigService } from '@nestjs/config';
 import { and, eq, sql } from 'drizzle-orm';
 
@@ -89,6 +92,7 @@ export class MasterOrchestratorService {
     userId: string;
     message: string;
     conversationId: string;
+    role?: string;
   }): Promise<OrchestratorRunResult> {
     this.assertContext(input.tenantId, input.userId);
     const started = Date.now();
@@ -104,21 +108,25 @@ export class MasterOrchestratorService {
         return this.findReplay(input.tenantId, input.conversationId, input.message, operation.action);
       },
       handlers: {
-        'company.create': (operation) => this.createCompany(input.tenantId, input.userId, operation),
-        'lead.create': (operation, completed) => this.createLead(input.tenantId, operation, completed),
-        'prospect.create': (operation, completed) => this.createProspect(input.tenantId, operation, completed),
-        'proposal.create': (operation, completed) => this.createProposal(input.tenantId, input.userId, operation, completed),
-        'proposal.read': (operation) => this.readProposal(input.tenantId, operation),
-        'task.create': (operation, completed) => this.createTask(input.tenantId, input.userId, operation, completed),
-        'task.overdue': () => this.readOverdue(input.tenantId, input.userId),
-        'communication.summary': () => this.readCommunications(input.tenantId),
-        'prospect.followup': () => this.readProspectFollowUp(input.tenantId),
-        'dashboard.read': () => this.readDashboard(input.tenantId),
-        'team.analyze': () => this.readTeam(input.tenantId, input.message),
-        'analytics.overview': () => this.analytics.overviewSummary(input.tenantId, input.message),
-        'analytics.sales': () => this.analytics.salesSummary(input.tenantId, input.message),
-        'analytics.proposals': () => this.analytics.proposalSummary(input.tenantId, input.message),
-        'analytics.tasks': () => this.analytics.taskSummary(input.tenantId, input.message),
+        'company.create': (operation) => this.guarded(input.role, [Permission.CompanyCreate], () => this.createCompany(input.tenantId, input.userId, operation)),
+        'lead.create': (operation, completed) => this.guarded(input.role, [Permission.LeadManage], () => this.createLead(input.tenantId, operation, completed)),
+        'prospect.create': (operation, completed) => this.guarded(input.role, [Permission.ProspectManage], () => this.createProspect(input.tenantId, operation, completed)),
+        'proposal.create': (operation, completed) => this.guarded(input.role, [Permission.ProposalCreate], () => this.createProposal(input.tenantId, input.userId, operation, completed)),
+        'proposal.read': (operation) => this.guarded(input.role, [Permission.ProposalView], () => this.readProposal(input.tenantId, operation)),
+        'task.create': (operation, completed) => this.guarded(input.role, [Permission.TaskCreate], () => this.createTask(input.tenantId, input.userId, operation, completed)),
+        'task.overdue': () => this.guarded(input.role, [Permission.TaskViewAll, Permission.TaskViewOwn], () => this.readOverdue(input.tenantId, input.userId, input.role)),
+        'communication.summary': () => this.guarded(input.role, [Permission.CommunicationView], () => this.readCommunications(input.tenantId)),
+        'prospect.followup': () => this.guarded(input.role, [Permission.ProspectManage], () => this.readProspectFollowUp(input.tenantId)),
+        'dashboard.read': () => this.guarded(input.role, [Permission.DashboardView], () => this.readDashboard(input.tenantId)),
+        'team.analyze': () => this.guarded(input.role, [Permission.TeamInsightsView, Permission.TeamInsightsViewOwn], () => this.readTeam(input.tenantId, input.userId, input.message, input.role)),
+        'analytics.overview': () => this.guarded(input.role, [Permission.AnalyticsView], () => this.analytics.overviewSummary(input.tenantId, input.message)),
+        'analytics.sales': () => this.guarded(input.role, [Permission.AnalyticsView], () => this.analytics.salesSummary(input.tenantId, input.message)),
+        'analytics.proposals': () => this.guarded(input.role, [Permission.AnalyticsView], () => this.analytics.proposalSummary(input.tenantId, input.message)),
+        'analytics.tasks': () => this.guarded(input.role, [Permission.AnalyticsView, Permission.AnalyticsViewOwn], () => (
+          hasAnyPermission(input.role, [Permission.AnalyticsView])
+            ? this.analytics.taskSummary(input.tenantId, input.message)
+            : this.analytics.scopedTaskSummary(input.tenantId, input.message, input.userId)
+        )),
         'knowledge.answer': async () => {
           throw new Error('Ask the knowledge question on its own so the existing knowledge agent can search your documents.');
         },
@@ -149,6 +157,7 @@ export class MasterOrchestratorService {
   async confirm(input: {
     tenantId: string;
     userId: string;
+    role?: string;
     operation: PlannedOperation;
   }): Promise<PlannedOperation> {
     this.assertContext(input.tenantId, input.userId);
@@ -158,6 +167,7 @@ export class MasterOrchestratorService {
     }
 
     if (operation.action === 'proposal.send') {
+      this.permit(input.role, [Permission.ProposalSend]);
       const proposalId = operation.outputs?.proposalId;
       if (!proposalId) {
         throw new BadRequestException('No proposal is ready to send.');
@@ -180,6 +190,7 @@ export class MasterOrchestratorService {
     }
 
     if (operation.action === 'record.delete') {
+      this.permit(input.role, [Permission.CompanyDelete]);
       const recordId = operation.outputs?.recordId ?? operation.requiredInputs.recordId;
       if (!recordId) {
         throw new BadRequestException('A record id is required before a delete can run.');
@@ -374,8 +385,8 @@ export class MasterOrchestratorService {
     };
   }
 
-  private async readOverdue(tenantId: string, userId: string) {
-    const rows = await this.tasks.getOverdueTasks({}, { tenantId, userId });
+  private async readOverdue(tenantId: string, userId: string, role?: string) {
+    const rows = await this.tasks.getOverdueTasks({}, { tenantId, userId, role });
     if (!rows.length) return { summary: 'No overdue tasks.' };
     const titles = rows.slice(0, 5).map((task) => task.title).join(', ');
     return { summary: `${rows.length} overdue task${rows.length === 1 ? '' : 's'}: ${titles}.` };
@@ -408,8 +419,11 @@ export class MasterOrchestratorService {
     };
   }
 
-  private async readTeam(tenantId: string, message: string) {
-    const result = await this.team.answer(tenantId, message);
+  private async readTeam(tenantId: string, userId: string, message: string, role?: string) {
+    const scopeUserId = hasAnyPermission(role, [Permission.TeamInsightsView]) ? undefined : userId;
+    const result = scopeUserId
+      ? await this.team.answer(tenantId, message, scopeUserId)
+      : await this.team.answer(tenantId, message);
     return {
       summary: result.summary,
       outputs: {
@@ -423,6 +437,17 @@ export class MasterOrchestratorService {
     if (!name) return undefined;
     const rows = await this.companies.findAll(tenantId, name);
     return rows.find((company) => company.name.toLowerCase() === name.toLowerCase())?.id;
+  }
+
+  private guarded<T>(role: string | undefined, permissions: PermissionName[], action: () => Promise<T>): Promise<T> {
+    this.permit(role, permissions);
+    return action();
+  }
+
+  private permit(role: string | undefined, permissions: PermissionName[]): void {
+    if (!hasAnyPermission(role, permissions)) {
+      throw new ForbiddenException('You do not have permission for this action.');
+    }
   }
 
   private assertContext(tenantId: string, userId: string) {

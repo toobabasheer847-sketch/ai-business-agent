@@ -44,28 +44,33 @@ export function useCommunicationHubHistory(query: CommunicationHubListQuery = {}
   })
 }
 
-export function useCommunicationHubStats() {
+export function useCommunicationHubStats(enabled = true) {
   return useQuery({
     queryKey: communicationHubKeys.stats(),
     queryFn: () => communicationHubApi.stats(),
+    enabled,
   })
 }
 
 export function useCommunicationHubEmailThreads(
   query: CommunicationHubThreadQuery = {},
+  enabled = true,
 ) {
   return useQuery({
     queryKey: communicationHubKeys.emailThreads(query),
     queryFn: () => communicationHubApi.getEmailThreads(query),
+    enabled,
   })
 }
 
 export function useCommunicationHubSmsThreads(
   query: CommunicationHubThreadQuery = {},
+  enabled = true,
 ) {
   return useQuery({
     queryKey: communicationHubKeys.smsThreads(query),
     queryFn: () => communicationHubApi.getSmsThreads(query),
+    enabled,
   })
 }
 

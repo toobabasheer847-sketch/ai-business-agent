@@ -21,37 +21,37 @@ export type TeamAnalysis = {
 export class TeamAgent {
   constructor(private readonly analytics: TeamAnalyticsService) {}
 
-  async answer(tenantId: string, message: string): Promise<TeamAnalysis> {
+  async answer(tenantId: string, message: string, scopeUserId?: string): Promise<TeamAnalysis> {
     if (!tenantId?.trim()) {
       throw new UnauthorizedException('Tenant context is required');
     }
     const focus = detectTeamFocus(message);
+    const only = <T extends { employeeId: string }>(rows: T[]) => scopeUserId ? rows.filter((row) => row.employeeId === scopeUserId) : rows;
     if (focus === 'projects') {
       const progress = this.analytics.getProjectProgress();
       return { focus, summary: progress.reason, activeMembers: 0 };
     }
     if (focus === 'members') {
-      const members = await this.analytics.getTeamMembers(tenantId);
+      const members = only(await this.analytics.getTeamMembers(tenantId));
       return { focus, summary: this.members(members), activeMembers: members.length };
     }
     if (focus === 'overdue') {
       const overdue = await this.analytics.getOverdueTasksByEmployee(tenantId);
-      return {
-        focus,
-        summary: this.overdue(overdue.employees, overdue.tasks),
-        activeMembers: overdue.employees.length,
-      };
+      const employees = only(overdue.employees);
+      const tasks = scopeUserId ? overdue.tasks.filter((task) => task.assigneeId === scopeUserId) : overdue.tasks;
+      return { focus, summary: this.overdue(employees, tasks), activeMembers: employees.length };
     }
     if (focus === 'deadlines') {
       const deadlines = await this.analytics.getUpcomingDeadlines(tenantId);
-      return { focus, summary: this.deadlines(deadlines), activeMembers: 0 };
+      const visible = scopeUserId ? deadlines.filter((task) => task.assigneeId === scopeUserId) : deadlines;
+      return { focus, summary: this.deadlines(visible), activeMembers: 0 };
     }
     if (focus === 'completion') {
-      const employees = await this.analytics.getTaskCompletionSummary(tenantId);
+      const employees = only(await this.analytics.getTaskCompletionSummary(tenantId));
       return { focus, summary: this.completion(employees), activeMembers: employees.length };
     }
     if (focus === 'distribution' || focus === 'workload') {
-      const employees = await this.analytics.getTaskDistribution(tenantId);
+      const employees = only(await this.analytics.getTaskDistribution(tenantId));
       return {
         focus,
         summary: focus === 'workload' ? this.mostPending(employees) : this.distribution(employees),
@@ -59,10 +59,14 @@ export class TeamAgent {
       };
     }
     if (focus === 'capacity' || focus === 'assignment' || focus === 'balance') {
-      const employees = await this.analytics.getEmployeeWorkload(tenantId);
+      const employees = only(await this.analytics.getEmployeeWorkload(tenantId));
       return { focus, summary: this.recommendation(employees, focus), activeMembers: employees.length };
     }
 
+    if (scopeUserId) {
+      const employees = only(await this.analytics.getEmployeeWorkload(tenantId));
+      return { focus, summary: this.members(employees), activeMembers: employees.length };
+    }
     const overview = await this.analytics.getTeamOverview(tenantId);
     return { focus, summary: this.overview(overview), activeMembers: overview.activeMembers };
   }

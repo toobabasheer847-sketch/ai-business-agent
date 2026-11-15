@@ -14,6 +14,7 @@ export type AuthUserSummary = {
   name: string
   email: string
   isActive: boolean
+  role?: 'owner' | 'admin' | 'member'
 }
 
 export type LoginRequest = {

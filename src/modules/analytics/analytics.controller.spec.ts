@@ -18,7 +18,7 @@ describe('AnalyticsController', () => {
   const controller = new AnalyticsController(service as never);
   const tenantId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const otherTenant = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-  const req = { user: { userId: 'user-1', tenantId, email: 'a@example.com', name: 'A' } } as never;
+  const req = { user: { userId: 'user-1', tenantId, email: 'a@example.com', name: 'A', role: 'owner' } } as never;
 
   beforeEach(() => jest.clearAllMocks());
 

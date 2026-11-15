@@ -1,5 +1,9 @@
+import type { ReactNode } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
+import { AccessDeniedPage } from '@/features/authorization/access-denied-page'
+import { type PermissionName } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -24,6 +28,15 @@ export function ProtectedRoute() {
   }
 
   return <Outlet />
+}
+
+export function Permit({ permissions, children }: { permissions: PermissionName[]; children: ReactNode }) {
+  const { canAccess, isBootstrapping } = usePermissions()
+  if (isBootstrapping) {
+    return <Skeleton className="m-6 h-24 w-full max-w-xl" />
+  }
+  if (!canAccess(permissions)) return <AccessDeniedPage />
+  return children
 }
 
 export function GuestRoute() {

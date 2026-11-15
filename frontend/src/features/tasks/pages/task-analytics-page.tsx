@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getErrorMessage } from '@/lib/api'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { cn } from '@/lib/utils'
 import { useCompanies } from '@/features/companies/hooks/use-companies'
 import { useLeads } from '@/features/leads/hooks/use-leads'
@@ -100,6 +102,8 @@ function downloadCsvBlob(blob: Blob, filename: string) {
 }
 
 export function TaskAnalyticsPage() {
+  const { hasPermission } = usePermissions()
+  const canExport = hasPermission(Permission.AnalyticsView)
   const defaults = resolveDatePresetRange('last_30_days') ?? { from: '', to: '' }
   const [preset, setPreset] = useState<DatePreset>('last_30_days')
   const [from, setFrom] = useState(defaults.from)
@@ -213,6 +217,7 @@ export function TaskAnalyticsPage() {
                 Back to tasks
               </Link>
             </Button>
+            {canExport ? (
             <Button
               type="button"
               variant="outline"
@@ -222,6 +227,7 @@ export function TaskAnalyticsPage() {
               <Download className="size-4" />
               {exportMutation.isPending ? 'Exporting…' : 'Export CSV'}
             </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

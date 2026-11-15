@@ -55,7 +55,7 @@ export class TaskAnalyticsRepository {
 
   async getSummary(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     filters: TaskAnalyticsFilters,
     now: Date = new Date(),
   ): Promise<TaskAnalyticsResult> {
@@ -132,7 +132,7 @@ export class TaskAnalyticsRepository {
 
   async getTrends(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     filters: TaskAnalyticsFilters,
     groupBy: TaskAnalyticsGroupBy,
     from: Date,
@@ -218,7 +218,7 @@ export class TaskAnalyticsRepository {
 
   async listExportRows(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     filters: TaskAnalyticsFilters,
     limit = 10000,
   ): Promise<Array<TaskCsvRow & { id: string }>> {
@@ -341,7 +341,7 @@ export class TaskAnalyticsRepository {
 
   private taskFilterClauses(
     tenantId: string,
-    userId: string,
+    userId: string | null,
     filters: TaskAnalyticsFilters,
   ): SQL[] {
     const clauses: SQL[] = [this.accessFilter(tenantId, userId)];
@@ -385,7 +385,8 @@ export class TaskAnalyticsRepository {
     return clauses;
   }
 
-  private accessFilter(tenantId: string, userId: string) {
+  private accessFilter(tenantId: string, userId: string | null) {
+    if (!userId) return eq(tasks.tenantId, tenantId);
     return and(
       eq(tasks.tenantId, tenantId),
       or(eq(tasks.createdBy, userId), eq(tasks.assignedTo, userId))!,

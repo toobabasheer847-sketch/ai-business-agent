@@ -3,6 +3,8 @@ import { BarChart3, FileText, MessagesSquare, Users } from 'lucide-react'
 
 import { DashboardKpiCard } from '@/features/dashboard/components/dashboard-kpi-card'
 import { DashboardSectionError } from '@/features/dashboard/components/dashboard-section-error'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { useAnalytics } from '@/features/analytics/hooks/use-analytics'
 import type { AnalyticsComparison, AnalyticsQuery, AnalyticsRange } from '@/features/analytics/types/analytics.types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,7 +30,9 @@ export function AnalyticsPage() {
   const [query, setQuery] = useState<AnalyticsQuery>({ range: '30d' })
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
-  const data = useAnalytics(query)
+  const { hasPermission } = usePermissions()
+  const fullAnalytics = hasPermission(Permission.AnalyticsView)
+  const data = useAnalytics(query, { full: fullAnalytics, tasks: fullAnalytics || hasPermission(Permission.AnalyticsViewOwn) })
   const sales = data.sales.data
   const proposals = data.proposals.data
   const tasks = data.tasks.data
@@ -79,19 +83,25 @@ export function AnalyticsPage() {
         </form>
       </header>
 
-      {data.sales.isError ? <DashboardSectionError error={data.sales.error} onRetry={() => void data.sales.refetch()} /> : null}
+      {!fullAnalytics ? (
+        <p className="text-sm text-muted-foreground">
+          Tenant-wide sales, proposals, team, and communications analytics are limited to owners and admins. Task numbers below are only your tasks.
+        </p>
+      ) : null}
+
+      {fullAnalytics && data.sales.isError ? <DashboardSectionError error={data.sales.error} onRetry={() => void data.sales.refetch()} /> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="analytics-kpis">
-        <DashboardKpiCard title="New companies" value={sales?.pipeline.companies} description={comparisonText(sales?.comparisons.companies)} icon={BarChart3} isLoading={data.sales.isLoading} />
-        <DashboardKpiCard title="New leads" value={sales?.pipeline.leads} description={comparisonText(sales?.comparisons.leads)} icon={Users} isLoading={data.sales.isLoading} />
-        <DashboardKpiCard title="Accepted proposals" value={proposals?.currentStatusEvents.accepted} description={proposals?.acceptanceRate.percent === null ? 'Acceptance rate unavailable' : `${proposals?.acceptanceRate.percent}% acceptance`} icon={FileText} isLoading={data.proposals.isLoading} />
+        {fullAnalytics ? <DashboardKpiCard title="New companies" value={sales?.pipeline.companies} description={comparisonText(sales?.comparisons.companies)} icon={BarChart3} isLoading={data.sales.isLoading} /> : null}
+        {fullAnalytics ? <DashboardKpiCard title="New leads" value={sales?.pipeline.leads} description={comparisonText(sales?.comparisons.leads)} icon={Users} isLoading={data.sales.isLoading} /> : null}
+        {fullAnalytics ? <DashboardKpiCard title="Accepted proposals" value={proposals?.currentStatusEvents.accepted} description={proposals?.acceptanceRate.percent === null ? 'Acceptance rate unavailable' : `${proposals?.acceptanceRate.percent}% acceptance`} icon={FileText} isLoading={data.proposals.isLoading} /> : null}
         <DashboardKpiCard title="Overdue tasks" value={tasks?.status.overdue} description={comparisonText(tasks?.comparisons.overdue)} icon={BarChart3} isLoading={data.tasks.isLoading} />
       </section>
 
       {empty ? <p className="text-sm text-muted-foreground">No records were created in this period.</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        {fullAnalytics ? <Card>
           <CardHeader><CardTitle>Sales and CRM</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             {data.sales.isLoading ? <Skeleton className="h-24 w-full" /> : null}
@@ -105,8 +115,8 @@ export function AnalyticsPage() {
               </>
             ) : null}
           </CardContent>
-        </Card>
-        <Card>
+        </Card> : null}
+        {fullAnalytics ? <Card>
           <CardHeader><CardTitle>Proposal performance</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.proposals.isLoading ? <Skeleton className="h-24 w-full" /> : null}
@@ -120,7 +130,7 @@ export function AnalyticsPage() {
               </>
             ) : null}
           </CardContent>
-        </Card>
+        </Card> : null}
         <Card>
           <CardHeader><CardTitle>Tasks</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -135,7 +145,7 @@ export function AnalyticsPage() {
             ) : null}
           </CardContent>
         </Card>
-        <Card>
+        {fullAnalytics ? <Card>
           <CardHeader><CardTitle>Team workload</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.team.isLoading ? <Skeleton className="h-24 w-full" /> : null}
@@ -146,8 +156,8 @@ export function AnalyticsPage() {
             ))}
             {team ? <p className="text-muted-foreground">{team.note}</p> : null}
           </CardContent>
-        </Card>
-        <Card>
+        </Card> : null}
+        {fullAnalytics ? <Card>
           <CardHeader><CardTitle>Communications</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.communications.isLoading ? <Skeleton className="h-24 w-full" /> : null}
@@ -161,8 +171,8 @@ export function AnalyticsPage() {
               </>
             ) : null}
           </CardContent>
-        </Card>
-        <Card>
+        </Card> : null}
+        {fullAnalytics ? <Card>
           <CardHeader><CardTitle>Trends</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.trends.isLoading ? <Skeleton className="h-24 w-full" /> : null}
@@ -171,10 +181,10 @@ export function AnalyticsPage() {
             {trends && trends.leads.length === 0 ? <p>No lead creation days in this period.</p> : null}
             {trends ? <p className="text-muted-foreground">{trends.note}</p> : null}
           </CardContent>
-        </Card>
+        </Card> : null}
       </div>
 
-      <section className="space-y-3" data-testid="analytics-insights">
+      {fullAnalytics ? <section className="space-y-3" data-testid="analytics-insights">
         <h2 className="text-lg font-semibold">Business insights</h2>
         {data.insights.isLoading ? <Skeleton className="h-20 w-full" /> : null}
         {data.insights.isError ? <DashboardSectionError error={data.insights.error} onRetry={() => void data.insights.refetch()} /> : null}
@@ -188,7 +198,7 @@ export function AnalyticsPage() {
             </CardContent>
           </Card>
         ))}
-      </section>
+      </section> : null}
     </div>
   )
 }

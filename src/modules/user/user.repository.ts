@@ -12,6 +12,7 @@ const RETURNING_COLUMNS = {
   name: users.name,
   email: users.email,
   isActive: users.isActive,
+  role: users.role,
   createdAt: users.createdAt,
   updatedAt: users.updatedAt,
 } as const;
@@ -64,6 +65,7 @@ export class UserRepository {
         name: true,
         email: true,
         isActive: true,
+        role: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -91,6 +93,7 @@ export class UserRepository {
     email: string;
     passwordHash: string;
     isActive?: boolean;
+    role?: string;
   }) {
     const [row] = await this.db
       .insert(users)
@@ -100,6 +103,7 @@ export class UserRepository {
         email: input.email,
         passwordHash: input.passwordHash,
         isActive: input.isActive ?? true,
+        role: input.role ?? 'member',
       })
       .returning(RETURNING_COLUMNS);
 
@@ -114,6 +118,7 @@ export class UserRepository {
       email?: string;
       passwordHash?: string;
       isActive?: boolean;
+      role?: string;
     },
   ) {
     const values: Partial<typeof users.$inferInsert> = {};
@@ -122,6 +127,7 @@ export class UserRepository {
     if (input.email !== undefined) values.email = input.email;
     if (input.passwordHash !== undefined) values.passwordHash = input.passwordHash;
     if (input.isActive !== undefined) values.isActive = input.isActive;
+    if (input.role !== undefined) values.role = input.role;
 
     if (Object.keys(values).length === 0) {
       return this.findByIdAndTenant(id, tenantId);

@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AuthorizationModule } from './modules/authorization/authorization.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
 import { CompanyModule } from './modules/company/company.module';
@@ -34,6 +35,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
 
     InfrastructureModule,
     AuthModule,
+    AuthorizationModule,
     TenantModule,
     UserModule,
     BrandModule,

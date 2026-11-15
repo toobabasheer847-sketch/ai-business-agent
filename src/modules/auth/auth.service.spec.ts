@@ -46,6 +46,7 @@ describe('AuthService', () => {
         name: 'Owner',
         email: 'owner@example.com',
         isActive: true,
+        role: 'owner',
       },
     });
 
@@ -90,6 +91,7 @@ describe('AuthService', () => {
       email: 'owner@example.com',
       passwordHash,
       isActive: true,
+      role: 'owner',
     });
 
     const result = await service.login({
@@ -119,6 +121,7 @@ describe('AuthService', () => {
       email: 'owner@example.com',
       name: 'Owner',
       isActive: true,
+      role: 'owner',
     });
 
     await expect(service.validateUser('user-1')).resolves.toEqual({
@@ -126,6 +129,20 @@ describe('AuthService', () => {
       tenantId: 'tenant-1',
       email: 'owner@example.com',
       name: 'Owner',
+      role: 'owner',
     });
+  });
+
+  it('rejects a user with no stored role', async () => {
+    authRepository.findUserById.mockResolvedValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      email: 'owner@example.com',
+      name: 'Owner',
+      isActive: true,
+      role: null,
+    });
+
+    await expect(service.validateUser('user-1')).resolves.toBeNull();
   });
 });

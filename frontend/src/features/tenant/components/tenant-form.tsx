@@ -6,6 +6,8 @@ import {
   type UpdateTenantFormValues,
 } from '@/features/tenant/schemas/tenant.schemas'
 import type { Tenant } from '@/features/tenant/types/tenant.types'
+import { Permission } from '@/features/authorization/permissions'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +19,8 @@ type TenantFormProps = {
 }
 
 export function TenantForm({ tenant, submitting, onSubmit }: TenantFormProps) {
+  const { hasPermission } = usePermissions()
+  const canManage = hasPermission(Permission.TenantManage)
   const {
     register,
     handleSubmit,
@@ -40,7 +44,8 @@ export function TenantForm({ tenant, submitting, onSubmit }: TenantFormProps) {
         <Input
           id="tenant-name"
           autoComplete="organization"
-          disabled={submitting}
+          disabled={submitting || !canManage}
+          readOnly={!canManage}
           {...register('name')}
         />
         {errors.name && (
@@ -51,11 +56,15 @@ export function TenantForm({ tenant, submitting, onSubmit }: TenantFormProps) {
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={submitting || !isDirty}>
-          {submitting ? 'Saving…' : 'Save changes'}
-        </Button>
-      </div>
+      {canManage ? (
+        <div className="flex justify-end">
+          <Button type="submit" disabled={submitting || !isDirty}>
+            {submitting ? 'Saving…' : 'Save changes'}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Only the tenant owner can change these settings.</p>
+      )}
     </form>
   )
 }

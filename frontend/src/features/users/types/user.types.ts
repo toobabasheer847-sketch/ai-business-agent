@@ -8,6 +8,7 @@ export type User = {
   name: string
   email: string
   isActive: boolean
+  role?: 'owner' | 'admin' | 'member'
   createdAt: string
   updatedAt: string
 }
@@ -21,6 +22,7 @@ export type CreateUserRequest = {
   email: string
   password: string
   isActive?: boolean
+  role?: 'owner' | 'admin' | 'member'
 }
 
 /**
@@ -32,6 +34,7 @@ export type UpdateUserRequest = {
   email?: string
   password?: string
   isActive?: boolean
+  role?: 'owner' | 'admin' | 'member'
 }
 
 /** Matches DELETE /api/users/:id response */

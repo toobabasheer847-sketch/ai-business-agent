@@ -55,6 +55,7 @@ export class CompanyRepository {
       columns: {
         id: true,
         tenantId: true,
+        userId: true,
         name: true,
         domain: true,
         website: true,

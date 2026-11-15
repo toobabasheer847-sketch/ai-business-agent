@@ -31,16 +31,16 @@ export class ConversationService {
       status?: any;
       prospectId?: string;
       search?: string;
+      userId?: string;
     },
   ) {
     return this.conversationRepository.findAllByTenant(tenantId, query);
   }
 
-  async findOne(tenantId: string, id: string) {
-    const conversation = await this.conversationRepository.findByIdAndTenant(
-      id,
-      tenantId,
-    );
+  async findOne(tenantId: string, id: string, scopeUserId?: string) {
+    const conversation = scopeUserId
+      ? await this.conversationRepository.findByIdTenantAndUser(id, tenantId, scopeUserId)
+      : await this.conversationRepository.findByIdAndTenant(id, tenantId);
 
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
@@ -87,12 +87,10 @@ export class ConversationService {
 
   // ─── Messages ─────────────────────────────────────────────────────────────
 
-  async getMessages(tenantId: string, conversationId: string) {
-    // Verify the conversation belongs to this tenant before returning messages
-    const conversation = await this.conversationRepository.findByIdAndTenant(
-      conversationId,
-      tenantId,
-    );
+  async getMessages(tenantId: string, conversationId: string, scopeUserId?: string) {
+    const conversation = scopeUserId
+      ? await this.conversationRepository.findByIdTenantAndUser(conversationId, tenantId, scopeUserId)
+      : await this.conversationRepository.findByIdAndTenant(conversationId, tenantId);
 
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
@@ -109,12 +107,11 @@ export class ConversationService {
     conversationId: string,
     userId: string,
     dto: CreateMessageDto,
+    scopeUserId?: string,
   ) {
-    // Verify the conversation belongs to this tenant
-    const conversation = await this.conversationRepository.findByIdAndTenant(
-      conversationId,
-      tenantId,
-    );
+    const conversation = scopeUserId
+      ? await this.conversationRepository.findByIdTenantAndUser(conversationId, tenantId, scopeUserId)
+      : await this.conversationRepository.findByIdAndTenant(conversationId, tenantId);
 
     if (!conversation) {
       throw new NotFoundException('Conversation not found');

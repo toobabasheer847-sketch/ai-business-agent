@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: me.name,
       email: me.email,
       isActive: true,
+      role: me.role === 'owner' || me.role === 'admin' || me.role === 'member' ? me.role : undefined,
     }
     setStoredUser(summary)
     setUser(summary)

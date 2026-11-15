@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -17,6 +18,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { hasPermission, Permission } from '../authorization/permissions';
 import { ProposalService } from './proposal.service';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
@@ -45,6 +47,12 @@ export class ProposalController {
     @Body() dto: CreateProposalDto,
   ) {
     const user = this.getUser(req);
+    if (dto.status && dto.status !== 'draft' && !hasPermission(user.role, Permission.ProposalManage)) {
+      throw new ForbiddenException('You do not have permission to set this proposal status.');
+    }
+    if (dto.status === 'sent' && !hasPermission(user.role, Permission.ProposalSend)) {
+      throw new ForbiddenException('You do not have permission to send proposals.');
+    }
     return this.proposalService.create(user.tenantId, user.userId, dto);
   }
 
@@ -83,7 +91,11 @@ export class ProposalController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProposalDto,
   ) {
-    return this.proposalService.update(this.getUser(req).tenantId, id, dto);
+    const user = this.getUser(req);
+    if (dto.status === 'sent' && !hasPermission(user.role, Permission.ProposalSend)) {
+      throw new ForbiddenException('You do not have permission to send proposals.');
+    }
+    return this.proposalService.update(user.tenantId, id, dto);
   }
 
   /**

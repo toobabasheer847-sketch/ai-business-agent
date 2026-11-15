@@ -11,6 +11,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { hasPermission, Permission } from '../authorization/permissions';
 import { CommunicationHubService } from './communication-hub.service';
 import { GetCommunicationHistoryDto } from './dto/communication-history.dto';
 
@@ -35,9 +36,11 @@ export class CommunicationHubController {
     @Req() req: Request,
     @Query() dto: GetCommunicationHistoryDto,
   ) {
+    const actor = req.user as AuthenticatedUser;
     return this.communicationHubService.getHistory(
-      this.getTenantId(req),
+      actor.tenantId,
       dto,
+      hasPermission(actor.role, Permission.CommunicationView) ? undefined : actor.userId,
     );
   }
 
@@ -99,9 +102,11 @@ export class CommunicationHubController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    const actor = req.user as AuthenticatedUser;
     return this.communicationHubService.getConversationDetail(
-      this.getTenantId(req),
+      actor.tenantId,
       id,
+      hasPermission(actor.role, Permission.CommunicationView) ? undefined : actor.userId,
     );
   }
 }
