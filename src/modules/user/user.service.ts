@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 
+import { listResponse, parseListPage } from '../../common/pagination';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
 import { AuthorizationService } from '../authorization/authorization.service';
 import { UserRepository } from './user.repository';
@@ -50,10 +51,18 @@ export class UserService {
   }
 
   async findAll(tenantId: string, query: UserQueryDto) {
-    return this.userRepository.findAllByTenant(tenantId, {
+    const filters = {
       isActive: query.isActive,
       search: query.search,
-    });
+    };
+    const page = parseListPage(
+      query.page === undefined ? undefined : String(query.page),
+      query.limit === undefined ? undefined : String(query.limit),
+    );
+    const rows = await this.userRepository.findAllByTenant(tenantId, filters, page);
+    if (!page) return rows;
+    const total = await this.userRepository.countByTenant(tenantId, filters);
+    return listResponse(rows, page, total);
   }
 
   async findOne(tenantId: string, id: string) {

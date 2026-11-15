@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { listResponse, parseListPage } from '../../common/pagination';
 import { ProspectRepository } from './prospect.repository';
 import { CreateProspectDto, ProspectStatus } from './dto/create-prospect.dto';
 import { UpdateProspectDto } from './dto/update-prospect.dto';
@@ -80,12 +81,20 @@ export class ProspectService {
   }
 
   async findAll(tenantId: string, query: ProspectQueryDto) {
-    return this.prospectRepository.findAllByTenant(tenantId, {
+    const filters = {
       status: query.status,
       companyId: query.companyId,
       leadId: query.leadId,
       search: query.search,
-    });
+    };
+    const page = parseListPage(
+      query.page === undefined ? undefined : String(query.page),
+      query.limit === undefined ? undefined : String(query.limit),
+    );
+    const rows = await this.prospectRepository.findAllByTenant(tenantId, filters, page);
+    if (!page) return rows;
+    const total = await this.prospectRepository.countByTenant(tenantId, filters);
+    return listResponse(rows, page, total);
   }
 
   async findOne(tenantId: string, id: string) {

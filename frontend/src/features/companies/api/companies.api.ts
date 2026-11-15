@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api'
+import { listAllPages } from '@/lib/api/paged-list'
 import type {
   Company,
   CreateCompanyRequest,
@@ -14,9 +15,7 @@ function toListParams(search?: string) {
 
 export const companiesApi = {
   list(search?: string) {
-    return apiClient
-      .get<Company[]>('/companies', { params: toListParams(search) })
-      .then((r) => r.data)
+    return listAllPages<Company>('/companies', toListParams(search))
   },
 
   getById(id: string) {

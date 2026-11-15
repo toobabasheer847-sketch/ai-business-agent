@@ -23,8 +23,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       throw new Error('DATABASE_URL is not configured');
     }
 
+    const poolMax = Number(this.configService.get<string>('DATABASE_POOL_MAX') ?? 10);
     this.pool = new Pool({
       connectionString: databaseUrl,
+      max: Number.isFinite(poolMax) && poolMax > 0 ? poolMax : 10,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
     });
 
     this.db = drizzle(this.pool, {

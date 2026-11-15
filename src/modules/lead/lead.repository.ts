@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+
+import type { PageBounds } from '../../common/pagination';
 
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
@@ -34,9 +36,27 @@ export class LeadRepository {
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
   ) {}
 
-  async findAllByTenant(tenantId: string, options: ListLeadsOptions = {}) {
-    const { status, companyId, source, search } = options;
+  async findAllByTenant(tenantId: string, options: ListLeadsOptions = {}, page?: PageBounds) {
+    const where = this.listWhere(tenantId, options);
+    const query = this.db
+      .select(RETURNING_COLUMNS)
+      .from(leads)
+      .where(where)
+      .orderBy(desc(leads.createdAt), desc(leads.id));
+    if (!page) return query;
+    return query.limit(page.limit).offset(page.offset);
+  }
 
+  async countByTenant(tenantId: string, options: ListLeadsOptions = {}): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(leads)
+      .where(this.listWhere(tenantId, options));
+    return Number(row?.total ?? 0);
+  }
+
+  private listWhere(tenantId: string, options: ListLeadsOptions) {
+    const { status, companyId, source, search } = options;
     const conditions = [eq(leads.tenantId, tenantId)];
 
     if (status) {
@@ -61,11 +81,7 @@ export class LeadRepository {
       );
     }
 
-    return this.db
-      .select(RETURNING_COLUMNS)
-      .from(leads)
-      .where(and(...conditions))
-      .orderBy(desc(leads.createdAt));
+    return and(...conditions);
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {

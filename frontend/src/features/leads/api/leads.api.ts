@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api'
+import { listAllPages } from '@/lib/api/paged-list'
 import type {
   CreateLeadRequest,
   DeleteLeadResponse,
@@ -21,9 +22,7 @@ function toListParams(query?: LeadListQuery) {
 
 export const leadsApi = {
   list(query?: LeadListQuery) {
-    return apiClient
-      .get<Lead[]>('/leads', { params: toListParams(query) })
-      .then((r) => r.data)
+    return listAllPages<Lead>('/leads', toListParams(query))
   },
 
   getById(id: string) {

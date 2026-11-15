@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api'
+import { listAllPages } from '@/lib/api/paged-list'
 import type {
   CreateUserRequest,
   DeleteUserResponse,
@@ -19,9 +20,7 @@ function toListParams(query?: UserListQuery) {
 
 export const usersApi = {
   list(query?: UserListQuery) {
-    return apiClient
-      .get<User[]>('/users', { params: toListParams(query) })
-      .then((r) => r.data)
+    return listAllPages<User>('/users', toListParams(query))
   },
 
   getById(id: string) {

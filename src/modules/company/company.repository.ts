@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+
+import type { PageBounds } from '../../common/pagination';
 
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
@@ -23,27 +25,35 @@ export class CompanyRepository {
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
   ) {}
 
-  async findAllByTenant(tenantId: string, search?: string) {
-    if (search && search.trim()) {
-      return this.db
-        .select(RETURNING_COLUMNS)
-        .from(companies)
-        .where(
-          and(
-            eq(companies.tenantId, tenantId),
-            or(
-              ilike(companies.name, `%${search.trim()}%`),
-              ilike(companies.domain, `%${search.trim()}%`),
-              ilike(companies.industry, `%${search.trim()}%`),
-            ),
-          ),
-        );
-    }
-
-    return this.db
+  async findAllByTenant(tenantId: string, search?: string, page?: PageBounds) {
+    const query = this.db
       .select(RETURNING_COLUMNS)
       .from(companies)
-      .where(eq(companies.tenantId, tenantId));
+      .where(this.listWhere(tenantId, search))
+      .orderBy(desc(companies.createdAt), desc(companies.id));
+    if (!page) return query;
+    return query.limit(page.limit).offset(page.offset);
+  }
+
+  async countByTenant(tenantId: string, search?: string): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(companies)
+      .where(this.listWhere(tenantId, search));
+    return Number(row?.total ?? 0);
+  }
+
+  private listWhere(tenantId: string, search?: string) {
+    const term = search?.trim();
+    if (!term) return eq(companies.tenantId, tenantId);
+    return and(
+      eq(companies.tenantId, tenantId),
+      or(
+        ilike(companies.name, `%${term}%`),
+        ilike(companies.domain, `%${term}%`),
+        ilike(companies.industry, `%${term}%`),
+      ),
+    );
   }
 
   async findByIdAndTenant(id: string, tenantId: string) {

@@ -23,7 +23,6 @@ export class LoggingInterceptor implements NestInterceptor {
       ? {
           userId: request.user.userId,
           tenantId: request.user.tenantId,
-          email: request.user.email,
         }
       : undefined;
     const requestId =

@@ -7,6 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { AuthRateLimitGuard } from './auth-rate-limit';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -19,11 +20,13 @@ export class AuthController {
     private readonly authService: AuthService,
   ) {}
 
+  @UseGuards(AuthRateLimitGuard)
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  @UseGuards(AuthRateLimitGuard)
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);

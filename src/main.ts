@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -16,6 +18,15 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   app.use(helmet());
+  app.use((req: { headers: Record<string, string | string[] | undefined> }, res: { setHeader: (name: string, value: string) => void }, next: () => void) => {
+    const incoming = req.headers['x-request-id'];
+    const requestId = typeof incoming === 'string' && /^[\w-]{8,80}$/.test(incoming)
+      ? incoming
+      : randomUUID();
+    req.headers['x-request-id'] = requestId;
+    res.setHeader('X-Request-Id', requestId);
+    next();
+  });
 
   const configService = app.get(ConfigService);
   const corsOrigins =

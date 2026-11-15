@@ -17,6 +17,7 @@ import type { Request } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { parseListPage } from '../../common/pagination';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -50,8 +51,14 @@ export class CompanyController {
   async findAll(
     @Req() req: Request,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.companyService.findAll(this.getTenantId(req), search);
+    return this.companyService.findAll(
+      this.getTenantId(req),
+      search,
+      parseListPage(page, limit),
+    );
   }
 
   @Get(':id')

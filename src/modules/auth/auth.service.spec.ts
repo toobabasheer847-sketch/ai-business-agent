@@ -103,6 +103,26 @@ describe('AuthService', () => {
     expect(result.user.tenantId).toBe('tenant-1');
   });
 
+  it('rejects an inactive account with the same message as a bad password', async () => {
+    const passwordHash = await argon2.hash('StrongPass!123');
+    authRepository.findUserByEmail.mockResolvedValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      name: 'Owner',
+      email: 'owner@example.com',
+      passwordHash,
+      isActive: false,
+      role: 'owner',
+    });
+
+    await expect(
+      service.login({
+        email: 'owner@example.com',
+        password: 'StrongPass!123',
+      }),
+    ).rejects.toThrow('Invalid email or password');
+  });
+
   it('rejects invalid login credentials', async () => {
     authRepository.findUserByEmail.mockResolvedValue(null);
 

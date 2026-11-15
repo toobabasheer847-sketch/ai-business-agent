@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api'
+import { listAllPages } from '@/lib/api/paged-list'
 import type {
   CreateProspectRequest,
   DeleteProspectResponse,
@@ -21,9 +22,7 @@ function toListParams(query?: ProspectListQuery) {
 
 export const prospectsApi = {
   list(query?: ProspectListQuery) {
-    return apiClient
-      .get<Prospect[]>('/prospects', { params: toListParams(query) })
-      .then((r) => r.data)
+    return listAllPages<Prospect>('/prospects', toListParams(query))
   },
 
   getById(id: string) {

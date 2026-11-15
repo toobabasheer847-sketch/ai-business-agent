@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { listResponse, type PageBounds } from '../../common/pagination';
 import { hasPermission, Permission } from '../authorization/permissions';
 
 import { CompanyRepository } from './company.repository';
@@ -49,8 +50,11 @@ export class CompanyService {
     });
   }
 
-  async findAll(tenantId: string, search?: string) {
-    return this.companyRepository.findAllByTenant(tenantId, search);
+  async findAll(tenantId: string, search?: string, page?: PageBounds) {
+    const rows = await this.companyRepository.findAllByTenant(tenantId, search, page);
+    if (!page) return rows;
+    const total = await this.companyRepository.countByTenant(tenantId, search);
+    return listResponse(rows, page, total);
   }
 
   async findOne(tenantId: string, id: string) {

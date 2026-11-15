@@ -9,6 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { DRIZZLE_DB } from '../../database/database.module';
 import type { DrizzleDb } from '../../database/database.service';
 import { companies } from '../../database/drizzle/schema';
+import { listResponse, type PageBounds } from '../../common/pagination';
 import { LeadRepository } from './lead.repository';
 import { CreateLeadDto, LeadStatus } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
@@ -77,8 +78,12 @@ export class LeadService {
       source?: string;
       search?: string;
     },
+    page?: PageBounds,
   ) {
-    return this.leadRepository.findAllByTenant(tenantId, options);
+    const rows = await this.leadRepository.findAllByTenant(tenantId, options, page);
+    if (!page) return rows;
+    const total = await this.leadRepository.countByTenant(tenantId, options);
+    return listResponse(rows, page, total);
   }
 
   async findOne(tenantId: string, id: string) {

@@ -78,27 +78,13 @@ export class AuthService {
     const user =
       await this.authRepository.findUserByEmail(email);
 
-    if (!user) {
-      throw new UnauthorizedException(
-        'Invalid email or password',
-      );
-    }
+    const passwordHash = user?.passwordHash ?? '';
+    const isPasswordValid = passwordHash
+      ? await argon2.verify(passwordHash, dto.password)
+      : false;
 
-    if (!user.isActive) {
-      throw new UnauthorizedException(
-        'User account is inactive',
-      );
-    }
-
-    const isPasswordValid = await argon2.verify(
-      user.passwordHash ?? '',
-      dto.password,
-    );
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException(
-        'Invalid email or password',
-      );
+    if (!user || !user.isActive || !isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const accessToken = this.generateToken({

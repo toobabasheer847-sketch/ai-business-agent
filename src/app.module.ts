@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
+import { HealthController } from './health.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
@@ -55,7 +56,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     TwilioWebhooksModule,
     AiModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}

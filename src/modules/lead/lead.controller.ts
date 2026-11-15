@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 
+import { parseListPage } from '../../common/pagination';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/types/auth.types';
 import { LeadService } from './lead.service';
@@ -58,13 +59,15 @@ export class LeadController {
     @Query('status') status?: string,
     @Query('companyId') companyId?: string,
     @Query('source') source?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.leadService.findAll(this.getTenantId(req), {
       search,
       status,
       companyId,
       source,
-    });
+    }, parseListPage(page, limit));
   }
 
   /**

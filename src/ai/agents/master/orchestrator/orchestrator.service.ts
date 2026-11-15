@@ -258,7 +258,8 @@ export class MasterOrchestratorService {
     } catch (error) {
       if (!(error instanceof ConflictException)) throw error;
       const existing = await this.companies.findAll(tenantId, name);
-      const match = existing.find((company) => company.name.toLowerCase() === name.toLowerCase());
+      const companies = Array.isArray(existing) ? existing : existing.data;
+      const match = companies.find((company) => company.name.toLowerCase() === name.toLowerCase());
       if (!match) throw error;
       return {
         summary: `Company ${match.name} already exists and was reused.`,
@@ -404,7 +405,8 @@ export class MasterOrchestratorService {
   }
 
   private async readProspectFollowUp(tenantId: string) {
-    const rows = await this.prospects.findAll(tenantId, {} as never);
+    const listed = await this.prospects.findAll(tenantId, {} as never);
+    const rows = Array.isArray(listed) ? listed : listed.data;
     const open = rows.filter((row) => row.status === 'new' || row.status === 'contacted');
     if (!open.length) return { summary: 'No new or contacted prospects need follow-up.' };
     const names = open.slice(0, 5).map((row) => [row.firstName, row.lastName].filter(Boolean).join(' ')).join(', ');
@@ -435,7 +437,8 @@ export class MasterOrchestratorService {
 
   private async lookupCompanyId(tenantId: string, name?: string) {
     if (!name) return undefined;
-    const rows = await this.companies.findAll(tenantId, name);
+    const listed = await this.companies.findAll(tenantId, name);
+    const rows = Array.isArray(listed) ? listed : listed.data;
     return rows.find((company) => company.name.toLowerCase() === name.toLowerCase())?.id;
   }
 

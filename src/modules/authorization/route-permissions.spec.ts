@@ -6,6 +6,7 @@ import { ROUTE_PERMISSIONS } from './route-permissions';
 
 const PUBLIC_HANDLERS = new Set([
   'AppController.getHello',
+  'HealthController.health',
   'AuthController.register',
   'AuthController.login',
   'AuthController.me',
