@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 import { authApi } from '@/features/auth/api/auth.api'
@@ -38,16 +39,18 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<AuthUserSummary | null>(() => getStoredUser())
   const [token, setToken] = useState<string | null>(() => getAccessToken())
   const [isBootstrapping, setIsBootstrapping] = useState(true)
 
   const logout = useCallback(() => {
     clearSession()
+    queryClient.clear()
     setUser(null)
     setToken(null)
     navigate('/login', { replace: true })
-  }, [navigate])
+  }, [navigate, queryClient])
 
   const refreshMe = useCallback(async () => {
     const me = await authApi.me()
@@ -88,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onUnauthorized = () => {
       clearSession()
+      queryClient.clear()
       setUser(null)
       setToken(null)
       navigate('/login', { replace: true })
@@ -95,23 +99,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('auth:unauthorized', onUnauthorized)
     return () => window.removeEventListener('auth:unauthorized', onUnauthorized)
-  }, [navigate])
+  }, [navigate, queryClient])
 
   const login = useCallback(async (payload: LoginRequest) => {
     const result = await authApi.login(payload)
+    queryClient.clear()
     setAccessToken(result.accessToken)
     setStoredUser(result.user)
     setToken(result.accessToken)
     setUser(result.user)
-  }, [])
+  }, [queryClient])
 
   const register = useCallback(async (payload: RegisterRequest) => {
     const result = await authApi.register(payload)
+    queryClient.clear()
     setAccessToken(result.accessToken)
     setStoredUser(result.user)
     setToken(result.accessToken)
     setUser(result.user)
-  }, [])
+  }, [queryClient])
 
   const value = useMemo<AuthContextValue>(
     () => ({

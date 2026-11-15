@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { ProposalService } from '../../ai/agents/proposal/proposal.service.js';
 import { TaskReminderService } from '../../ai/agents/task/task-reminder.service.js';
 import { AppLogger } from '../logging/logger.service';
+import { scheduledJobsEnabled } from './scheduled-jobs';
 
 @Injectable()
 export class SchedulerService {
@@ -11,6 +13,7 @@ export class SchedulerService {
     private readonly appLogger: AppLogger,
     private readonly proposalService: ProposalService,
     private readonly taskReminderService: TaskReminderService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR, {
@@ -18,6 +21,9 @@ export class SchedulerService {
     timeZone: 'UTC',
   })
   async handleProposalExpiry(): Promise<void> {
+    if (this.skipScheduledJob('proposal-expiry-check')) {
+      return;
+    }
     const now = new Date();
     const requestId = `cron:proposal-expiry:${now.toISOString()}`;
 
@@ -57,6 +63,9 @@ export class SchedulerService {
     timeZone: 'UTC',
   })
   async handleTaskReminders(): Promise<void> {
+    if (this.skipScheduledJob('task-reminder-scan')) {
+      return;
+    }
     const now = new Date();
     const requestId = `cron:task-reminders:${now.toISOString()}`;
 
@@ -77,6 +86,9 @@ export class SchedulerService {
     timeZone: 'UTC',
   })
   async handleGmailTokenHealth(): Promise<void> {
+    if (this.skipScheduledJob('gmail-token-health-check')) {
+      return;
+    }
     const now = new Date();
 
     this.appLogger.log(
@@ -87,5 +99,21 @@ export class SchedulerService {
         note: 'Token-refresh business logic will consume Gmail OAuth APIs in a later feature phase.',
       },
     );
+  }
+
+  private skipScheduledJob(job: string): boolean {
+    const enabled = scheduledJobsEnabled(
+      this.configService.get<string>('SCHEDULED_JOBS_ENABLED'),
+    );
+    if (enabled) {
+      return false;
+    }
+
+    this.appLogger.log(
+      'Scheduled job skipped because SCHEDULED_JOBS_ENABLED is off',
+      { requestId: `cron:${job}:skipped` },
+      { job },
+    );
+    return true;
   }
 }

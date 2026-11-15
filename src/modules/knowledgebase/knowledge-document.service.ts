@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 
 import { QUEUE_NAMES } from '../../infrastructure/queue/queue.module';
@@ -39,6 +40,7 @@ export class KnowledgeDocumentService {
     private readonly ingestion: DocumentIngestionService,
     @InjectQueue(QUEUE_NAMES.RAG_EMBEDDING)
     private readonly ragEmbeddingQueue: Queue,
+    private readonly configService: ConfigService,
   ) {}
 
   async list(tenantId: string, knowledgeBaseId: string) {
@@ -99,7 +101,10 @@ export class KnowledgeDocumentService {
           jobId: `knowledge-document-${documentId}`,
         },
       );
-    } catch {
+    } catch (error) {
+      if (this.redisConfigured()) {
+        throw error;
+      }
       this.processInBackground(tenantId, knowledgeBaseId, documentId);
     }
 
@@ -140,7 +145,10 @@ export class KnowledgeDocumentService {
           jobId: `knowledge-document-${document.id}-${Date.now()}`,
         },
       );
-    } catch {
+    } catch (error) {
+      if (this.redisConfigured()) {
+        throw error;
+      }
       this.processInBackground(tenantId, knowledgeBaseId, document.id);
     }
 
@@ -203,6 +211,10 @@ export class KnowledgeDocumentService {
     }
 
     return document;
+  }
+
+  private redisConfigured(): boolean {
+    return Boolean(this.configService.get<string>('REDIS_URL')?.trim());
   }
 
   private processInBackground(

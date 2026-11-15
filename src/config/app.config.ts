@@ -26,6 +26,7 @@ export default function appConfig() {
     TASK_REMINDER_MINUTES_BEFORE: parseReminderMinutesBefore(
       process.env.TASK_REMINDER_MINUTES_BEFORE,
     ),
+    SCHEDULED_JOBS_ENABLED: process.env.SCHEDULED_JOBS_ENABLED,
   };
 }
 
