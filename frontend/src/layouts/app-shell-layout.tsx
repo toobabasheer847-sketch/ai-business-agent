@@ -142,7 +142,7 @@ function ShellHeader({ onOpenMobile }: { onOpenMobile: () => void }) {
       .toUpperCase() || 'U'
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur md:px-4">
+    <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur md:px-4">
       <Button variant="ghost" size="icon" className="md:hidden" onClick={onOpenMobile} aria-label="Open navigation">
         <Menu className="size-4" />
       </Button>
@@ -200,16 +200,16 @@ export function AppShellLayout() {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="flex min-h-svh w-full bg-background">
+    <div className="flex h-svh w-full overflow-hidden bg-background">
       <aside
         className={cn(
-          'hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex md:flex-col',
+          'sticky top-0 hidden h-svh shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex md:flex-col',
           collapsed ? 'w-[72px]' : 'w-64',
         )}
       >
         <SidebarBrand collapsed={collapsed} />
         <Separator />
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <NavItems collapsed={collapsed} />
         </ScrollArea>
         <div className="border-t p-2">
@@ -237,9 +237,9 @@ export function AppShellLayout() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <ShellHeader onOpenMobile={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           <div className="mx-auto w-full max-w-7xl">
             <Outlet />
           </div>
