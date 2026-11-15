@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 
 jest.mock('@google/adk', () => ({
   FunctionTool: class MockFunctionTool {
@@ -44,7 +44,7 @@ describe('TwilioToolsProvider security', () => {
   it('uses JWT tenant for send_sms and ignores injected tenantId', async () => {
     const tool = provider.createSendSmsTool();
 
-    await runWithAiContext({ tenantId, userId }, async () => {
+    await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
       await tool.execute({
         to: '+15550002',
         body: 'Hello',
@@ -71,5 +71,25 @@ describe('TwilioToolsProvider security', () => {
         fromPhoneNumberId: phoneNumberId,
       }),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('rejects a member sending SMS or starting a call', async () => {
+    const sms = provider.createSendSmsTool();
+    const call = provider.createInitiateCallTool();
+
+    await runWithAiContext({ tenantId, userId, role: 'member' }, async () => {
+      await expect(sms.execute({
+        to: '+15550002',
+        body: 'Hello',
+        fromPhoneNumberId: phoneNumberId,
+      })).rejects.toThrow(ForbiddenException);
+      await expect(call.execute({
+        to: '+15550002',
+        fromPhoneNumberId: phoneNumberId,
+      })).rejects.toThrow(ForbiddenException);
+    });
+
+    expect(smsService.sendSms).not.toHaveBeenCalled();
+    expect(callService.initiateOutboundCall).not.toHaveBeenCalled();
   });
 });

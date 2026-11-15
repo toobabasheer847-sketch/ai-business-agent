@@ -60,6 +60,17 @@ export class AuthorizationService {
     }
 
     if (nextRole && nextRole !== currentRole) {
+      if (target.id === actor.userId) {
+        await this.writeAudit({
+          tenantId: actor.tenantId,
+          actorUserId: actor.userId,
+          action: 'user.role_change_denied',
+          entityType: 'user',
+          entityId: target.id,
+          description: 'Rejected a self role change.',
+        });
+        throw new ForbiddenException('You cannot change your own role.');
+      }
       if (!hasPermission(actorRole, Permission.TeamChangeRole)) {
         await this.writeAudit({
           tenantId: actor.tenantId,

@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 
 jest.mock('@google/adk', () => ({
   FunctionTool: class MockFunctionTool {
@@ -56,7 +56,7 @@ describe('CommunicationToolsProvider security', () => {
   it('uses JWT tenant for send_mail and ignores injected tenantId in tool args', async () => {
     const tool = provider.createSendMailTool();
 
-    await runWithAiContext({ tenantId, userId }, async () => {
+    await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
       const result = await tool.execute({
         to: 'recipient@example.com',
         subject: 'Hello',
@@ -88,5 +88,21 @@ describe('CommunicationToolsProvider security', () => {
         body: 'Body',
       }),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('rejects a member sending or listing tenant Gmail', async () => {
+    const send = provider.createSendMailTool();
+    const list = provider.createListMailsTool();
+
+    await runWithAiContext({ tenantId, userId, role: 'member' }, async () => {
+      await expect(send.execute({
+        to: 'recipient@example.com',
+        subject: 'Hello',
+        body: 'Body',
+      })).rejects.toThrow(ForbiddenException);
+      await expect(list.execute({ maxResults: 5 })).rejects.toThrow(ForbiddenException);
+    });
+
+    expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalled();
   });
 });

@@ -53,7 +53,7 @@ describe('role assignment rules', () => {
         where: () => Promise.resolve([{ total: 1 }]),
       }),
     });
-    await expect(service.assertRoleAssignment(owner, { id: 'owner-1', tenantId: 'tenant-a', role: 'owner' }, 'admin', undefined))
+    await expect(service.assertRoleAssignment(owner, { id: 'owner-2', tenantId: 'tenant-a', role: 'owner' }, 'admin', undefined))
       .rejects.toThrow('at least one active owner');
   });
 
@@ -72,5 +72,21 @@ describe('role assignment rules', () => {
     });
     await expect(service.assertRoleAssignment(owner, { id: 'owner-2', tenantId: 'tenant-a', role: 'owner' }, 'admin', undefined))
       .resolves.toBeUndefined();
+  });
+
+  it('rejects a user changing their own role', async () => {
+    await expect(service.assertRoleAssignment(owner, { id: 'owner-1', tenantId: 'tenant-a', role: 'owner' }, 'admin', undefined))
+      .rejects.toThrow('You cannot change your own role.');
+    await expect(service.assertRoleAssignment(admin, { id: 'admin-1', tenantId: 'tenant-a', role: 'admin' }, 'owner', undefined))
+      .rejects.toThrow('You cannot change your own role.');
+  });
+
+  it('defaults new users to member and blocks non-owners from assigning privileged roles', () => {
+    expect(service.assertCreatableRole(admin, undefined)).toBe('member');
+    expect(service.assertCreatableRole(owner, 'member')).toBe('member');
+    expect(service.assertCreatableRole(owner, 'admin')).toBe('admin');
+    expect(() => service.assertCreatableRole(admin, 'owner')).toThrow(ForbiddenException);
+    expect(() => service.assertCreatableRole(admin, 'admin')).toThrow(ForbiddenException);
+    expect(() => service.assertCreatableRole({ ...admin, role: 'member' }, 'admin')).toThrow(ForbiddenException);
   });
 });

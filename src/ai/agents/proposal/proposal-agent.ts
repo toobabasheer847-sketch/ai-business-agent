@@ -71,6 +71,7 @@ export class ProposalAgent {
       }),
       execute: async (input: any) => {
         const context = getTrustedAiContext();
+        assertRolePermission(context.role, [Permission.ProposalCreate]);
         const prospect = await this.proposalRepository.getProspect(
           input.prospectId,
           context.tenantId,
@@ -99,8 +100,9 @@ export class ProposalAgent {
         proposalId: z.string(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
-        return this.proposalRepository.getProposal(input.proposalId, tenantId);
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalView]);
+        return this.proposalRepository.getProposal(input.proposalId, trusted.tenantId);
       },
     });
 
@@ -116,8 +118,9 @@ export class ProposalAgent {
         search: z.string().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
-        return this.proposalRepository.listProposals(tenantId, {
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalView]);
+        return this.proposalRepository.listProposals(trusted.tenantId, {
           status: input.status,
           prospectId: input.prospectId,
           search: input.search,
@@ -144,9 +147,13 @@ export class ProposalAgent {
         content: z.string().optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
+        if (input.status === 'sent') {
+          assertRolePermission(trusted.role, [Permission.ProposalSend]);
+        }
         const { proposalId, ...patch } = input;
-        return this.proposalRepository.updateProposal(proposalId, tenantId, patch);
+        return this.proposalRepository.updateProposal(proposalId, trusted.tenantId, patch);
       },
     });
 
@@ -162,10 +169,11 @@ export class ProposalAgent {
         length: z.enum(['short', 'medium', 'detailed']).optional(),
       }),
       execute: async (input: any) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.ProposalManage]);
         return this.generateWithGemini(
           input.proposalId,
-          tenantId,
+          trusted.tenantId,
           input.prospectId,
           input.instructions,
           input.tone,

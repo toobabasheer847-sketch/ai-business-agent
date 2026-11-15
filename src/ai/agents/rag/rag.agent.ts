@@ -5,7 +5,9 @@ import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 
 import { runAdkEphemeral } from '../../adk/run-adk-ephemeral.js';
-import { getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
+import { assertRolePermission } from '../../context/assert-ai-permission.js';
+import { currentAiRole, getTrustedAiContext, runWithAiContext } from '../../context/ai-request-context.js';
+import { Permission } from '../../../modules/authorization/permissions';
 import {
   consumeRagSearchChunks,
   recordRagSearchChunks,
@@ -78,10 +80,11 @@ export class RagAgent {
         topK: z.number().int().min(1).max(10).optional(),
       }),
       execute: async (input) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.KnowledgeManage]);
 
         const chunks = await this.ragTools.searchKnowledge(
-          tenantId,
+          trusted.tenantId,
           input.query,
           input.topK ?? 5,
         );
@@ -123,7 +126,7 @@ export class RagAgent {
     query: string,
     options: RagQueryOptions = {},
   ): Promise<RagResponse> {
-    return runWithAiContext({ tenantId, userId }, () =>
+    return runWithAiContext({ tenantId, userId, role: currentAiRole() }, () =>
       this.answerQuery(tenantId, query, options),
     );
   }
@@ -138,7 +141,7 @@ export class RagAgent {
     agent: LlmAgent,
     options: RagQueryOptions = {},
   ): Promise<RagResponse> {
-    return runWithAiContext({ tenantId, userId }, () =>
+    return runWithAiContext({ tenantId, userId, role: currentAiRole() }, () =>
       runWithRagDelegationState(async () => {
         try {
           const adkResult = await runAdkEphemeral({

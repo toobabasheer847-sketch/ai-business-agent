@@ -22,6 +22,10 @@ export function runWithAiContext<T>(
   return aiContextStorage.run(context, fn);
 }
 
+export function currentAiRole(): string | null | undefined {
+  return aiContextStorage.getStore()?.role;
+}
+
 export function getTrustedAiContext(): AiRequestContext {
   const context = aiContextStorage.getStore();
 

@@ -79,6 +79,7 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ProposalController.generate': [Permission.ProposalManage],
   'ProposalController.changeStatus': [Permission.ProposalManage],
 
+  'CommunicationAgentController.getStatus': [Permission.AssistantUse],
   'CommunicationHubController.getHistory': [Permission.CommunicationView, Permission.CommunicationViewOwn],
   'CommunicationHubController.getConversationDetail': [Permission.CommunicationView, Permission.CommunicationViewOwn],
   'CommunicationHubController.getStats': [Permission.CommunicationView],
@@ -110,6 +111,7 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'KnowledgeDocumentController.remove': [Permission.KnowledgeManage],
   'RagController.query': [Permission.KnowledgeManage],
 
+  'MasterAgentController.getStatus': [Permission.AssistantUse],
   'MasterAgentController.chat': [Permission.AssistantUse],
   'MasterAgentController.orchestrate': [Permission.AssistantUse],
   'MasterAgentController.confirmOrchestration': [Permission.AssistantUse],

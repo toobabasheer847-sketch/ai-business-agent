@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../context/ai-request-context.js';
+import { Permission } from '../../../modules/authorization/permissions';
 import { GmailService, TenantGmailCredentials } from './gmail/gmail.service';
 import type { MailSummary, MailDraft } from '../../../integrations/gmail/mail-operations';
 
@@ -125,8 +127,9 @@ export class CommunicationToolsProvider {
         'Sends an email to the specified recipient using the authenticated tenant Gmail configuration.',
       parameters: SEND_MAIL_SCHEMA,
       execute: async ({ to, subject, body, fromEmail }) => {
-        const { tenantId } = getTrustedAiContext();
-        const creds = await provider.resolveCredentials(tenantId, fromEmail);
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.CommunicationView]);
+        const creds = await provider.resolveCredentials(trusted.tenantId, fromEmail);
         const sent = await provider.gmailService.mailOperations.sendEmail({
           to,
           subject,
@@ -159,8 +162,9 @@ export class CommunicationToolsProvider {
         'Lists emails available in the authenticated tenant Gmail inbox. Returns a short preview of each email.',
       parameters: LIST_MAILS_SCHEMA,
       execute: async ({ fromEmail, maxResults, query }) => {
-        const { tenantId } = getTrustedAiContext();
-        const creds = await provider.resolveCredentials(tenantId, fromEmail);
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.CommunicationView]);
+        const creds = await provider.resolveCredentials(trusted.tenantId, fromEmail);
         const mails: MailSummary[] =
           await provider.gmailService.mailOperations.listMessages({
             maxResults: maxResults ?? 10,
@@ -195,8 +199,9 @@ export class CommunicationToolsProvider {
         'Creates an email draft in the authenticated tenant Gmail account. The draft is stored on Gmail servers and is NOT sent.',
       parameters: DRAFT_MAIL_SCHEMA,
       execute: async ({ to, subject, body, fromEmail }) => {
-        const { tenantId } = getTrustedAiContext();
-        const creds = await provider.resolveCredentials(tenantId, fromEmail);
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.CommunicationView]);
+        const creds = await provider.resolveCredentials(trusted.tenantId, fromEmail);
         const draft: MailDraft =
           await provider.gmailService.mailOperations.createDraft({
             to,

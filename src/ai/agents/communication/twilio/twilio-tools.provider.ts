@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
+import { assertRolePermission } from '../../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../../context/ai-request-context.js';
+import { Permission } from '../../../../modules/authorization/permissions';
 import { SmsManagementService } from '../../../../integrations/twilio/sms-management';
 import { CallManagementService } from '../../../../integrations/twilio/call-management';
 
@@ -116,9 +118,10 @@ export class TwilioToolsProvider {
         'Sends an SMS message to a specified phone number using the authenticated tenant Twilio configuration.',
       parameters: SEND_SMS_SCHEMA,
       execute: async ({ to, body, fromPhoneNumberId, statusCallback }) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.CommunicationView]);
         const result = await provider.smsService.sendSms({
-          tenantId,
+          tenantId: trusted.tenantId,
           to,
           body,
           fromPhoneNumberId,
@@ -153,9 +156,10 @@ export class TwilioToolsProvider {
         'Initiates an outbound phone call using the authenticated tenant Twilio configuration.',
       parameters: INITIATE_CALL_SCHEMA,
       execute: async ({ to, fromPhoneNumberId, twiml, callbackUrl, statusCallback }) => {
-        const { tenantId } = getTrustedAiContext();
+        const trusted = getTrustedAiContext();
+        assertRolePermission(trusted.role, [Permission.CommunicationView]);
         const result = await provider.callService.initiateOutboundCall({
-          tenantId,
+          tenantId: trusted.tenantId,
           to,
           fromPhoneNumberId,
           twiml,
