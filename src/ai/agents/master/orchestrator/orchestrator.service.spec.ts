@@ -308,4 +308,168 @@ describe('MasterOrchestratorService', () => {
     })).rejects.toThrow('permission');
     expect(delivery.sendProposalEmail).not.toHaveBeenCalled();
   });
+
+  it('does not delete or email when the approval center is unavailable', async () => {
+    await expect(service.confirm({
+      tenantId: tenantA,
+      userId,
+      role: 'owner',
+      operation: {
+        operationId: 'op-delete',
+        intent: 'record.delete',
+        selectedAgent: 'crm',
+        action: 'record.delete',
+        requiredInputs: { recordId: 'company-1' },
+        dependencies: [],
+        executionMode: 'sequential',
+        permissionRequirements: [],
+        status: 'awaiting_confirmation',
+        missing: [],
+        sensitive: true,
+        outputs: { recordId: 'company-1' },
+      },
+    })).rejects.toThrow('approval center');
+    expect(companies.remove).not.toHaveBeenCalled();
+    expect(delivery.sendProposalEmail).not.toHaveBeenCalled();
+  });
+
+  it('holds a configured company create instead of writing it', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-create', status: 'pending' },
+      }),
+      approve: jest.fn(),
+    };
+    const config = { get: jest.fn((key: string) => (key === 'AI_APPROVAL_EXTRA_ACTIONS' ? 'company.create' : undefined)) };
+    const gated = new MasterOrchestratorService(
+      companies as never,
+      leads as never,
+      prospects as never,
+      tasks as never,
+      proposals as never,
+      proposalRepository as never,
+      delivery as never,
+      communications as never,
+      dashboard as never,
+      team as never,
+      analytics as never,
+      config as never,
+      db as never,
+      undefined,
+      approvals as never,
+    );
+    const result = await gated.run({
+      tenantId: tenantA,
+      userId,
+      role: 'owner',
+      conversationId,
+      message: 'Create a company called Northwind Labs',
+    });
+    expect(companies.create).not.toHaveBeenCalled();
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'company.create',
+      tenantId: tenantA,
+      payload: { name: 'Northwind Labs' },
+    }));
+    expect(approvals.approve).not.toHaveBeenCalled();
+    expect(result.response).toContain('Approval Center');
+  });
+
+  it('files proposal sending in the approval center and does not email', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-1', status: 'pending' },
+      }),
+      approve: jest.fn(),
+    };
+    const gated = new MasterOrchestratorService(
+      companies as never,
+      leads as never,
+      prospects as never,
+      tasks as never,
+      proposals as never,
+      proposalRepository as never,
+      delivery as never,
+      communications as never,
+      dashboard as never,
+      team as never,
+      analytics as never,
+      configService as never,
+      db as never,
+      undefined,
+      approvals as never,
+    );
+
+    const result = await gated.run({
+      tenantId: tenantA,
+      userId,
+      role: 'owner',
+      conversationId,
+      message: 'Create a company called ABC Technologies, add Jane Doe as a lead and CEO, create a proposal and email it to the client.',
+    });
+
+    expect(delivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'proposal.send',
+      tenantId: tenantA,
+    }));
+    expect(approvals.approve).not.toHaveBeenCalled();
+    expect(result.response).toContain('Approval Center');
+  });
+
+  it('delegates company deletion to the approval center', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-2', status: 'pending' },
+      }),
+      approve: jest.fn().mockResolvedValue({ status: 'executed' }),
+    };
+    const gated = new MasterOrchestratorService(
+      companies as never,
+      leads as never,
+      prospects as never,
+      tasks as never,
+      proposals as never,
+      proposalRepository as never,
+      delivery as never,
+      communications as never,
+      dashboard as never,
+      team as never,
+      analytics as never,
+      configService as never,
+      db as never,
+      undefined,
+      approvals as never,
+    );
+
+    const result = await gated.confirm({
+      tenantId: tenantA,
+      userId,
+      role: 'owner',
+      operation: {
+        operationId: 'op-delete',
+        intent: 'record.delete',
+        selectedAgent: 'crm',
+        action: 'record.delete',
+        requiredInputs: { recordId: 'company-1' },
+        dependencies: [],
+        executionMode: 'sequential',
+        permissionRequirements: [],
+        status: 'awaiting_confirmation',
+        missing: [],
+        sensitive: true,
+        outputs: { recordId: 'company-1' },
+      },
+    });
+
+    expect(companies.remove).not.toHaveBeenCalled();
+    expect(approvals.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: tenantA, userId, role: 'owner' }),
+      'approval-2',
+    );
+    expect(result.status).toBe('completed');
+  });
 });

@@ -8,13 +8,14 @@ import {
   Injectable,
   Logger,
   ForbiddenException,
-  NotFoundException,
   Optional,
 } from '@nestjs/common';
 
 import { hasAnyPermission, Permission, type PermissionName } from '../../../../modules/authorization/permissions';
 import { ConfigService } from '@nestjs/config';
 import { AgentRunTracker } from '../../../monitoring/agent-run.tracker';
+import { ApprovalService } from '../../../approvals/approval.service';
+import { evaluateApproval, parseExtraApprovalActions } from '../../../approvals/approval-policy';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { DRIZZLE_DB } from '../../../../database/database.module.js';
@@ -84,6 +85,7 @@ export class MasterOrchestratorService {
     private readonly configService: ConfigService,
     @Inject(DRIZZLE_DB) private readonly db: DrizzleDb,
     @Optional() private readonly runTracker?: AgentRunTracker,
+    @Optional() private readonly approvals?: ApprovalService,
   ) {}
 
   shouldOrchestrate(message: string): boolean {
@@ -111,12 +113,12 @@ export class MasterOrchestratorService {
         return this.findReplay(input.tenantId, input.conversationId, input.message, operation.action);
       },
       handlers: {
-        'company.create': (operation) => this.guarded(input.role, [Permission.CompanyCreate], () => this.createCompany(input.tenantId, input.userId, operation)),
+        'company.create': (operation) => this.guarded(input.role, [Permission.CompanyCreate], () => this.createCompany(input.tenantId, input.userId, input.role, operation)),
         'lead.create': (operation, completed) => this.guarded(input.role, [Permission.LeadManage], () => this.createLead(input.tenantId, operation, completed)),
         'prospect.create': (operation, completed) => this.guarded(input.role, [Permission.ProspectManage], () => this.createProspect(input.tenantId, operation, completed)),
         'proposal.create': (operation, completed) => this.guarded(input.role, [Permission.ProposalCreate], () => this.createProposal(input.tenantId, input.userId, operation, completed)),
         'proposal.read': (operation) => this.guarded(input.role, [Permission.ProposalView], () => this.readProposal(input.tenantId, operation)),
-        'task.create': (operation, completed) => this.guarded(input.role, [Permission.TaskCreate], () => this.createTask(input.tenantId, input.userId, operation, completed)),
+        'task.create': (operation, completed) => this.guarded(input.role, [Permission.TaskCreate], () => this.createTask(input.tenantId, input.userId, input.role, operation, completed)),
         'task.overdue': () => this.guarded(input.role, [Permission.TaskViewAll, Permission.TaskViewOwn], () => this.readOverdue(input.tenantId, input.userId, input.role)),
         'communication.summary': () => this.guarded(input.role, [Permission.CommunicationView], () => this.readCommunications(input.tenantId)),
         'prospect.followup': () => this.guarded(input.role, [Permission.ProspectManage], () => this.readProspectFollowUp(input.tenantId)),
@@ -139,6 +141,39 @@ export class MasterOrchestratorService {
     for (const operation of executed) {
       if (operation.status === 'completed' && operation.executionMode === 'sequential' && !operation.summary?.startsWith('Already completed')) {
         await this.rememberCompletion(input, operation);
+      }
+    }
+
+    if (this.approvals) {
+      for (const operation of executed) {
+        if (operation.status !== 'awaiting_confirmation') continue;
+        const actionType = operation.action === 'record.delete' ? 'company.delete' : operation.action;
+        const targetId = operation.action === 'proposal.send'
+          ? operation.outputs?.proposalId
+          : operation.outputs?.recordId ?? operation.requiredInputs.recordId;
+        if (!targetId || (actionType !== 'proposal.send' && actionType !== 'company.delete')) continue;
+        try {
+          const proposed = await this.approvals.propose({
+            tenantId: input.tenantId,
+            userId: input.userId,
+            role: input.role,
+            actionType,
+            title: actionType === 'proposal.send' ? 'Send proposal' : 'Delete company',
+            description: operation.summary ?? 'This action needs approval.',
+            targetEntityType: actionType === 'proposal.send' ? 'proposal' : 'company',
+            targetEntityId: targetId,
+            payload: actionType === 'proposal.send' ? { proposalId: targetId } : { companyId: targetId },
+            agentName: 'orchestrator',
+          });
+          if (proposed.approval) {
+            operation.outputs = { ...(operation.outputs ?? {}), approvalId: proposed.approval.id };
+            operation.summary = `${operation.summary ?? 'Approval required.'} It is waiting in the Approval Center.`;
+          }
+        } catch {
+          operation.status = 'failed';
+          operation.failureCategory = 'permission';
+          operation.summary = 'This action was not submitted because the current role cannot request it.';
+        }
       }
     }
 
@@ -169,41 +204,40 @@ export class MasterOrchestratorService {
       throw new BadRequestException('This operation is not waiting for confirmation.');
     }
 
-    if (operation.action === 'proposal.send') {
-      this.permit(input.role, [Permission.ProposalSend]);
-      const proposalId = operation.outputs?.proposalId;
-      if (!proposalId) {
-        throw new BadRequestException('No proposal is ready to send.');
+    if (operation.action === 'proposal.send' || operation.action === 'record.delete') {
+      if (operation.action === 'proposal.send') this.permit(input.role, [Permission.ProposalSend]);
+      if (operation.action === 'record.delete') this.permit(input.role, [Permission.CompanyDelete]);
+      if (!this.approvals) {
+        throw new BadRequestException('This action requires the approval center and was not executed.');
       }
-      const proposal = await this.proposalRepository.getProposal(proposalId, input.tenantId);
-      if (!proposal || proposal.tenantId !== input.tenantId) {
-        throw new NotFoundException('Proposal not found');
+      const actionType = operation.action === 'record.delete' ? 'company.delete' : 'proposal.send';
+      const targetId = operation.outputs?.proposalId ?? operation.outputs?.recordId ?? operation.requiredInputs.recordId;
+      if (!targetId) throw new BadRequestException('The action is missing its target record.');
+      let approvalId = operation.outputs?.approvalId;
+      if (!approvalId) {
+        const proposed = await this.approvals.propose({
+          tenantId: input.tenantId,
+          userId: input.userId,
+          role: input.role,
+          actionType,
+          title: actionType === 'proposal.send' ? 'Send proposal' : 'Delete company',
+          description: operation.summary ?? 'Confirmation requested.',
+          targetEntityType: actionType === 'proposal.send' ? 'proposal' : 'company',
+          targetEntityId: targetId,
+          payload: actionType === 'proposal.send' ? { proposalId: targetId } : { companyId: targetId },
+          agentName: 'orchestrator',
+        });
+        approvalId = proposed.approval?.id;
       }
-      await this.delivery.sendProposalEmail({
-        proposal,
-        tenantId: input.tenantId,
-        userId: input.userId,
-      });
+      if (!approvalId) throw new BadRequestException('This action cannot be approved.');
+      const decided = await this.approvals.approve({ tenantId: input.tenantId, userId: input.userId, role: input.role }, approvalId);
       return {
         ...operation,
-        status: 'completed',
-        summary: 'Proposal email was sent after confirmation.',
-        entityId: proposalId,
-      };
-    }
-
-    if (operation.action === 'record.delete') {
-      this.permit(input.role, [Permission.CompanyDelete]);
-      const recordId = operation.outputs?.recordId ?? operation.requiredInputs.recordId;
-      if (!recordId) {
-        throw new BadRequestException('A record id is required before a delete can run.');
-      }
-      await this.companies.remove(input.tenantId, recordId);
-      return {
-        ...operation,
-        status: 'completed',
-        summary: 'The company was deleted after confirmation.',
-        entityId: recordId,
+        status: decided.status === 'executed' ? 'completed' : 'failed',
+        summary: decided.status === 'executed'
+          ? 'The action was executed after approval.'
+          : decided.errorSummary ?? 'The action was not executed.',
+        entityId: targetId,
       };
     }
 
@@ -258,8 +292,20 @@ export class MasterOrchestratorService {
     }
   }
 
-  private async createCompany(tenantId: string, userId: string, operation: PlannedOperation) {
+  private async createCompany(tenantId: string, userId: string, role: string | undefined, operation: PlannedOperation) {
     const name = operation.requiredInputs.companyName;
+    const held = await this.holdConfigurable({
+      tenantId,
+      userId,
+      role,
+      actionType: 'company.create',
+      title: `Create company ${name}`.slice(0, 200),
+      description: 'Creating this company is on the configured approval list.',
+      targetEntityType: 'company',
+      targetEntityId: name.slice(0, 80),
+      payload: { name },
+    });
+    if (held) return held;
     try {
       const created = await this.companies.create(tenantId, userId, { name });
       return {
@@ -379,9 +425,28 @@ export class MasterOrchestratorService {
   private async createTask(
     tenantId: string,
     userId: string,
+    role: string | undefined,
     operation: PlannedOperation,
     completed: Map<string, PlannedOperation>,
   ) {
+    const title = operation.requiredInputs.title || 'Follow up';
+    const held = await this.holdConfigurable({
+      tenantId,
+      userId,
+      role,
+      actionType: 'task.create',
+      title: `Create task ${title}`.slice(0, 200),
+      description: 'Creating this task is on the configured approval list.',
+      targetEntityType: 'task',
+      targetEntityId: title.slice(0, 80),
+      payload: {
+        title,
+        ...(outputFrom(completed, 'companyId') ? { companyId: outputFrom(completed, 'companyId') } : {}),
+        ...(outputFrom(completed, 'leadId') ? { leadId: outputFrom(completed, 'leadId') } : {}),
+        ...(outputFrom(completed, 'prospectId') ? { prospectId: outputFrom(completed, 'prospectId') } : {}),
+      },
+    });
+    if (held) return held;
     const task = await this.tasks.createTask(
       {
         title: operation.requiredInputs.title || 'Follow up',
@@ -457,6 +522,33 @@ export class MasterOrchestratorService {
   private guarded<T>(role: string | undefined, permissions: PermissionName[], action: () => Promise<T>): Promise<T> {
     this.permit(role, permissions);
     return action();
+  }
+
+  private async holdConfigurable(input: {
+    tenantId: string;
+    userId: string;
+    role?: string;
+    actionType: string;
+    title: string;
+    description: string;
+    targetEntityType: string;
+    targetEntityId: string;
+    payload: Record<string, unknown>;
+  }) {
+    const extra = parseExtraApprovalActions(this.configService.get<string>('AI_APPROVAL_EXTRA_ACTIONS'));
+    if (!evaluateApproval(input.actionType, extra).required) return null;
+    if (!this.approvals) {
+      throw new BadRequestException('This action requires the approval center and was not saved.');
+    }
+    const proposed = await this.approvals.propose({ ...input, agentName: 'orchestrator' });
+    if (!proposed.approval) {
+      throw new BadRequestException('This action was not submitted for approval.');
+    }
+    return {
+      awaitingApproval: true,
+      summary: `${input.title} is waiting in the Approval Center and was not saved.`,
+      outputs: { approvalId: proposed.approval.id },
+    };
   }
 
   private permit(role: string | undefined, permissions: PermissionName[]): void {

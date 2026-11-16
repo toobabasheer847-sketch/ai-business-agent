@@ -4,6 +4,7 @@ import {
   Bot,
   Building2,
   CircleHelp,
+  ShieldCheck,
   Activity,
   BarChart3,
   LayoutDashboard,
@@ -62,6 +63,15 @@ export const mainNav: NavItem[] = [
     module: 'ai-monitoring',
     available: true,
     description: 'Provider runs, token usage, and estimated cost',
+    permissions: ['audit.view', 'assistant.use'],
+  },
+  {
+    title: 'Approval Center',
+    href: '/approvals',
+    icon: ShieldCheck,
+    module: 'approvals',
+    available: true,
+    description: 'Review sensitive AI actions before they run',
     permissions: ['audit.view', 'assistant.use'],
   },
   {
@@ -187,7 +197,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
@@ -196,7 +206,6 @@ export const navSections: Array<{ id: string; label: string; hrefs: string[] }> 
 
 /** Named so later phases can add routes. These are not rendered as links. */
 export const plannedModules = [
-  { id: 'approvals', title: 'Approval Center' },
   { id: 'exceptions', title: 'Business Exceptions' },
   { id: 'workflows', title: 'Automation Workflows' },
 ] as const

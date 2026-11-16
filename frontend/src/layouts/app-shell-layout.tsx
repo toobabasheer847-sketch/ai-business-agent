@@ -2,9 +2,11 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { LogOut, Menu, Moon, PanelLeft, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import { Permission } from '@/features/authorization/permissions'
 import { usePermissions } from '@/features/authorization/use-permissions'
+import { approvalsApi } from '@/features/approvals/api/approvals.api'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { APP_NAME } from '@/lib/constants/app'
 import { mainNav, navSections, type NavItem } from '@/lib/constants/navigation'
@@ -40,6 +42,13 @@ function useVisibleNav() {
 
 function NavItems({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const items = useVisibleNav()
+  const { canAccess } = usePermissions()
+  const pending = useQuery({
+    queryKey: ['approvals', 'summary'],
+    queryFn: approvalsApi.summary,
+    enabled: canAccess(['audit.view', 'assistant.use']),
+  })
+  const pendingCount = pending.data?.pending ?? 0
   const byHref = new Map(items.map((item) => [item.href, item]))
 
   return (
@@ -75,6 +84,9 @@ function NavItems({ collapsed = false, onNavigate }: { collapsed?: boolean; onNa
                 >
                   <item.icon className="size-4 shrink-0" />
                   {collapsed ? <span className="sr-only">{item.title}</span> : <span className="truncate">{item.title}</span>}
+                  {item.href === '/approvals' && pendingCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">{pendingCount}</span>
+                  ) : null}
                 </NavLink>
               )
               if (!collapsed) return link

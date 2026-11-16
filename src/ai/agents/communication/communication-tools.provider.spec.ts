@@ -53,7 +53,25 @@ describe('CommunicationToolsProvider security', () => {
     provider = new CommunicationToolsProvider(gmailService as any);
   });
 
-  it('uses JWT tenant for send_mail and ignores injected tenantId in tool args', async () => {
+  it('uses JWT tenant for an approved email and ignores another tenant', async () => {
+    const result = await provider.deliverApprovedEmail({
+      tenantId,
+      to: 'recipient@example.com',
+      subject: 'Hello',
+      body: 'Body',
+    });
+
+    expect(gmailService.findActiveCredentialsForTenant).toHaveBeenCalledWith(tenantId, undefined);
+    expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalledWith(otherTenantId, expect.anything());
+    expect(gmailService.mailOperations.sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'recipient@example.com',
+      accessToken: 'access-token',
+    }));
+    expect(result.reference).toBe('msg-1');
+    expect(JSON.stringify(result)).not.toContain('refresh-token');
+  });
+
+  it('does not send mail from the tool before approval exists', async () => {
     const tool = provider.createSendMailTool();
 
     await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
@@ -63,19 +81,12 @@ describe('CommunicationToolsProvider security', () => {
         body: 'Body',
         tenantId: otherTenantId,
       } as any);
-
-      expect(gmailService.findActiveCredentialsForTenant).toHaveBeenCalledWith(
-        tenantId,
-        undefined,
-      );
-      expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalledWith(
-        otherTenantId,
-        expect.anything(),
-      );
-      expect(result.email.status).toBe('sent');
+      expect(result.email.status).toBe('pending_approval');
       expect(JSON.stringify(result)).not.toContain('access-token');
-      expect(JSON.stringify(result)).not.toContain('refresh-token');
     });
+
+    expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
+    expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalled();
   });
 
   it('fails closed when send_mail runs without trusted context', async () => {
@@ -103,6 +114,33 @@ describe('CommunicationToolsProvider security', () => {
       await expect(list.execute({ maxResults: 5 })).rejects.toThrow(ForbiddenException);
     });
 
+    expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalled();
+  });
+
+  it('does not send Gmail before an approval exists', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-1', status: 'pending' },
+      }),
+    };
+    const gated = new CommunicationToolsProvider(gmailService as any, approvals as any);
+    const tool = gated.createSendMailTool();
+
+    await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
+      const result = await tool.execute({
+        to: 'recipient@example.com',
+        subject: 'Hello',
+        body: 'Body',
+      });
+      expect(result.email.status).toBe('pending_approval');
+    });
+
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'email.send',
+      tenantId,
+    }));
+    expect(gmailService.mailOperations.sendEmail).not.toHaveBeenCalled();
     expect(gmailService.findActiveCredentialsForTenant).not.toHaveBeenCalled();
   });
 });

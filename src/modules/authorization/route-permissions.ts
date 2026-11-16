@@ -149,4 +149,13 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'AgentRunController.summary': [Permission.AuditView, Permission.AssistantUse],
   'AgentRunController.find': [Permission.AuditView, Permission.AssistantUse],
   'AgentRunController.list': [Permission.AuditView, Permission.AssistantUse],
+
+  'ApprovalController.summary': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.list': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.events': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.find': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.approve': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.editApprove': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.reject': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.cancel': [Permission.AuditView, Permission.AssistantUse],
 };

@@ -8,6 +8,7 @@ import { Permission } from '../../../modules/authorization/permissions';
 import { resolveAdkModelName } from '../../context/resolve-adk-model.js';
 import { AgentRunTracker } from '../../monitoring/agent-run.tracker';
 import { getMonitoringContext } from '../../monitoring/monitoring-context';
+import { ApprovalService } from '../../approvals/approval.service';
 import { ProposalDeliveryService } from './proposal-delivery.service.js';
 import { ProposalRepository } from './proposal.repository.js';
 import {
@@ -16,7 +17,6 @@ import {
   ProposalStatus,
   ProposalTone,
   ProposalLength,
-  ProposalSendResult,
 } from './types/proposal.types.js';
 
 @Injectable()
@@ -30,6 +30,7 @@ export class ProposalAgent {
     private readonly proposalDelivery: ProposalDeliveryService,
     private readonly configService: ConfigService,
     @Optional() private readonly runTracker?: AgentRunTracker,
+    @Optional() private readonly approvals?: ApprovalService,
   ) {
     this.apiKey = this.configService.get<string>('GOOGLE_GENAI_API_KEY') ?? null;
 
@@ -211,11 +212,11 @@ export class ProposalAgent {
 
         const status: ProposalStatus = input.status;
         if (status === 'sent' && existing.status !== 'sent') {
-          await this.proposalDelivery.sendProposalEmail({
-            proposal: existing,
-            tenantId,
-            fromEmail: input.fromEmail,
-          });
+          return {
+            proposalId: existing.id,
+            status: 'pending_approval',
+            message: await this.holdProposalSend(tenantId, trusted.userId, trusted.role ?? undefined, existing),
+          };
         }
 
         const update: any = { status };
@@ -421,10 +422,11 @@ export class ProposalAgent {
       }
 
       if (status === 'sent' && existing.status !== 'sent') {
-        await this.proposalDelivery.sendProposalEmail({
-          proposal: existing,
-          tenantId: context.tenantId,
-        });
+        return {
+          action: 'change_status',
+          data: null,
+          message: await this.holdProposalSend(context.tenantId, context.userId, context.role, existing),
+        };
       }
 
       const update: any = { status };
@@ -630,6 +632,26 @@ export class ProposalAgent {
     return name && !name.includes('@') ? name : undefined;
   }
 
+  private async holdProposalSend(tenantId: string, userId: string, role: string | undefined, proposal: { id: string; title?: string | null }) {
+    const title = proposal.title ?? 'proposal';
+    if (!this.approvals) {
+      return `Proposal '${title}' requires approval and was not emailed.`;
+    }
+    await this.approvals.propose({
+      tenantId,
+      userId,
+      role,
+      actionType: 'proposal.send',
+      title: `Send ${title}`.slice(0, 200),
+      description: 'The proposal email waits in the Approval Center and has not been sent.',
+      targetEntityType: 'proposal',
+      targetEntityId: proposal.id,
+      payload: { proposalId: proposal.id },
+      agentName: 'proposal-agent',
+    });
+    return `Proposal '${title}' is waiting for approval and was not emailed.`;
+  }
+
   private isSendableProposal(proposal: { status: ProposalStatus }): boolean {
     return proposal.status !== 'sent';
   }
@@ -739,28 +761,10 @@ export class ProposalAgent {
         };
       }
 
-      await this.proposalDelivery.sendProposalEmail({
-        proposal,
-        tenantId: context.tenantId,
-        userId: context.userId,
-      });
-
-      await this.proposalRepository.updateProposal(proposal.id, context.tenantId, {
-        status: 'sent',
-        sentAt: new Date().toISOString(),
-      });
-
-      const recipient = prospect.email!.trim();
       return {
         action: 'send',
-        data: {
-          success: true,
-          proposalId: proposal.id,
-          prospectId: prospect.id,
-          recipient,
-          status: 'sent',
-        } satisfies ProposalSendResult,
-        message: `Proposal '${proposal.title}' was successfully emailed to ${recipient} with the PDF attached.`,
+        data: null,
+        message: await this.holdProposalSend(context.tenantId, context.userId, context.role, proposal),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

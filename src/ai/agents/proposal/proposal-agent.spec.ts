@@ -73,12 +73,38 @@ describe('ProposalAgent Phase 22 delivery', () => {
     expect(proposalRepository.listProposals).toHaveBeenCalledWith(tenantA, {
       prospectId: prospect.id,
     });
-    expect(proposalDelivery.sendProposalEmail).toHaveBeenCalledWith({
-      proposal,
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('not emailed');
+    expect(result.message).not.toContain('access-token');
+  });
+
+  it('holds a proposal email until the approval center accepts it', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-1', status: 'pending' },
+      }),
+    };
+    const gated = new ProposalAgent(
+      proposalRepository as any,
+      proposalDelivery as any,
+      configService as any,
+      undefined,
+      approvals as any,
+    );
+
+    const result = await gated.processRequest(
+      { userId: 'user-a', tenantId: tenantA, role: 'owner' },
+      'Send the proposal to TOOBABASHEER847@GMAIL.COM',
+    );
+
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'proposal.send',
       tenantId: tenantA,
-      userId: 'user-a',
-    });
-    expect(result.message).toContain('PDF attached');
+      targetEntityId: proposal.id,
+    }));
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('waiting for approval');
   });
 
   it('ignores already-sent proposals when selecting sendable candidates', async () => {
@@ -92,8 +118,9 @@ describe('ProposalAgent Phase 22 delivery', () => {
       `Send the proposal to ${prospect.email}`,
     );
 
-    expect(proposalDelivery.sendProposalEmail).toHaveBeenCalled();
-    expect(result.message).toContain('PDF attached');
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('not emailed');
+    expect(result.message).not.toContain('already been sent');
   });
 
   it('returns all-sent message when only sent proposals exist', async () => {
@@ -171,13 +198,9 @@ describe('ProposalAgent Phase 22 delivery', () => {
 
     expect(proposalRepository.getProposal).toHaveBeenCalledWith(proposal.id, tenantA);
     expect(proposalRepository.listProposals).not.toHaveBeenCalled();
-    expect(result.data).toEqual({
-      success: true,
-      proposalId: proposal.id,
-      prospectId: prospect.id,
-      recipient: prospect.email,
-      status: 'sent',
-    });
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.data).toBeNull();
+    expect(result.message).toContain('not emailed');
   });
 
   it('does not send when an explicit proposal belongs to another prospect', async () => {
@@ -205,7 +228,8 @@ describe('ProposalAgent Phase 22 delivery', () => {
       `Send the proposal to ${prospect.email}`,
     );
 
-    expect(result.message).toContain('not marked as sent');
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('not emailed');
     expect(result.message).not.toContain('refresh token secret');
     expect(result.data).toBeNull();
   });
@@ -220,7 +244,8 @@ describe('ProposalAgent Phase 22 delivery', () => {
       'Bashir Khan',
       tenantA,
     );
-    expect(result.message).toContain('PDF attached');
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('not emailed');
   });
 
   it('routes send quotation phrasing through the send flow', async () => {
@@ -229,8 +254,8 @@ describe('ProposalAgent Phase 22 delivery', () => {
       `Send quotation to ${prospect.email}`,
     );
 
-    expect(proposalDelivery.sendProposalEmail).toHaveBeenCalled();
-    expect(result.message).toContain('PDF attached');
+    expect(proposalDelivery.sendProposalEmail).not.toHaveBeenCalled();
+    expect(result.message).toContain('not emailed');
   });
 
   it('returns validation feedback for an invalid email', async () => {

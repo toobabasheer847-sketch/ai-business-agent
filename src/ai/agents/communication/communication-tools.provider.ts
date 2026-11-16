@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
@@ -6,6 +6,8 @@ import { assertRolePermission } from '../../context/assert-ai-permission.js';
 import { getTrustedAiContext } from '../../context/ai-request-context.js';
 import { Permission } from '../../../modules/authorization/permissions';
 import { GmailService, TenantGmailCredentials } from './gmail/gmail.service';
+import { ApprovalService } from '../../approvals/approval.service';
+import { uncertainDelivery } from '../../approvals/approval-executor.registry';
 import type { MailSummary, MailDraft } from '../../../integrations/gmail/mail-operations';
 
 const SEND_MAIL_SCHEMA = z.object({
@@ -93,7 +95,10 @@ export interface DraftMailResult {
 
 @Injectable()
 export class CommunicationToolsProvider {
-  constructor(private readonly gmailService: GmailService) {}
+  constructor(
+    private readonly gmailService: GmailService,
+    @Optional() private readonly approvals?: ApprovalService,
+  ) {}
 
   private async resolveCredentials(
     tenantId: string,
@@ -109,6 +114,26 @@ export class CommunicationToolsProvider {
       );
     }
     return creds;
+  }
+
+  async deliverApprovedEmail(input: { tenantId: string; to: string; subject: string; body: string; fromEmail?: string }) {
+    const creds = await this.resolveCredentials(input.tenantId, input.fromEmail);
+    try {
+      const sent = await this.gmailService.mailOperations.sendEmail({
+        to: input.to,
+        subject: input.subject,
+        body: input.body,
+        contentType: 'text/plain',
+        accessToken: creds.accessToken,
+        refreshToken: creds.refreshToken,
+        tokenExpiry: creds.tokenExpiry,
+        refreshAccessToken: this.refreshCallback(creds),
+      });
+      return { reference: sent.messageId, uncertain: false as const };
+    } catch (error) {
+      if (uncertainDelivery(error)) return { reference: null, uncertain: true as const };
+      throw error;
+    }
   }
 
   private refreshCallback(
@@ -129,26 +154,31 @@ export class CommunicationToolsProvider {
       execute: async ({ to, subject, body, fromEmail }) => {
         const trusted = getTrustedAiContext();
         assertRolePermission(trusted.role, [Permission.CommunicationView]);
-        const creds = await provider.resolveCredentials(trusted.tenantId, fromEmail);
-        const sent = await provider.gmailService.mailOperations.sendEmail({
-          to,
-          subject,
-          body,
-          contentType: 'text/plain',
-          accessToken: creds.accessToken,
-          refreshToken: creds.refreshToken,
-          tokenExpiry: creds.tokenExpiry,
-          refreshAccessToken: provider.refreshCallback(creds),
-        });
+        if (provider.approvals) {
+          const proposed = await provider.approvals.propose({
+            tenantId: trusted.tenantId,
+            userId: trusted.userId,
+            role: trusted.role ?? undefined,
+            actionType: 'email.send',
+            title: `Email ${to}`,
+            description: subject,
+            targetEntityType: 'email',
+            targetEntityId: to,
+            payload: { to, subject, body, ...(fromEmail ? { fromEmail } : {}) },
+            agentName: 'communication',
+          });
+          return {
+            status: 'pending_approval',
+            message: 'The email is waiting for approval and was not sent.',
+            approvalId: proposed.approval?.id ?? null,
+            email: { to, subject, status: 'pending_approval' },
+          };
+        }
         return {
-          status: 'success',
-          message: 'Email sent successfully.',
-          email: {
-            messageId: sent.messageId,
-            to: sent.to,
-            subject: sent.subject,
-            status: 'sent',
-          },
+          status: 'pending_approval',
+          message: 'The email requires approval and was not sent.',
+          approvalId: null,
+          email: { to, subject, status: 'pending_approval' },
         };
       },
     });

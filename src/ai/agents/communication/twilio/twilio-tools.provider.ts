@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 
@@ -7,6 +7,8 @@ import { getTrustedAiContext } from '../../../context/ai-request-context.js';
 import { Permission } from '../../../../modules/authorization/permissions';
 import { SmsManagementService } from '../../../../integrations/twilio/sms-management';
 import { CallManagementService } from '../../../../integrations/twilio/call-management';
+import { ApprovalService } from '../../../approvals/approval.service';
+import { uncertainDelivery } from '../../../approvals/approval-executor.registry';
 
 // ---------------------------------------------------------------------------
 // Zod schemas — compatible with the installed @google/adk FunctionTool API
@@ -103,6 +105,7 @@ export class TwilioToolsProvider {
   constructor(
     private readonly smsService: SmsManagementService,
     private readonly callService: CallManagementService,
+    @Optional() private readonly approvals?: ApprovalService,
   ) {}
 
   /**
@@ -120,27 +123,71 @@ export class TwilioToolsProvider {
       execute: async ({ to, body, fromPhoneNumberId, statusCallback }) => {
         const trusted = getTrustedAiContext();
         assertRolePermission(trusted.role, [Permission.CommunicationView]);
-        const result = await provider.smsService.sendSms({
-          tenantId: trusted.tenantId,
-          to,
-          body,
-          fromPhoneNumberId,
-          statusCallback,
-        });
-
+        if (provider.approvals) {
+          const proposed = await provider.approvals.propose({
+            tenantId: trusted.tenantId,
+            userId: trusted.userId,
+            role: trusted.role ?? undefined,
+            actionType: 'sms.send',
+            title: `SMS ${to}`,
+            description: body.slice(0, 180),
+            targetEntityType: 'sms',
+            targetEntityId: to,
+            payload: { to, body, fromPhoneNumberId },
+            agentName: 'communication',
+          });
+          return {
+            status: 'pending_approval',
+            message: `The SMS is waiting for approval and was not sent.${proposed.approval?.id ? ` Approval ${proposed.approval.id}.` : ''}`,
+            sms: {
+              messageSid: '',
+              from: '',
+              to,
+              body,
+              deliveryStatus: 'pending_approval',
+            },
+          } satisfies SmsSendResult;
+        }
         return {
-          status: 'success',
-          message: 'SMS sent successfully.',
+          status: 'pending_approval',
+          message: 'The SMS requires approval and was not sent.',
           sms: {
-            messageSid: result.messageSid,
-            from: result.from,
-            to: result.to,
-            body: result.body,
-            deliveryStatus: result.status,
+            messageSid: '',
+            from: '',
+            to,
+            body,
+            deliveryStatus: 'pending_approval',
           },
         } satisfies SmsSendResult;
       },
     });
+  }
+
+  async deliverApprovedSms(input: { tenantId: string; to: string; body: string; fromPhoneNumberId: string }) {
+    try {
+      const result = await this.smsService.sendSms(input);
+      return { reference: result.messageSid, uncertain: false as const };
+    } catch (error) {
+      if (uncertainDelivery(error)) return { reference: null, uncertain: true as const };
+      throw error;
+    }
+  }
+
+  async deliverApprovedCall(input: {
+    tenantId: string;
+    to: string;
+    fromPhoneNumberId: string;
+    twiml?: string;
+    callbackUrl?: string;
+    statusCallback?: string;
+  }) {
+    try {
+      const result = await this.callService.initiateOutboundCall(input);
+      return { reference: result.callSid, uncertain: false as const };
+    } catch (error) {
+      if (uncertainDelivery(error)) return { reference: null, uncertain: true as const };
+      throw error;
+    }
   }
 
   /**
@@ -158,25 +205,36 @@ export class TwilioToolsProvider {
       execute: async ({ to, fromPhoneNumberId, twiml, callbackUrl, statusCallback }) => {
         const trusted = getTrustedAiContext();
         assertRolePermission(trusted.role, [Permission.CommunicationView]);
-        const result = await provider.callService.initiateOutboundCall({
-          tenantId: trusted.tenantId,
-          to,
-          fromPhoneNumberId,
-          twiml,
-          callbackUrl,
-          statusCallback,
-        });
-
+        if (provider.approvals) {
+          const proposed = await provider.approvals.propose({
+            tenantId: trusted.tenantId,
+            userId: trusted.userId,
+            role: trusted.role ?? undefined,
+            actionType: 'call.initiate',
+            title: `Call ${to}`,
+            description: 'An outbound call waits in the Approval Center and has not been placed.',
+            targetEntityType: 'call',
+            targetEntityId: to,
+            payload: {
+              to,
+              fromPhoneNumberId,
+              ...(twiml ? { twiml } : {}),
+              ...(callbackUrl ? { callbackUrl } : {}),
+              ...(statusCallback ? { statusCallback } : {}),
+            },
+            agentName: 'communication',
+          });
+          return {
+            status: 'pending_approval',
+            message: `The call is waiting for approval and was not placed.${proposed.approval?.id ? ` Approval ${proposed.approval.id}.` : ''}`,
+            call: { callSid: '', from: '', to, callStatus: 'pending_approval' },
+          };
+        }
         return {
-          status: 'success',
-          message: 'Call initiated successfully.',
-          call: {
-            callSid: result.callSid,
-            from: result.from,
-            to: result.to,
-            callStatus: result.status,
-          },
-        } satisfies CallInitiateResult;
+          status: 'pending_approval',
+          message: 'The call requires approval and was not placed.',
+          call: { callSid: '', from: '', to, callStatus: 'pending_approval' },
+        };
       },
     });
   }

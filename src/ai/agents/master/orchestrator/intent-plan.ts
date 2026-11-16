@@ -388,6 +388,7 @@ export type OperationHandlerResult = {
   summary: string;
   entityId?: string;
   outputs?: Record<string, string>;
+  awaitingApproval?: boolean;
 };
 
 export async function executePlan(options: {
@@ -496,6 +497,13 @@ async function runOperation(
     }
 
     const result = await withTimeout(handler(operation, completed), timeoutMs);
+    if (result.awaitingApproval) {
+      operation.status = 'awaiting_confirmation';
+      operation.summary = result.summary;
+      operation.outputs = result.outputs;
+      operation.durationMs = Date.now() - started;
+      return;
+    }
     operation.status = 'completed';
     operation.summary = result.summary;
     operation.entityId = result.entityId;

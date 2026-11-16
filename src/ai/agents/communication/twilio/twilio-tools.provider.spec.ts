@@ -41,24 +41,36 @@ describe('TwilioToolsProvider security', () => {
     provider = new TwilioToolsProvider(smsService as any, callService as any);
   });
 
-  it('uses JWT tenant for send_sms and ignores injected tenantId', async () => {
+  it('uses JWT tenant for an approved SMS and ignores another tenant', async () => {
+    await provider.deliverApprovedSms({
+      tenantId,
+      to: '+15550002',
+      body: 'Hello',
+      fromPhoneNumberId: phoneNumberId,
+    });
+
+    expect(smsService.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId, fromPhoneNumberId: phoneNumberId }),
+    );
+    expect(smsService.sendSms).not.toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: otherTenantId }),
+    );
+  });
+
+  it('does not send SMS from the tool before approval exists', async () => {
     const tool = provider.createSendSmsTool();
 
     await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
-      await tool.execute({
+      const result = await tool.execute({
         to: '+15550002',
         body: 'Hello',
         fromPhoneNumberId: phoneNumberId,
         tenantId: otherTenantId,
       } as any);
-
-      expect(smsService.sendSms).toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId, fromPhoneNumberId: phoneNumberId }),
-      );
-      expect(smsService.sendSms).not.toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId: otherTenantId }),
-      );
+      expect(result.status).toBe('pending_approval');
     });
+
+    expect(smsService.sendSms).not.toHaveBeenCalled();
   });
 
   it('fails closed when send_sms runs without trusted context', async () => {
@@ -90,6 +102,57 @@ describe('TwilioToolsProvider security', () => {
     });
 
     expect(smsService.sendSms).not.toHaveBeenCalled();
+    expect(callService.initiateOutboundCall).not.toHaveBeenCalled();
+  });
+
+  it('does not send SMS before an approval exists', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-1', status: 'pending' },
+      }),
+    };
+    const gated = new TwilioToolsProvider(smsService as any, callService as any, approvals as any);
+    const tool = gated.createSendSmsTool();
+
+    await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
+      const result = await tool.execute({
+        to: '+15550002',
+        body: 'Hello',
+        fromPhoneNumberId: phoneNumberId,
+      });
+      expect(result.status).toBe('pending_approval');
+    });
+
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'sms.send',
+      tenantId,
+    }));
+    expect(smsService.sendSms).not.toHaveBeenCalled();
+  });
+
+  it('does not place a call before an approval exists', async () => {
+    const approvals = {
+      propose: jest.fn().mockResolvedValue({
+        required: true,
+        approval: { id: 'approval-call', status: 'pending' },
+      }),
+    };
+    const gated = new TwilioToolsProvider(smsService as any, callService as any, approvals as any);
+    const tool = gated.createInitiateCallTool();
+
+    await runWithAiContext({ tenantId, userId, role: 'owner' }, async () => {
+      const result = await tool.execute({
+        to: '+15550002',
+        fromPhoneNumberId: phoneNumberId,
+      });
+      expect(result.status).toBe('pending_approval');
+    });
+
+    expect(approvals.propose).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'call.initiate',
+      tenantId,
+    }));
     expect(callService.initiateOutboundCall).not.toHaveBeenCalled();
   });
 });
