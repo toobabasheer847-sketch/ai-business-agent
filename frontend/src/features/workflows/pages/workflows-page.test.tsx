@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { workflowAnalyticsApi } from '@/features/workflow-analytics/api/workflow-analytics.api'
 import { workflowsApi } from '@/features/workflows/api/workflows.api'
 import { WorkflowsPage } from '@/features/workflows/pages/workflows-page'
 
@@ -11,6 +12,10 @@ const auth = vi.hoisted(() => ({ role: 'admin' as string | undefined }))
 
 vi.mock('@/features/auth/hooks/use-auth', () => ({
   useAuth: () => ({ user: { name: 'Ada', tenantId: 'tenant-1', role: auth.role }, isBootstrapping: false }),
+}))
+
+vi.mock('@/features/workflow-analytics/api/workflow-analytics.api', () => ({
+  workflowAnalyticsApi: { workflow: vi.fn() },
 }))
 
 vi.mock('@/features/workflows/api/workflows.api', () => ({
@@ -40,6 +45,7 @@ const activate = vi.mocked(workflowsApi.activate)
 const pause = vi.mocked(workflowsApi.pause)
 const execute = vi.mocked(workflowsApi.execute)
 const executions = vi.mocked(workflowsApi.executions)
+const workflowAnalytics = vi.mocked(workflowAnalyticsApi.workflow)
 
 const definition = {
   schemaVersion: 1 as const,
@@ -120,6 +126,22 @@ describe('WorkflowsPage', () => {
     create.mockResolvedValue(record)
     activate.mockResolvedValue({ ...record, status: 'active' })
     pause.mockResolvedValue({ ...record, status: 'paused' })
+    workflowAnalytics.mockResolvedValue({
+      id: 'wf-1',
+      name: 'New lead follow-up',
+      status: 'draft',
+      triggerType: 'new_lead',
+      executions: 4,
+      successRate: 75,
+      failureRate: 25,
+      averageDurationMs: 1000,
+      healthScore: 75,
+      healthLabel: 'NEEDS_ATTENTION',
+      healthFactors: ['Success rate is 75% of finished executions.'],
+      lastExecutionAt: '2026-11-16T12:00:00.000Z',
+      steps: [{ actionType: 'create_task', completed: 3, failed: 1, averageDurationMs: 800, retriedSteps: 0 }],
+      recommendations: [],
+    })
     execute.mockResolvedValue({
       id: 'run-2',
       workflowId: 'wf-1',
@@ -197,6 +219,7 @@ describe('WorkflowsPage', () => {
     renderPage()
     await user.click(await screen.findByRole('button', { name: /New lead follow-up/ }))
     expect(await screen.findByText(/create_task: completed/)).toBeTruthy()
+    expect(await screen.findByText(/Health NEEDS_ATTENTION/)).toBeTruthy()
   })
 
   it('hides management from a member and does not call the API', async () => {

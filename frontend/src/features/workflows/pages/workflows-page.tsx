@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePermissions } from '@/features/authorization/use-permissions'
+import { workflowAnalyticsApi } from '@/features/workflow-analytics/api/workflow-analytics.api'
 import { workflowsApi } from '@/features/workflows/api/workflows.api'
 import { getErrorMessage } from '@/lib/api/errors'
 import type { GenerationResult, WorkflowDefinition, WorkflowRecord } from '@/features/workflows/types/workflow.types'
@@ -36,6 +37,7 @@ export function WorkflowsPage() {
   const list = useQuery({ queryKey: ['workflows', 'list'], queryFn: () => workflowsApi.list({}), enabled: allowed })
   const detail = useQuery({ queryKey: ['workflows', 'detail', selectedId], queryFn: () => workflowsApi.find(selectedId as string), enabled: allowed && Boolean(selectedId) })
   const history = useQuery({ queryKey: ['workflows', 'executions', selectedId], queryFn: () => workflowsApi.executions(selectedId as string), enabled: allowed && Boolean(selectedId) })
+  const analytics = useQuery({ queryKey: ['workflow-analytics', 'workflow', selectedId], queryFn: () => workflowAnalyticsApi.workflow(selectedId as string, { range: '30d' }), enabled: allowed && Boolean(selectedId) })
   const refresh = async () => { await queryClient.invalidateQueries({ queryKey: ['workflows'] }) }
   const onError = (error: unknown) => setActionError(getErrorMessage(error))
   const generate = useMutation({ mutationFn: () => workflowsApi.generate(instruction), onSuccess: (result) => { setProposal(result); if (result.proposal) setDefinition(result.proposal) }, onError })
@@ -110,7 +112,7 @@ export function WorkflowsPage() {
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader><DialogTitle>{detail.data?.name ?? 'Workflow'}</DialogTitle></DialogHeader>
           {detail.isLoading || history.isLoading ? <Skeleton className="h-24 w-full" /> : null}
-          {detail.data ? <WorkflowDetail record={detail.data} executions={history.data?.data ?? []} /> : null}
+          {detail.data ? <WorkflowDetail record={detail.data} executions={history.data?.data ?? []} analytics={analytics.data ?? null} /> : null}
         </DialogContent>
       </Dialog>
     </div>
@@ -150,12 +152,19 @@ function GenerationReview({ result }: { result: GenerationResult }) {
   )
 }
 
-function WorkflowDetail({ record, executions }: { record: WorkflowRecord; executions: Array<{ id: string; status: string; triggerSource: string; startedAt: string; durationMs: number | null; sanitizedError: string | null; steps?: Array<{ id: string; actionType: string; status: string; sanitizedError: string | null }> }> }) {
+function WorkflowDetail({ record, executions, analytics }: { record: WorkflowRecord; executions: Array<{ id: string; status: string; triggerSource: string; startedAt: string; durationMs: number | null; sanitizedError: string | null; steps?: Array<{ id: string; actionType: string; status: string; sanitizedError: string | null }> }>; analytics: { healthLabel: string; healthFactors: string[]; successRate: number | null; failureRate: number | null; executions: number; steps: Array<{ actionType: string; averageDurationMs: number | null }> } | null }) {
   return (
     <div className="space-y-3 text-sm">
       <p>{record.description}</p>
       <p>Status {record.status}. Version {record.version}. Trigger {record.definition.trigger.type}.</p>
       <p>Actions: {record.definition.actions.map((action) => action.type).join(', ')}</p>
+      {analytics ? (
+        <div className="rounded-lg border p-3">
+          <p>Analytics: {analytics.executions} executions. Success {analytics.successRate === null ? 'not enough data' : `${analytics.successRate}%`}. Failure {analytics.failureRate === null ? 'not enough data' : `${analytics.failureRate}%`}.</p>
+          <p>Health {analytics.healthLabel}. {analytics.healthFactors[0]}</p>
+          {analytics.steps.map((step) => <p key={step.actionType}>{step.actionType} average {step.averageDurationMs === null ? 'not enough data' : `${step.averageDurationMs} ms`}</p>)}
+        </div>
+      ) : null}
       {executions.length === 0 ? <p className="text-muted-foreground">No executions yet.</p> : null}
       {executions.map((execution) => (
         <div key={execution.id} className="rounded-lg border p-3">

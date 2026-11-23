@@ -267,4 +267,12 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'WorkflowController.execute': [Permission.WorkflowManage],
   'WorkflowExecutionController.find': [Permission.WorkflowManage],
   'WorkflowExecutionController.cancel': [Permission.WorkflowManage],
+
+  'WorkflowAnalyticsController.overview': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.trends': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.failures': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.optimizations': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.updateStatus': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.workflow': [Permission.WorkflowManage],
+  'WorkflowAnalyticsController.workflows': [Permission.WorkflowManage],
 };

@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { usePermissions } from '@/features/authorization/use-permissions'
 import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
+import { workflowAnalyticsApi } from '@/features/workflow-analytics/api/workflow-analytics.api'
 import { workflowsApi } from '@/features/workflows/api/workflows.api'
 import { DashboardKpiCard } from '@/features/dashboard/components/dashboard-kpi-card'
 import { DashboardSectionError } from '@/features/dashboard/components/dashboard-section-error'
@@ -83,16 +84,20 @@ function WorkflowAutomation() {
   const { canAccess } = usePermissions()
   const enabled = canAccess(['workflow.manage'])
   const summary = useQuery({ queryKey: ['workflows', 'summary'], queryFn: workflowsApi.summary, enabled })
+  const analytics = useQuery({ queryKey: ['workflow-analytics', 'overview', '7d'], queryFn: () => workflowAnalyticsApi.overview({ range: '7d' }), enabled })
   if (!enabled) return null
+  const success = analytics.data?.rates.successRate
+  const saved = analytics.data?.savings
+  const attention = (analytics.data?.health.needsAttention ?? 0) + (analytics.data?.health.unhealthy ?? 0)
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Workflow automation</CardTitle>
-        <Button asChild size="sm" variant="outline"><Link to="/workflows">Open workflows</Link></Button>
+        <Button asChild size="sm" variant="outline"><Link to="/workflow-analytics">Workflow analytics</Link></Button>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
-        {summary.isLoading ? <Skeleton className="h-16 w-full" /> : null}
-        {summary.isError ? <DashboardSectionError error={summary.error} onRetry={() => { void summary.refetch() }} /> : null}
+        {summary.isLoading || analytics.isLoading ? <Skeleton className="h-16 w-full" /> : null}
+        {summary.isError || analytics.isError ? <DashboardSectionError error={summary.error ?? analytics.error} onRetry={() => { void summary.refetch(); void analytics.refetch() }} /> : null}
         {summary.data ? (
           <>
             <p>{summary.data.active} active workflows.</p>
@@ -100,6 +105,13 @@ function WorkflowAutomation() {
             {summary.data.recentFailures.slice(0, 5).map((item) => (
               <p key={item.id}>Failed: {item.sanitizedError ?? item.id}</p>
             ))}
+          </>
+        ) : null}
+        {analytics.data ? (
+          <>
+            <p>{success === null || success === undefined ? 'Not enough finished executions for a success rate.' : `${success}% of finished executions succeeded in the last 7 days.`}</p>
+            <p>{saved?.status === 'estimated' && saved.estimatedSeconds !== null ? `Estimated time saved: about ${Math.round(saved.estimatedSeconds / 60)} min. This is not measured labor time.` : 'Not enough data to estimate time saved.'}</p>
+            <p>{attention === 1 ? '1 workflow needs attention.' : `${attention} workflows need attention.`}</p>
           </>
         ) : null}
       </CardContent>

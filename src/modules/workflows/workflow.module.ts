@@ -5,6 +5,8 @@ import { TaskModule } from '../../ai/agents/task/task.module';
 import { QUEUE_NAMES } from '../../infrastructure/queue/queue.module';
 import { ExceptionModule } from '../exceptions/exception.module';
 import { LeadModule } from '../lead/lead.module';
+import { WorkflowAnalyticsController } from './workflow-analytics.controller';
+import { WorkflowAnalyticsService } from './workflow-analytics.service';
 import { WorkflowActionRegistry } from './workflow.actions';
 import {
   WorkflowController,
@@ -23,12 +25,17 @@ import { DrizzleWorkflowStore } from './workflow.store';
     LeadModule,
     ExceptionModule,
   ],
-  controllers: [WorkflowController, WorkflowExecutionController],
+  controllers: [
+    WorkflowController,
+    WorkflowExecutionController,
+    WorkflowAnalyticsController,
+  ],
   providers: [
     DrizzleWorkflowStore,
     WorkflowTriggerSource,
     WorkflowActionRegistry,
     WorkflowService,
+    WorkflowAnalyticsService,
     WorkflowProcessor,
     WorkflowScheduler,
   ],

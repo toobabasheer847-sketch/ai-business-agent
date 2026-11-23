@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api'
 import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
+import { workflowAnalyticsApi } from '@/features/workflow-analytics/api/workflow-analytics.api'
 import { workflowsApi } from '@/features/workflows/api/workflows.api'
 
 const auth = vi.hoisted(() => ({ role: undefined as string | undefined }))
@@ -28,6 +29,12 @@ vi.mock('@/features/workflows/api/workflows.api', () => ({
   },
 }))
 
+vi.mock('@/features/workflow-analytics/api/workflow-analytics.api', () => ({
+  workflowAnalyticsApi: {
+    overview: vi.fn(),
+  },
+}))
+
 vi.mock('@/features/dashboard/api/dashboard.api', () => ({
   dashboardApi: {
     overview: vi.fn(),
@@ -46,6 +53,7 @@ const communications = vi.mocked(dashboardApi.communicationsSummary)
 const exceptionSummary = vi.mocked(exceptionsApi.summary)
 const attention = vi.mocked(exceptionsApi.attention)
 const workflowSummary = vi.mocked(workflowsApi.summary)
+const workflowAnalytics = vi.mocked(workflowAnalyticsApi.overview)
 
 const lifetimeCounts = {
   companies: 4,
@@ -117,6 +125,26 @@ describe('DashboardPage', () => {
       resolutionNote: null,
       metadata: {},
     }])
+    workflowAnalytics.mockResolvedValue({
+      window: { preset: '7d', from: '2026-11-09T12:00:00.000Z', to: '2026-11-16T12:00:00.000Z', timezone: 'UTC' },
+      workflows: { total: 2, active: 1, draft: 1, paused: 0 },
+      executions: { total: 4, completed: 3, failed: 1, partiallyCompleted: 0, cancelled: 0, running: 0, waiting: 0 },
+      rates: { successRate: 75, failureRate: 25, terminalEligible: 4, classification: 'Finished executions only.' },
+      duration: { sample: 4, averageMs: 1200, medianMs: 1000, p95Ms: null },
+      savings: {
+        status: 'estimated',
+        estimatedSeconds: 360,
+        label: 'Estimated from configured manual baselines. This is not measured labor time.',
+        lines: [],
+        skippedActions: [],
+        baselineSource: 'built_in_assumption',
+        today: { status: 'insufficient', estimatedSeconds: null, label: 'Not enough completed actions to estimate time saved.', lines: [], skippedActions: [] },
+        week: { status: 'estimated', estimatedSeconds: 360, label: 'Estimated from configured manual baselines. This is not measured labor time.', lines: [], skippedActions: [] },
+        month: { status: 'estimated', estimatedSeconds: 360, label: 'Estimated from configured manual baselines. This is not measured labor time.', lines: [], skippedActions: [] },
+      },
+      ai: { totalRuns: 0, failedRuns: 0, inputTokens: null, outputTokens: null, totalTokens: null, estimatedCost: null, currency: null, pricingNotConfiguredRuns: 0, billedCost: null, note: 'No workflow-generation model calls were recorded.', associatedWithExecutions: false },
+      health: { healthy: 0, needsAttention: 1, unhealthy: 0, insufficientData: 1 },
+    })
     workflowSummary.mockResolvedValue({
       total: 2,
       active: 1,
@@ -202,6 +230,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Workflow automation')).toBeNull()
     expect(exceptionSummary).not.toHaveBeenCalled()
     expect(workflowSummary).not.toHaveBeenCalled()
+    expect(workflowAnalytics).not.toHaveBeenCalled()
   })
 
   it('shows unresolved exceptions to a manager without loading CRM lists', async () => {
@@ -214,7 +243,10 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Workflow automation')).toBeTruthy()
     expect(await screen.findByText('1 active workflows.')).toBeTruthy()
     expect(await screen.findByText('Failed: The task title is missing.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Open workflows' }).getAttribute('href')).toBe('/workflows')
+    expect(screen.getByRole('link', { name: 'Workflow analytics' }).getAttribute('href')).toBe('/workflow-analytics')
+    expect(await screen.findByText('75% of finished executions succeeded in the last 7 days.')).toBeTruthy()
+    expect(screen.getByText('Estimated time saved: about 6 min. This is not measured labor time.')).toBeTruthy()
+    expect(screen.getByText('1 workflow needs attention.')).toBeTruthy()
     expect(exceptionSummary).toHaveBeenCalledTimes(1)
     expect(workflowSummary).toHaveBeenCalledTimes(1)
     expect(attention).toHaveBeenCalledTimes(1)

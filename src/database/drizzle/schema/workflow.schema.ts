@@ -89,6 +89,7 @@ export const workflowExecutions = pgTable(
   (table) => [
     uniqueIndex('workflow_executions_trigger_unique').on(table.tenantId, table.workflowId, table.triggerReference),
     index('workflow_executions_tenant_status_idx').on(table.tenantId, table.status, table.startedAt),
+    index('workflow_executions_tenant_started_idx').on(table.tenantId, table.startedAt),
     index('workflow_executions_workflow_idx').on(table.workflowId, table.startedAt),
     index('workflow_executions_waiting_idx')
       .on(table.tenantId, table.startedAt)
@@ -123,5 +124,33 @@ export const workflowExecutionSteps = pgTable(
     uniqueIndex('workflow_execution_steps_key_unique').on(table.executionId, table.stepKey),
     index('workflow_execution_steps_tenant_idx').on(table.tenantId, table.executionId),
     index('workflow_execution_steps_approval_idx').on(table.approvalId),
+    index('workflow_execution_steps_tenant_action_idx').on(table.tenantId, table.actionType),
+  ],
+);
+
+export const workflowRecommendations = pgTable(
+  'workflow_optimization_recommendations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    recommendationKey: varchar('recommendation_key', { length: 200 }).notNull(),
+    rule: varchar('rule', { length: 40 }).notNull(),
+    title: varchar('title', { length: 200 }).notNull(),
+    evidence: varchar('evidence', { length: 800 }).notNull(),
+    suggestion: varchar('suggestion', { length: 400 }).notNull(),
+    impact: varchar('impact', { length: 300 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull(),
+    metrics: jsonb('metrics').notNull(),
+    periodStart: timestamp('period_start', { withTimezone: true }),
+    periodEnd: timestamp('period_end', { withTimezone: true }),
+    detectedAt: timestamp('detected_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('workflow_recommendations_key_unique').on(table.tenantId, table.recommendationKey),
+    index('workflow_recommendations_tenant_status_idx').on(table.tenantId, table.status),
   ],
 );

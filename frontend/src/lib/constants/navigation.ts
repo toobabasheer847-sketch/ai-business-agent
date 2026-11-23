@@ -86,6 +86,15 @@ export const mainNav: NavItem[] = [
     permissions: ['workflow.manage'],
   },
   {
+    title: 'Workflow analytics',
+    href: '/workflow-analytics',
+    icon: BarChart3,
+    module: 'workflow-analytics',
+    available: true,
+    description: 'Execution performance and estimated savings',
+    permissions: ['workflow.manage'],
+  },
+  {
     title: 'Approval Center',
     href: '/approvals',
     icon: ShieldCheck,
@@ -217,7 +226,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/approvals'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
