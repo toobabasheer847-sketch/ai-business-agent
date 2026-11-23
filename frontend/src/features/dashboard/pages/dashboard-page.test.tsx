@@ -6,9 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api'
+import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
+
+const auth = vi.hoisted(() => ({ role: undefined as string | undefined }))
 
 vi.mock('@/features/auth/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { name: 'Ada', tenantId: 'tenant-1' } }),
+  useAuth: () => ({ user: { name: 'Ada', tenantId: 'tenant-1', role: auth.role }, isBootstrapping: false }),
+}))
+
+vi.mock('@/features/exceptions/api/exceptions.api', () => ({
+  exceptionsApi: {
+    summary: vi.fn(),
+    attention: vi.fn(),
+  },
 }))
 
 vi.mock('@/features/dashboard/api/dashboard.api', () => ({
@@ -26,6 +36,8 @@ const pipeline = vi.mocked(dashboardApi.salesPipeline)
 const tasks = vi.mocked(dashboardApi.tasksSummary)
 const activity = vi.mocked(dashboardApi.recentActivity)
 const communications = vi.mocked(dashboardApi.communicationsSummary)
+const exceptionSummary = vi.mocked(exceptionsApi.summary)
+const attention = vi.mocked(exceptionsApi.attention)
 
 const lifetimeCounts = {
   companies: 4,
@@ -60,7 +72,43 @@ function renderDashboard(className = '') {
 
 describe('DashboardPage', () => {
   beforeEach(() => {
+    auth.role = undefined
     vi.clearAllMocks()
+    exceptionSummary.mockResolvedValue({
+      open: 1,
+      critical: 1,
+      high: 0,
+      acknowledged: 0,
+      resolved: 0,
+      resolvedToday: 0,
+      categories: { task: 1 },
+      insight: 'Suggestion, not a verified forecast: 1 open exception, including 1 critical and 0 high.',
+      insightSource: 'rule',
+    })
+    attention.mockResolvedValue([{
+      id: 'ex-1',
+      exceptionKey: 'task:task-1',
+      category: 'task',
+      severity: 'critical',
+      title: 'Task needs attention: Invoice',
+      description: 'This task is overdue by 4 days and is still pending.',
+      sourceType: 'task',
+      sourceId: 'task-1',
+      status: 'open',
+      detectedAt: '2026-11-16T12:00:00.000Z',
+      lastDetectedAt: '2026-11-16T12:00:00.000Z',
+      occurrenceCount: 1,
+      priorityScore: 90,
+      priorityReason: 'Priority 90 because this is Critical severity, not yet acknowledged.',
+      recommendedAction: 'Review the task.',
+      recommendedActionType: 'review_task',
+      assignedTo: null,
+      acknowledgedAt: null,
+      resolvedAt: null,
+      dismissedAt: null,
+      resolutionNote: null,
+      metadata: {},
+    }])
     overview.mockResolvedValue({
       window: { preset: 'lifetime', from: null, to: null, timezone: 'UTC' },
       lifetime: lifetimeCounts,
@@ -120,6 +168,19 @@ describe('DashboardPage', () => {
     expect(screen.getByTestId('kpi-grid').className).toContain('grid-cols-1')
     expect(screen.getByTestId('kpi-grid').className).toContain('sm:grid-cols-2')
     expect(screen.getByTestId('kpi-grid').className).toContain('xl:grid-cols-4')
+    expect(screen.queryByText('Business Needs Attention')).toBeNull()
+    expect(exceptionSummary).not.toHaveBeenCalled()
+  })
+
+  it('shows unresolved exceptions to a manager without loading CRM lists', async () => {
+    auth.role = 'admin'
+    renderDashboard()
+    expect(await screen.findByText('Business Needs Attention')).toBeTruthy()
+    expect(await screen.findByText('1 unresolved exceptions.')).toBeTruthy()
+    expect(await screen.findByText('Critical: Task needs attention: Invoice')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'View all exceptions' }).getAttribute('href')).toBe('/exceptions')
+    expect(exceptionSummary).toHaveBeenCalledTimes(1)
+    expect(attention).toHaveBeenCalledTimes(1)
   })
 
   it('shows skeletons while the overview is loading', () => {

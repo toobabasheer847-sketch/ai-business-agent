@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   RAG_EMBEDDING: 'rag-embedding-queue',
   AUDIT: 'audit-queue',
   TASK_REMINDER: 'task-reminder-queue',
+  EXCEPTION_DETECTION: 'exception-detection-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -43,6 +44,7 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
       { name: QUEUE_NAMES.RAG_EMBEDDING },
       { name: QUEUE_NAMES.AUDIT },
       { name: QUEUE_NAMES.TASK_REMINDER },
+      { name: QUEUE_NAMES.EXCEPTION_DETECTION },
     ),
   ],
   providers: [],

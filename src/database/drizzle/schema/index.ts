@@ -21,3 +21,4 @@ export * from './knowledge-chunk.schema';
 export * from './oauth-state.schema';
 export * from './agent-run.schema';
 export * from './ai-approval.schema';
+export * from './operational-exception.schema';

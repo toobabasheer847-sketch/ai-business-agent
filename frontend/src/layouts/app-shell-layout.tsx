@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Permission } from '@/features/authorization/permissions'
 import { usePermissions } from '@/features/authorization/use-permissions'
 import { approvalsApi } from '@/features/approvals/api/approvals.api'
+import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { APP_NAME } from '@/lib/constants/app'
 import { mainNav, navSections, type NavItem } from '@/lib/constants/navigation'
@@ -49,6 +50,12 @@ function NavItems({ collapsed = false, onNavigate }: { collapsed?: boolean; onNa
     enabled: canAccess(['audit.view', 'assistant.use']),
   })
   const pendingCount = pending.data?.pending ?? 0
+  const exceptions = useQuery({
+    queryKey: ['exceptions', 'summary'],
+    queryFn: exceptionsApi.summary,
+    enabled: canAccess(['audit.view']),
+  })
+  const openExceptions = exceptions.data?.open ?? 0
   const byHref = new Map(items.map((item) => [item.href, item]))
 
   return (
@@ -86,6 +93,9 @@ function NavItems({ collapsed = false, onNavigate }: { collapsed?: boolean; onNa
                   {collapsed ? <span className="sr-only">{item.title}</span> : <span className="truncate">{item.title}</span>}
                   {item.href === '/approvals' && pendingCount > 0 ? (
                     <span className="ml-auto rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">{pendingCount}</span>
+                  ) : null}
+                  {item.href === '/exceptions' && openExceptions > 0 ? (
+                    <span className="ml-auto rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">{openExceptions}</span>
                   ) : null}
                 </NavLink>
               )

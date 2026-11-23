@@ -9,6 +9,7 @@ import { RegisterPage } from '@/features/auth/pages/register-page'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
 import { AiMonitoringPage } from '@/features/ai-monitoring/pages/ai-monitoring-page'
 import { ApprovalsPage } from '@/features/approvals/pages/approvals-page'
+import { ExceptionsPage } from '@/features/exceptions/pages/exceptions-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { AssistantPage } from '@/features/assistant/pages/assistant-page'
 import { SystemStatusPage } from '@/features/system/pages/system-status-page'
@@ -44,6 +45,7 @@ export function AppRouter() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/ai-monitoring" element={<Permit permissions={[Permission.AuditView, Permission.AssistantUse]}><AiMonitoringPage /></Permit>} />
+          <Route path="/exceptions" element={<Permit permissions={[Permission.AuditView]}><ExceptionsPage /></Permit>} />
           <Route path="/approvals" element={<Permit permissions={[Permission.AuditView, Permission.AssistantUse]}><ApprovalsPage /></Permit>} />
           <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/tasks/analytics" element={<TaskAnalyticsPage />} />

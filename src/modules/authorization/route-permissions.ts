@@ -158,4 +158,15 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ApprovalController.editApprove': [Permission.AuditView, Permission.AssistantUse],
   'ApprovalController.reject': [Permission.AuditView, Permission.AssistantUse],
   'ApprovalController.cancel': [Permission.AuditView, Permission.AssistantUse],
+
+  'ExceptionController.summary': [Permission.AuditView],
+  'ExceptionController.attention': [Permission.AuditView],
+  'ExceptionController.list': [Permission.AuditView],
+  'ExceptionController.detect': [Permission.AuditView],
+  'ExceptionController.find': [Permission.AuditView],
+  'ExceptionController.acknowledge': [Permission.AuditView],
+  'ExceptionController.assign': [Permission.AuditView],
+  'ExceptionController.status': [Permission.AuditView],
+  'ExceptionController.resolve': [Permission.AuditView],
+  'ExceptionController.dismiss': [Permission.AuditView],
 };

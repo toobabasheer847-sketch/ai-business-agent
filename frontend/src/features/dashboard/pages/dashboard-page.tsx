@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Building2,
   CheckCircle2,
@@ -12,6 +13,8 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { usePermissions } from '@/features/authorization/use-permissions'
+import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
 import { DashboardKpiCard } from '@/features/dashboard/components/dashboard-kpi-card'
 import { DashboardSectionError } from '@/features/dashboard/components/dashboard-section-error'
 import {
@@ -45,6 +48,34 @@ const ACTIVITY_LABELS: Record<string, string> = {
   'proposal.rejected': 'Proposal rejected',
   'task.created': 'Task created',
   'task.completed': 'Task completed',
+}
+
+function BusinessNeedsAttention() {
+  const { canAccess } = usePermissions()
+  const enabled = canAccess(['audit.view'])
+  const summary = useQuery({ queryKey: ['exceptions', 'summary'], queryFn: exceptionsApi.summary, enabled })
+  const attention = useQuery({ queryKey: ['exceptions', 'attention'], queryFn: exceptionsApi.attention, enabled })
+  if (!enabled) return null
+  const critical = (attention.data ?? []).filter((item) => item.severity === 'critical').slice(0, 3)
+  const high = (attention.data ?? []).filter((item) => item.severity === 'high').slice(0, 3)
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Business Needs Attention</CardTitle>
+        <Button asChild size="sm" variant="outline"><Link to="/exceptions">View all exceptions</Link></Button>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {summary.isLoading || attention.isLoading ? <Skeleton className="h-16 w-full" /> : null}
+        {summary.isError || attention.isError ? (
+          <DashboardSectionError error={summary.error ?? attention.error} onRetry={() => { void summary.refetch(); void attention.refetch() }} />
+        ) : null}
+        {summary.data ? <p>{summary.data.open} unresolved exceptions.</p> : null}
+        {critical.map((item) => <p key={item.id}>Critical: {item.title}</p>)}
+        {high.map((item) => <p key={item.id}>High: {item.title}</p>)}
+        {summary.data && attention.data && critical.length === 0 && high.length === 0 ? <p className="text-muted-foreground">No critical or high exceptions are open.</p> : null}
+      </CardContent>
+    </Card>
+  )
 }
 
 function rangeLabel(query: DashboardRangeQuery): string {
@@ -210,6 +241,8 @@ export function DashboardPage() {
           <DashboardKpiCard title="Overdue tasks" value={activeCounts?.overdueTasks} icon={ListTodo} href="/tasks" isLoading={counts.isLoading} description="Open tasks past their due time" />
         </div>
       )}
+
+      <BusinessNeedsAttention />
 
       {taskCounts && (taskCounts.overdue > 0 || taskCounts.dueToday > 0) ? (
         <Card>

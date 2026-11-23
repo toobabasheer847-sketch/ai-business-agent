@@ -23,6 +23,7 @@ export class SchedulerModule implements OnModuleInit {
         'proposal-expiry-check (hourly)',
         'task-reminder-scan (every minute UTC)',
         'gmail-token-health-check (daily 3am UTC)',
+        'exception-detection (hourly, BullMQ when REDIS_URL is set)',
       ],
     });
   }

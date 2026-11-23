@@ -371,6 +371,20 @@ async function main() {
     );
     console.log('Applied 0004_ai_approvals.sql');
 
+    await applySqlFile(
+      client,
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'database',
+        'drizzle',
+        'migrations',
+        '0005_operational_exceptions.sql',
+      ),
+    );
+    console.log('Applied 0005_operational_exceptions.sql');
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (

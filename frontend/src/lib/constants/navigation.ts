@@ -5,6 +5,7 @@ import {
   Building2,
   CircleHelp,
   ShieldCheck,
+  TriangleAlert,
   Activity,
   BarChart3,
   LayoutDashboard,
@@ -64,6 +65,15 @@ export const mainNav: NavItem[] = [
     available: true,
     description: 'Provider runs, token usage, and estimated cost',
     permissions: ['audit.view', 'assistant.use'],
+  },
+  {
+    title: 'Exception Center',
+    href: '/exceptions',
+    icon: TriangleAlert,
+    module: 'exceptions',
+    available: true,
+    description: 'Daily operational problems that need a manager',
+    permissions: ['audit.view'],
   },
   {
     title: 'Approval Center',
@@ -197,7 +207,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/approvals'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
@@ -206,6 +216,5 @@ export const navSections: Array<{ id: string; label: string; hrefs: string[] }> 
 
 /** Named so later phases can add routes. These are not rendered as links. */
 export const plannedModules = [
-  { id: 'exceptions', title: 'Business Exceptions' },
   { id: 'workflows', title: 'Automation Workflows' },
 ] as const
