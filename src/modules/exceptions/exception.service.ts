@@ -151,6 +151,10 @@ export class ExceptionService {
     return this.lifecycle.dismiss(tenantId, userId, id, reason).then(present);
   }
 
+  async recordDrafts(tenantId: string, drafts: Parameters<ExceptionLifecycle['apply']>[1]) {
+    return this.lifecycle.apply(tenantId, drafts, false);
+  }
+
   private async scan(tenantId: string, trigger: 'manual' | 'schedule') {
     const startedAt = new Date();
     try {

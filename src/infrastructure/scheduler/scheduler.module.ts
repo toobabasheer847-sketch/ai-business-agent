@@ -24,6 +24,7 @@ export class SchedulerModule implements OnModuleInit {
         'task-reminder-scan (every minute UTC)',
         'gmail-token-health-check (daily 3am UTC)',
         'exception-detection (hourly, BullMQ when REDIS_URL is set)',
+        'workflow-execution (hourly, BullMQ when REDIS_URL is set)',
       ],
     });
   }

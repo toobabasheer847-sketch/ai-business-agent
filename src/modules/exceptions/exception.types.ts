@@ -5,6 +5,7 @@ export const EXCEPTION_CATEGORIES = [
   'communication',
   'ai_automation',
   'approval',
+  'workflow',
 ] as const;
 export const EXCEPTION_SEVERITIES = [
   'critical',

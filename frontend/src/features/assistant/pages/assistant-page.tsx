@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bot } from 'lucide-react'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -12,6 +13,7 @@ import {
   useAssistantMessages,
   useSendAssistantMessage,
 } from '@/features/assistant/hooks/use-assistant'
+import { usePermissions } from '@/features/authorization/use-permissions'
 import { getAssistantErrorMessage } from '@/features/assistant/lib/assistant-errors'
 import {
   ASSISTANT_CONVERSATION_STORAGE_KEY,
@@ -46,6 +48,7 @@ function writeStoredConversationId(conversationId: string | null) {
 
 export function AssistantPage() {
   const sendMessage = useSendAssistantMessage()
+  const { canAccess } = usePermissions()
   const [draft, setDraft] = useState('')
   const [conversationId, setConversationId] = useState<string | null>(() =>
     readStoredConversationId(),
@@ -200,15 +203,22 @@ export function AssistantPage() {
         title="AI Assistant"
         description="Ask questions, create tasks, draft emails, and generate proposals through the Master Agent."
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleNewChat}
-            disabled={sending}
-          >
-            New Chat
-          </Button>
+          <div className="flex gap-2">
+            {canAccess(['workflow.manage']) ? (
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link to="/workflows">Review a workflow</Link>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleNewChat}
+              disabled={sending}
+            >
+              New Chat
+            </Button>
+          </div>
         }
       />
 

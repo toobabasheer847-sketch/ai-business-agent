@@ -5,6 +5,7 @@ const LABELS: Record<string, string> = {
   communication: 'Communication',
   ai_automation: 'AI',
   approval: 'Approval',
+  workflow: 'Workflow',
   open: 'Open',
   acknowledged: 'Acknowledged',
   in_progress: 'In progress',
@@ -34,6 +35,7 @@ export function relatedHref(sourceType: string) {
   if (sourceType === 'proposal') return '/proposals'
   if (sourceType === 'ai_approval') return '/approvals'
   if (sourceType === 'agent' || sourceType === 'agent_run') return '/ai-monitoring'
+  if (sourceType === 'workflow_execution') return '/workflows'
   return null
 }
 

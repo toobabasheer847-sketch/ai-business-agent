@@ -15,10 +15,16 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'AnalyticsController.overview': [Permission.AnalyticsView],
   'AnalyticsController.sales': [Permission.AnalyticsView],
   'AnalyticsController.proposals': [Permission.AnalyticsView],
-  'AnalyticsController.tasks': [Permission.AnalyticsView, Permission.AnalyticsViewOwn],
+  'AnalyticsController.tasks': [
+    Permission.AnalyticsView,
+    Permission.AnalyticsViewOwn,
+  ],
   'AnalyticsController.team': [Permission.TeamInsightsView],
   'AnalyticsController.communications': [Permission.AnalyticsView],
-  'AnalyticsController.trends': [Permission.AnalyticsView, Permission.AnalyticsViewOwn],
+  'AnalyticsController.trends': [
+    Permission.AnalyticsView,
+    Permission.AnalyticsViewOwn,
+  ],
   'AnalyticsController.insights': [Permission.AnalyticsView],
 
   'TenantController.get': [Permission.TenantView],
@@ -33,7 +39,10 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'CompanyController.findAll': [Permission.CompanyView],
   'CompanyController.findOne': [Permission.CompanyView],
   'CompanyController.create': [Permission.CompanyCreate],
-  'CompanyController.update': [Permission.CompanyUpdateAny, Permission.CompanyUpdateOwn],
+  'CompanyController.update': [
+    Permission.CompanyUpdateAny,
+    Permission.CompanyUpdateOwn,
+  ],
   'CompanyController.remove': [Permission.CompanyDelete],
 
   'LeadController.findAll': [Permission.LeadManage],
@@ -51,22 +60,58 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'TaskController.list': [Permission.TaskViewAll, Permission.TaskViewOwn],
   'TaskController.get': [Permission.TaskViewAll, Permission.TaskViewOwn],
   'TaskController.create': [Permission.TaskCreate],
-  'TaskController.update': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.complete': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.cancel': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
+  'TaskController.update': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.complete': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.cancel': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
   'TaskController.remove': [Permission.TaskDelete],
   'TaskController.activity': [Permission.TaskViewAll, Permission.TaskViewOwn],
-  'TaskController.listDependencies': [Permission.TaskViewAll, Permission.TaskViewOwn],
-  'TaskController.createDependency': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.removeDependency': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
+  'TaskController.listDependencies': [
+    Permission.TaskViewAll,
+    Permission.TaskViewOwn,
+  ],
+  'TaskController.createDependency': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.removeDependency': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
   'TaskController.reminders': [Permission.TaskViewAll, Permission.TaskViewOwn],
-  'TaskController.enableReminders': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.disableReminders': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.rescheduleReminders': [Permission.TaskUpdateAssigned, Permission.TaskViewAll],
-  'TaskController.analytics': [Permission.AnalyticsView, Permission.AnalyticsViewOwn],
-  'TaskController.analyticsTrends': [Permission.AnalyticsView, Permission.AnalyticsViewOwn],
+  'TaskController.enableReminders': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.disableReminders': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.rescheduleReminders': [
+    Permission.TaskUpdateAssigned,
+    Permission.TaskViewAll,
+  ],
+  'TaskController.analytics': [
+    Permission.AnalyticsView,
+    Permission.AnalyticsViewOwn,
+  ],
+  'TaskController.analyticsTrends': [
+    Permission.AnalyticsView,
+    Permission.AnalyticsViewOwn,
+  ],
   'TaskController.exportAnalytics': [Permission.AnalyticsView],
-  'TaskController.report': [Permission.AnalyticsView, Permission.AnalyticsViewOwn],
+  'TaskController.report': [
+    Permission.AnalyticsView,
+    Permission.AnalyticsViewOwn,
+  ],
   'TaskController.handleNaturalLanguage': [Permission.AssistantUse],
 
   'ProposalController.findAll': [Permission.ProposalView],
@@ -80,25 +125,61 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ProposalController.changeStatus': [Permission.ProposalManage],
 
   'CommunicationAgentController.getStatus': [Permission.AssistantUse],
-  'CommunicationHubController.getHistory': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'CommunicationHubController.getConversationDetail': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CommunicationHubController.getHistory': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'CommunicationHubController.getConversationDetail': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
   'CommunicationHubController.getStats': [Permission.CommunicationView],
   'CommunicationHubController.getEmailThreads': [Permission.CommunicationView],
   'CommunicationHubController.getSmsThreads': [Permission.CommunicationView],
 
-  'ConversationController.findAll': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'ConversationController.findOne': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'ConversationController.getMessages': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'ConversationController.create': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'ConversationController.addMessage': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'ConversationController.findAll': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'ConversationController.findOne': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'ConversationController.getMessages': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'ConversationController.create': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'ConversationController.addMessage': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
   'ConversationController.update': [Permission.CommunicationView],
   'ConversationController.remove': [Permission.CommunicationView],
 
-  'MessageController.findAll': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'MessageController.findOne': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'MessageController.create': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'MessageController.update': [Permission.CommunicationView, Permission.CommunicationViewOwn],
-  'MessageController.remove': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'MessageController.findAll': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'MessageController.findOne': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'MessageController.create': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'MessageController.update': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
+  'MessageController.remove': [
+    Permission.CommunicationView,
+    Permission.CommunicationViewOwn,
+  ],
 
   'KnowledgebaseController.findAll': [Permission.KnowledgeManage],
   'KnowledgebaseController.findOne': [Permission.KnowledgeManage],
@@ -155,7 +236,10 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ApprovalController.events': [Permission.AuditView, Permission.AssistantUse],
   'ApprovalController.find': [Permission.AuditView, Permission.AssistantUse],
   'ApprovalController.approve': [Permission.AuditView, Permission.AssistantUse],
-  'ApprovalController.editApprove': [Permission.AuditView, Permission.AssistantUse],
+  'ApprovalController.editApprove': [
+    Permission.AuditView,
+    Permission.AssistantUse,
+  ],
   'ApprovalController.reject': [Permission.AuditView, Permission.AssistantUse],
   'ApprovalController.cancel': [Permission.AuditView, Permission.AssistantUse],
 
@@ -169,4 +253,18 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ExceptionController.status': [Permission.AuditView],
   'ExceptionController.resolve': [Permission.AuditView],
   'ExceptionController.dismiss': [Permission.AuditView],
+
+  'WorkflowController.summary': [Permission.WorkflowManage],
+  'WorkflowController.list': [Permission.WorkflowManage],
+  'WorkflowController.generate': [Permission.WorkflowManage],
+  'WorkflowController.create': [Permission.WorkflowManage],
+  'WorkflowController.executions': [Permission.WorkflowManage],
+  'WorkflowController.find': [Permission.WorkflowManage],
+  'WorkflowController.update': [Permission.WorkflowManage],
+  'WorkflowController.activate': [Permission.WorkflowManage],
+  'WorkflowController.pause': [Permission.WorkflowManage],
+  'WorkflowController.resume': [Permission.WorkflowManage],
+  'WorkflowController.execute': [Permission.WorkflowManage],
+  'WorkflowExecutionController.find': [Permission.WorkflowManage],
+  'WorkflowExecutionController.cancel': [Permission.WorkflowManage],
 };

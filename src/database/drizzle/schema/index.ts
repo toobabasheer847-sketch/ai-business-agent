@@ -22,3 +22,4 @@ export * from './oauth-state.schema';
 export * from './agent-run.schema';
 export * from './ai-approval.schema';
 export * from './operational-exception.schema';
+export * from './workflow.schema';

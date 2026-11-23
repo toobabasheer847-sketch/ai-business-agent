@@ -9,6 +9,7 @@ import {
   Activity,
   BarChart3,
   LayoutDashboard,
+  GitBranch,
   Landmark,
   ListTodo,
   Mail,
@@ -74,6 +75,15 @@ export const mainNav: NavItem[] = [
     available: true,
     description: 'Daily operational problems that need a manager',
     permissions: ['audit.view'],
+  },
+  {
+    title: 'Workflows',
+    href: '/workflows',
+    icon: GitBranch,
+    module: 'workflows',
+    available: true,
+    description: 'Controlled workflow automation',
+    permissions: ['workflow.manage'],
   },
   {
     title: 'Approval Center',
@@ -207,7 +217,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/approvals'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },

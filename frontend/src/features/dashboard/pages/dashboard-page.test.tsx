@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api'
 import { exceptionsApi } from '@/features/exceptions/api/exceptions.api'
+import { workflowsApi } from '@/features/workflows/api/workflows.api'
 
 const auth = vi.hoisted(() => ({ role: undefined as string | undefined }))
 
@@ -18,6 +19,12 @@ vi.mock('@/features/exceptions/api/exceptions.api', () => ({
   exceptionsApi: {
     summary: vi.fn(),
     attention: vi.fn(),
+  },
+}))
+
+vi.mock('@/features/workflows/api/workflows.api', () => ({
+  workflowsApi: {
+    summary: vi.fn(),
   },
 }))
 
@@ -38,6 +45,7 @@ const activity = vi.mocked(dashboardApi.recentActivity)
 const communications = vi.mocked(dashboardApi.communicationsSummary)
 const exceptionSummary = vi.mocked(exceptionsApi.summary)
 const attention = vi.mocked(exceptionsApi.attention)
+const workflowSummary = vi.mocked(workflowsApi.summary)
 
 const lifetimeCounts = {
   companies: 4,
@@ -109,6 +117,28 @@ describe('DashboardPage', () => {
       resolutionNote: null,
       metadata: {},
     }])
+    workflowSummary.mockResolvedValue({
+      total: 2,
+      active: 1,
+      paused: 0,
+      draft: 1,
+      completed: 3,
+      failed: 1,
+      waiting: 1,
+      recentFailures: [{
+        id: 'run-1',
+        workflowId: 'wf-1',
+        workflowVersion: 1,
+        triggerSource: 'manual',
+        triggerReference: 'manual:1',
+        status: 'failed',
+        startedAt: '2026-11-16T12:00:00.000Z',
+        completedAt: '2026-11-16T12:00:01.000Z',
+        durationMs: 1000,
+        errorCode: 'invalid_input',
+        sanitizedError: 'The task title is missing.',
+      }],
+    })
     overview.mockResolvedValue({
       window: { preset: 'lifetime', from: null, to: null, timezone: 'UTC' },
       lifetime: lifetimeCounts,
@@ -169,7 +199,9 @@ describe('DashboardPage', () => {
     expect(screen.getByTestId('kpi-grid').className).toContain('sm:grid-cols-2')
     expect(screen.getByTestId('kpi-grid').className).toContain('xl:grid-cols-4')
     expect(screen.queryByText('Business Needs Attention')).toBeNull()
+    expect(screen.queryByText('Workflow automation')).toBeNull()
     expect(exceptionSummary).not.toHaveBeenCalled()
+    expect(workflowSummary).not.toHaveBeenCalled()
   })
 
   it('shows unresolved exceptions to a manager without loading CRM lists', async () => {
@@ -179,7 +211,12 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('1 unresolved exceptions.')).toBeTruthy()
     expect(await screen.findByText('Critical: Task needs attention: Invoice')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'View all exceptions' }).getAttribute('href')).toBe('/exceptions')
+    expect(await screen.findByText('Workflow automation')).toBeTruthy()
+    expect(await screen.findByText('1 active workflows.')).toBeTruthy()
+    expect(await screen.findByText('Failed: The task title is missing.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open workflows' }).getAttribute('href')).toBe('/workflows')
     expect(exceptionSummary).toHaveBeenCalledTimes(1)
+    expect(workflowSummary).toHaveBeenCalledTimes(1)
     expect(attention).toHaveBeenCalledTimes(1)
   })
 

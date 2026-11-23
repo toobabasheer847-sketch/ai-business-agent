@@ -1,14 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { ApprovalLifecycle, parseApprovalQuery, type Actor } from './approval-lifecycle';
+import {
+  ApprovalLifecycle,
+  parseApprovalQuery,
+  type Actor,
+} from './approval-lifecycle';
 import { parseExtraApprovalActions } from './approval-policy';
 import { ApprovalExecutorRegistry } from './approval-executor.registry';
 import { DrizzleApprovalStore } from './approval.store';
+import type { ApprovalRecord } from './approval.types';
+
+type DecisionListener = (actor: Actor, record: ApprovalRecord) => Promise<void>;
 
 @Injectable()
 export class ApprovalService {
   private readonly lifecycle: ApprovalLifecycle;
+  private readonly decisions: DecisionListener[] = [];
 
   constructor(
     store: DrizzleApprovalStore,
@@ -18,8 +26,14 @@ export class ApprovalService {
     this.lifecycle = new ApprovalLifecycle(
       store,
       registry,
-      parseExtraApprovalActions(configService.get<string>('AI_APPROVAL_EXTRA_ACTIONS')),
+      parseExtraApprovalActions(
+        configService.get<string>('AI_APPROVAL_EXTRA_ACTIONS'),
+      ),
     );
+  }
+
+  onDecision(listener: DecisionListener) {
+    this.decisions.push(listener);
   }
 
   propose(input: Parameters<ApprovalLifecycle['propose']>[0]) {
@@ -42,15 +56,27 @@ export class ApprovalService {
     return this.lifecycle.events(actor, id);
   }
 
-  approve(actor: Actor, id: string, edits?: Record<string, unknown>) {
-    return this.lifecycle.approve(actor, id, edits);
+  async approve(actor: Actor, id: string, edits?: Record<string, unknown>) {
+    const record = await this.lifecycle.approve(actor, id, edits);
+    await this.notify(actor, record);
+    return record;
   }
 
-  reject(actor: Actor, id: string, reason: string) {
-    return this.lifecycle.reject(actor, id, reason);
+  async reject(actor: Actor, id: string, reason: string) {
+    const record = await this.lifecycle.reject(actor, id, reason);
+    await this.notify(actor, record);
+    return record;
   }
 
-  cancel(actor: Actor, id: string) {
-    return this.lifecycle.cancel(actor, id);
+  async cancel(actor: Actor, id: string) {
+    const record = await this.lifecycle.cancel(actor, id);
+    await this.notify(actor, record);
+    return record;
+  }
+
+  private async notify(actor: Actor, record: ApprovalRecord) {
+    for (const listener of this.decisions) {
+      await listener(actor, record).catch(() => undefined);
+    }
   }
 }

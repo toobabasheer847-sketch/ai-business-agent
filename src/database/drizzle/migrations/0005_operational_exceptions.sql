@@ -62,7 +62,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "operational_exceptions"
     ADD CONSTRAINT "operational_exceptions_category_check"
-    CHECK ("category" IN ('task', 'sales', 'proposal', 'communication', 'ai_automation', 'approval'));
+    CHECK ("category" IN ('task', 'sales', 'proposal', 'communication', 'ai_automation', 'approval', 'workflow'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN

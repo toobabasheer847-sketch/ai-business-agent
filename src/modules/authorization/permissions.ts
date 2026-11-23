@@ -34,6 +34,7 @@ export const Permission = {
   TeamInsightsView: 'team_insights.view',
   TeamInsightsViewOwn: 'team_insights.view_own',
   AuditView: 'audit.view',
+  WorkflowManage: 'workflow.manage',
   IntegrationManage: 'integration.manage',
   BrandView: 'brand.view',
   BrandManage: 'brand.manage',
