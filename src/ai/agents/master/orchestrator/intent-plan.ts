@@ -14,6 +14,13 @@ export function isBusinessIntelligenceQuestion(message: string): boolean {
   );
 }
 
+export function isStrategicQuestion(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  return /\b(?:focus on today|top three business priorities|business priorities|improve my sales pipeline|business opportunities|plan to reduce overdue|business goals progressing|recommendations have been successful|team work on next|recommendation marked high priority|strategic decisions)\b/.test(
+    text,
+  );
+}
+
 export const ORCHESTRATION_AGENTS = [
   'crm',
   'task',
@@ -47,6 +54,7 @@ export const ALLOWED_ACTIONS = [
   'analytics.proposals',
   'analytics.tasks',
   'business.intelligence',
+  'strategic.decision',
 ] as const;
 
 export type OrchestrationAction = (typeof ALLOWED_ACTIONS)[number];
@@ -83,6 +91,7 @@ const ACTION_AGENT: Record<OrchestrationAction, OrchestrationAgent> = {
   'analytics.proposals': 'analytics',
   'analytics.tasks': 'analytics',
   'business.intelligence': 'analytics',
+  'strategic.decision': 'analytics',
 };
 
 const READ_ACTIONS = new Set<OrchestrationAction>([
@@ -99,6 +108,7 @@ const READ_ACTIONS = new Set<OrchestrationAction>([
   'analytics.proposals',
   'analytics.tasks',
   'business.intelligence',
+  'strategic.decision',
 ]);
 
 const SENSITIVE_ACTIONS = new Set<OrchestrationAction>([
@@ -251,24 +261,29 @@ export function detectIntents(message: string): DetectionResult {
     if (!selected.includes(action)) selected.push(action);
   };
 
-  if (wantsCompany) push('company.create');
-  if (wantsLead) push('lead.create');
-  if (wantsProposalCreate) push('proposal.create');
-  if (wantsProposalRead && !wantsProposalCreate) push('proposal.read');
-  if (wantsSend) push('proposal.send');
-  if (wantsTask) push('task.create');
-  if (wantsOverdue) push('task.overdue');
-  if (wantsComms) push('communication.summary');
-  if (wantsProspectFollowup) push('prospect.followup');
-  if (wantsDashboard) push('dashboard.read');
-  if (wantsDelete) push('record.delete');
-  if (wantsTeam) push('team.analyze');
-  if (wantsAnalytics) {
-    for (const action of analyticsActions(text)) push(action);
+  const wantsStrategic = isStrategicQuestion(text);
+  if (wantsStrategic) {
+    push('strategic.decision');
+  } else {
+    if (wantsCompany) push('company.create');
+    if (wantsLead) push('lead.create');
+    if (wantsProposalCreate) push('proposal.create');
+    if (wantsProposalRead && !wantsProposalCreate) push('proposal.read');
+    if (wantsSend) push('proposal.send');
+    if (wantsTask) push('task.create');
+    if (wantsOverdue) push('task.overdue');
+    if (wantsComms) push('communication.summary');
+    if (wantsProspectFollowup) push('prospect.followup');
+    if (wantsDashboard) push('dashboard.read');
+    if (wantsDelete) push('record.delete');
+    if (wantsTeam) push('team.analyze');
+    if (wantsAnalytics) {
+      for (const action of analyticsActions(text)) push(action);
+    }
+    if (wantsBusinessIntelligence) push('business.intelligence');
+    if (wantsKnowledge && selected.length > 0) push('knowledge.answer');
+    if (wantsKnowledge && selected.length === 0) push('knowledge.answer');
   }
-  if (wantsBusinessIntelligence) push('business.intelligence');
-  if (wantsKnowledge && selected.length > 0) push('knowledge.answer');
-  if (wantsKnowledge && selected.length === 0) push('knowledge.answer');
 
   if (
     selected.includes('proposal.create') &&

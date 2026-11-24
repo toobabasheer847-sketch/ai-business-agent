@@ -17,6 +17,7 @@ import {
   Phone,
   Settings,
   Sparkles,
+  Target,
   Users,
   BriefcaseBusiness,
   BookOpen,
@@ -101,6 +102,15 @@ export const mainNav: NavItem[] = [
     module: 'business-intelligence',
     available: true,
     description: 'Historical performance, forecasts, and risks',
+    permissions: ['analytics.view'],
+  },
+  {
+    title: 'Strategic decisions',
+    href: '/strategic-decisions',
+    icon: Target,
+    module: 'strategic-decisions',
+    available: true,
+    description: 'Priorities, plans, and goals from stored evidence',
     permissions: ['analytics.view'],
   },
   {
@@ -235,7 +245,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/business-intelligence', '/approvals'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/business-intelligence', '/strategic-decisions', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },

@@ -379,6 +379,32 @@ export class BusinessIntelligenceService {
       risks,
       insights,
       forecasts,
+      operations,
+      expiringProposals: pipelineInputs.expiring,
+      oldPendingProposals: pipelineInputs.oldPending,
+    };
+  }
+
+  async decisionMetrics(tenantId: string) {
+    const picture = await this.picture(tenantId, {
+      range: '30d',
+      horizon: '7',
+    });
+    return {
+      window: picture.query.window,
+      staleNewLeads: picture.history.staleNewLeads,
+      leadsCreated: picture.history.leadsCreated,
+      previousLeads: picture.history.previousLeads,
+      acceptanceRate: picture.history.acceptance.rate,
+      acceptanceSample: picture.history.acceptance.decided,
+      previousAcceptanceRate: picture.history.previousAcceptance.rate,
+      previousAcceptanceSample: picture.history.previousAcceptance.decided,
+      overdueTasks: picture.workload.overdue,
+      dueNext7Days: picture.workload.dueNext7Days,
+      workflowFailures: picture.operations.failures,
+      openExceptions: picture.operations.openExceptions,
+      expiringProposals: picture.expiringProposals,
+      risks: picture.risks,
     };
   }
 

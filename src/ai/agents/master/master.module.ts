@@ -5,6 +5,7 @@ import { CompanyModule } from '../../../modules/company/company.module.js';
 import { ConversationModule } from '../../../modules/conversation/conversation.module';
 import { AnalyticsModule } from '../../../modules/analytics/analytics.module.js';
 import { BusinessIntelligenceModule } from '../../../modules/business-intelligence/business-intelligence.module';
+import { StrategicDecisionModule } from '../../../modules/strategic-decisions/strategic-decision.module';
 import { DashboardModule } from '../../../modules/dashboard/dashboard.module.js';
 import { LeadModule } from '../../../modules/lead/lead.module.js';
 import { MasterSettingsModule } from '../../../modules/master-settings/master-settings.module';
@@ -28,6 +29,7 @@ import { MasterOrchestratorService } from './orchestrator/orchestrator.service.j
     DashboardModule,
     AnalyticsModule,
     BusinessIntelligenceModule,
+    StrategicDecisionModule,
     LeadModule,
     MasterSettingsModule,
     ProposalModule,

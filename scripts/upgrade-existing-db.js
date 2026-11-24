@@ -427,6 +427,20 @@ async function main() {
     );
     console.log('Applied 0008_business_intelligence.sql');
 
+    await applySqlFile(
+      client,
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'database',
+        'drizzle',
+        'migrations',
+        '0009_strategic_decisions.sql',
+      ),
+    );
+    console.log('Applied 0009_strategic_decisions.sql');
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
