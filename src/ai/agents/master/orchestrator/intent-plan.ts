@@ -1,8 +1,18 @@
 import { ForbiddenException } from '@nestjs/common';
 import { z } from 'zod';
 
-import { analyticsActions, isAnalyticsQuestion } from '../../../../modules/analytics/analytics-intent.js';
+import {
+  analyticsActions,
+  isAnalyticsQuestion,
+} from '../../../../modules/analytics/analytics-intent.js';
 import { isTeamQuestion } from '../../team/team-intent.js';
+
+export function isBusinessIntelligenceQuestion(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  return /\b(?:biggest risks|proposal pipeline|sales trends|workflows need attention|focus on this week|business intelligence|business performing)\b/.test(
+    text,
+  );
+}
 
 export const ORCHESTRATION_AGENTS = [
   'crm',
@@ -36,6 +46,7 @@ export const ALLOWED_ACTIONS = [
   'analytics.sales',
   'analytics.proposals',
   'analytics.tasks',
+  'business.intelligence',
 ] as const;
 
 export type OrchestrationAction = (typeof ALLOWED_ACTIONS)[number];
@@ -71,6 +82,7 @@ const ACTION_AGENT: Record<OrchestrationAction, OrchestrationAgent> = {
   'analytics.sales': 'analytics',
   'analytics.proposals': 'analytics',
   'analytics.tasks': 'analytics',
+  'business.intelligence': 'analytics',
 };
 
 const READ_ACTIONS = new Set<OrchestrationAction>([
@@ -86,6 +98,7 @@ const READ_ACTIONS = new Set<OrchestrationAction>([
   'analytics.sales',
   'analytics.proposals',
   'analytics.tasks',
+  'business.intelligence',
 ]);
 
 const SENSITIVE_ACTIONS = new Set<OrchestrationAction>([
@@ -125,7 +138,9 @@ const modelIntentSchema = z
         z
           .object({
             action: z.string().max(80),
-            inputs: z.record(z.string().max(40), z.string().max(200)).optional(),
+            inputs: z
+              .record(z.string().max(40), z.string().max(200))
+              .optional(),
           })
           .strict(),
       )
@@ -136,21 +151,37 @@ const modelIntentSchema = z
 export function validateModelIntentPayload(
   raw: unknown,
   userMessage: string,
-): { ok: true; intents: Array<{ action: OrchestrationAction; inputs: Record<string, string> }> } | { ok: false; reason: string } {
+):
+  | {
+      ok: true;
+      intents: Array<{
+        action: OrchestrationAction;
+        inputs: Record<string, string>;
+      }>;
+    }
+  | { ok: false; reason: string } {
   const parsedJson = typeof raw === 'string' ? safeJson(raw) : raw;
   const parsed = modelIntentSchema.safeParse(parsedJson);
   if (!parsed.success) {
     return { ok: false, reason: 'invalid_model_output' };
   }
 
-  const intents: Array<{ action: OrchestrationAction; inputs: Record<string, string> }> = [];
+  const intents: Array<{
+    action: OrchestrationAction;
+    inputs: Record<string, string>;
+  }> = [];
   for (const item of parsed.data.intents) {
     if (!isAllowedAction(item.action)) {
       continue;
     }
     const inputs: Record<string, string> = {};
     for (const [key, value] of Object.entries(item.inputs ?? {})) {
-      if (key === 'tenantId' || key === 'sql' || key === 'query' || key === 'code') {
+      if (
+        key === 'tenantId' ||
+        key === 'sql' ||
+        key === 'query' ||
+        key === 'code'
+      ) {
         continue;
       }
       if (!valueAppearsInMessage(value, userMessage)) {
@@ -181,27 +212,39 @@ export function detectIntents(message: string): DetectionResult {
     /\b(?:ceo|contact)\b[\s\S]{0,20}\bas a lead\b/i.test(text) ||
     /\badd its ceo\b/i.test(text);
   const wantsProposalCreate =
-    /\b(?:create|generate|write|draft|make)\b[\s\S]{0,60}\b(?:proposal|quotation|quote)\b/i.test(text);
+    /\b(?:create|generate|write|draft|make)\b[\s\S]{0,60}\b(?:proposal|quotation|quote)\b/i.test(
+      text,
+    );
   const wantsProposalRead =
     /\bproposal\b/i.test(text) &&
     /\b(?:status|accepted|rejected|whether|find|show)\b/i.test(text);
   const wantsSend =
-    /\b(?:send|email)\b[\s\S]{0,50}\b(?:proposal|quotation|quote|client)\b/i.test(text);
+    /\b(?:send|email)\b[\s\S]{0,50}\b(?:proposal|quotation|quote|client)\b/i.test(
+      text,
+    );
   const wantsTask =
     /\b(?:task|follow-up|follow up)\b/i.test(text) &&
     /\b(?:create|add|schedule|set|remind)\b/i.test(text);
   const wantsAnalytics = isAnalyticsQuestion(text);
+  const wantsBusinessIntelligence = isBusinessIntelligenceQuestion(text);
   const wantsTeam = isTeamQuestion(text) && !wantsAnalytics;
-  const wantsOverdue = /\boverdue\b/i.test(text) && /\btasks?\b/i.test(text) && !wantsTeam && !wantsAnalytics;
+  const wantsOverdue =
+    /\boverdue\b/i.test(text) &&
+    /\btasks?\b/i.test(text) &&
+    !wantsTeam &&
+    !wantsAnalytics;
   const wantsComms =
     /\b(?:communications?|emails?|inbox|calls?|sms)\b/i.test(text) &&
     /\b(?:summarize|summary|recent|show)\b/i.test(text);
   const wantsProspectFollowup =
     /\bprospects?\b/i.test(text) && /\bfollow-?up\b/i.test(text);
-  const wantsDashboard = /\b(?:dashboard|kpis?|metrics|pipeline)\b/i.test(text) && !wantsAnalytics;
+  const wantsDashboard =
+    /\b(?:dashboard|kpis?|metrics|pipeline)\b/i.test(text) && !wantsAnalytics;
   const wantsDelete = /\b(?:delete|remove|erase|destroy)\b/i.test(text);
   const wantsKnowledge =
-    /\b(?:policy|refund|document|documents|knowledge|uploaded|wiki|faq)\b/i.test(text);
+    /\b(?:policy|refund|document|documents|knowledge|uploaded|wiki|faq)\b/i.test(
+      text,
+    );
 
   const selected: OrchestrationAction[] = [];
   const push = (action: OrchestrationAction) => {
@@ -223,10 +266,15 @@ export function detectIntents(message: string): DetectionResult {
   if (wantsAnalytics) {
     for (const action of analyticsActions(text)) push(action);
   }
+  if (wantsBusinessIntelligence) push('business.intelligence');
   if (wantsKnowledge && selected.length > 0) push('knowledge.answer');
   if (wantsKnowledge && selected.length === 0) push('knowledge.answer');
 
-  if (selected.includes('proposal.create') && selected.includes('lead.create') && !selected.includes('prospect.create')) {
+  if (
+    selected.includes('proposal.create') &&
+    selected.includes('lead.create') &&
+    !selected.includes('prospect.create')
+  ) {
     selected.splice(selected.indexOf('proposal.create'), 0, 'prospect.create');
   }
 
@@ -247,7 +295,10 @@ export function detectIntents(message: string): DetectionResult {
   };
 }
 
-export function assertTenantScopedInputs(operations: PlannedOperation[], tenantId: string): void {
+export function assertTenantScopedInputs(
+  operations: PlannedOperation[],
+  tenantId: string,
+): void {
   for (const operation of operations) {
     const supplied = operation.requiredInputs.tenantId;
     if (supplied && supplied !== tenantId) {
@@ -260,17 +311,30 @@ export function shouldOrchestrate(message: string): boolean {
   const detected = detectIntents(message);
   if (detected.operations.length === 0) return false;
   if (detected.clarification) return true;
-  if (detected.operations.some((operation) => operation.sensitive) && detected.operations.length > 1) {
+  if (
+    detected.operations.some((operation) => operation.sensitive) &&
+    detected.operations.length > 1
+  ) {
     return true;
   }
   if (detected.operations.length === 1) {
     const only = detected.operations[0];
-    return only.selectedAgent === 'crm' || only.selectedAgent === 'analytics' || only.selectedAgent === 'team' || only.action === 'record.delete';
+    return (
+      only.selectedAgent === 'crm' ||
+      only.selectedAgent === 'analytics' ||
+      only.selectedAgent === 'team' ||
+      only.action === 'record.delete'
+    );
   }
-  const agents = new Set(detected.operations.map((operation) => operation.selectedAgent));
+  const agents = new Set(
+    detected.operations.map((operation) => operation.selectedAgent),
+  );
   if (
     agents.size === 1 &&
-    (agents.has('proposal') || agents.has('task') || agents.has('communication') || agents.has('knowledge'))
+    (agents.has('proposal') ||
+      agents.has('task') ||
+      agents.has('communication') ||
+      agents.has('knowledge'))
   ) {
     return false;
   }
@@ -287,7 +351,10 @@ type PlanFacts = {
   proposalSubject?: string;
 };
 
-function buildPlan(actions: OrchestrationAction[], facts: PlanFacts): PlannedOperation[] {
+function buildPlan(
+  actions: OrchestrationAction[],
+  facts: PlanFacts,
+): PlannedOperation[] {
   const operations: PlannedOperation[] = [];
   const idFor = new Map<OrchestrationAction, string>();
 
@@ -378,8 +445,14 @@ function clarificationFor(operations: PlannedOperation[]): string | null {
   if (missing.some((item) => item.field === 'firstName')) {
     questions.push("What is the person's name?");
   }
-  if (missing.some((item) => item.action === 'record.delete' && item.field === 'recordId')) {
-    questions.push('Which record should be deleted? Send the record id from the CRM page.');
+  if (
+    missing.some(
+      (item) => item.action === 'record.delete' && item.field === 'recordId',
+    )
+  ) {
+    questions.push(
+      'Which record should be deleted? Send the record id from the CRM page.',
+    );
   }
   return questions.join(' ');
 }
@@ -393,14 +466,24 @@ export type OperationHandlerResult = {
 
 export async function executePlan(options: {
   operations: PlannedOperation[];
-  handlers: Partial<Record<OrchestrationAction, (
-    operation: PlannedOperation,
-    completed: Map<string, PlannedOperation>,
-  ) => Promise<OperationHandlerResult>>>;
+  handlers: Partial<
+    Record<
+      OrchestrationAction,
+      (
+        operation: PlannedOperation,
+        completed: Map<string, PlannedOperation>,
+      ) => Promise<OperationHandlerResult>
+    >
+  >;
   timeoutMs?: number;
-  isReplay?: (operation: PlannedOperation) => Promise<OperationHandlerResult | null>;
+  isReplay?: (
+    operation: PlannedOperation,
+  ) => Promise<OperationHandlerResult | null>;
 }): Promise<PlannedOperation[]> {
-  const operations = options.operations.map((operation) => ({ ...operation, requiredInputs: { ...operation.requiredInputs } }));
+  const operations = options.operations.map((operation) => ({
+    ...operation,
+    requiredInputs: { ...operation.requiredInputs },
+  }));
   const timeoutMs = options.timeoutMs ?? 30_000;
   const completed = new Map<string, PlannedOperation>();
 
@@ -408,25 +491,37 @@ export async function executePlan(options: {
     return operations.map((operation) => ({
       ...operation,
       status: 'skipped',
-      failureCategory: operation.missing.length ? 'missing_input' : 'dependency_skipped',
+      failureCategory: operation.missing.length
+        ? 'missing_input'
+        : 'dependency_skipped',
       summary: operation.missing.length
         ? `Missing ${operation.missing.join(', ')}.`
         : 'Skipped until the missing details are provided.',
     }));
   }
 
-  const unfinished = () => operations.filter((operation) => operation.status === 'pending');
+  const unfinished = () =>
+    operations.filter((operation) => operation.status === 'pending');
 
   while (unfinished().length > 0) {
     const pending = unfinished();
     for (const operation of pending) {
-      const deps = operation.dependencies.map((id) => operations.find((item) => item.operationId === id));
+      const deps = operation.dependencies.map((id) =>
+        operations.find((item) => item.operationId === id),
+      );
       if (deps.some((dep) => !dep || dep.status !== 'completed')) {
-        const blocked = deps.some((dep) => dep && dep.status !== 'pending' && dep.status !== 'running' && dep.status !== 'completed');
+        const blocked = deps.some(
+          (dep) =>
+            dep &&
+            dep.status !== 'pending' &&
+            dep.status !== 'running' &&
+            dep.status !== 'completed',
+        );
         if (blocked) {
           operation.status = 'skipped';
           operation.failureCategory = 'dependency_failed';
-          operation.summary = 'Skipped because an earlier step did not complete.';
+          operation.summary =
+            'Skipped because an earlier step did not complete.';
         }
       }
     }
@@ -436,9 +531,16 @@ export async function executePlan(options: {
     );
     if (!ready.length) break;
 
-    const reads = ready.filter((operation) => operation.executionMode === 'parallel' && !operation.sensitive);
+    const reads = ready.filter(
+      (operation) =>
+        operation.executionMode === 'parallel' && !operation.sensitive,
+    );
     if (reads.length > 0) {
-      await Promise.all(reads.map((operation) => runOperation(operation, options, completed, timeoutMs)));
+      await Promise.all(
+        reads.map((operation) =>
+          runOperation(operation, options, completed, timeoutMs),
+        ),
+      );
       continue;
     }
 
@@ -451,25 +553,39 @@ export async function executePlan(options: {
 async function runOperation(
   operation: PlannedOperation,
   options: {
-    handlers: Partial<Record<OrchestrationAction, (
+    handlers: Partial<
+      Record<
+        OrchestrationAction,
+        (
+          operation: PlannedOperation,
+          completed: Map<string, PlannedOperation>,
+        ) => Promise<OperationHandlerResult>
+      >
+    >;
+    isReplay?: (
       operation: PlannedOperation,
-      completed: Map<string, PlannedOperation>,
-    ) => Promise<OperationHandlerResult>>>;
-    isReplay?: (operation: PlannedOperation) => Promise<OperationHandlerResult | null>;
+    ) => Promise<OperationHandlerResult | null>;
   },
   completed: Map<string, PlannedOperation>,
   timeoutMs: number,
 ) {
   if (operation.sensitive) {
-    const proposal = [...completed.values()].find((item) => item.outputs?.proposalId);
+    const proposal = [...completed.values()].find(
+      (item) => item.outputs?.proposalId,
+    );
     operation.status = 'awaiting_confirmation';
     operation.outputs = {
-      ...(operation.requiredInputs.recordId ? { recordId: operation.requiredInputs.recordId } : {}),
-      ...(proposal?.outputs?.proposalId ? { proposalId: proposal.outputs.proposalId } : {}),
+      ...(operation.requiredInputs.recordId
+        ? { recordId: operation.requiredInputs.recordId }
+        : {}),
+      ...(proposal?.outputs?.proposalId
+        ? { proposalId: proposal.outputs.proposalId }
+        : {}),
     };
-    operation.summary = operation.action === 'proposal.send'
-      ? 'Sending the proposal needs your confirmation.'
-      : 'This delete needs your confirmation.';
+    operation.summary =
+      operation.action === 'proposal.send'
+        ? 'Sending the proposal needs your confirmation.'
+        : 'This delete needs your confirmation.';
     return;
   }
 
@@ -512,14 +628,16 @@ async function runOperation(
     completed.set(operation.operationId, operation);
   } catch (error) {
     operation.status = 'failed';
-    operation.failureCategory = error instanceof Error && error.message === 'timeout'
-      ? 'timeout'
-      : 'execution_error';
-    operation.summary = operation.failureCategory === 'timeout'
-      ? 'The operation timed out before the service confirmed it.'
-      : error instanceof Error
-        ? error.message
-        : 'The operation failed.';
+    operation.failureCategory =
+      error instanceof Error && error.message === 'timeout'
+        ? 'timeout'
+        : 'execution_error';
+    operation.summary =
+      operation.failureCategory === 'timeout'
+        ? 'The operation timed out before the service confirmed it.'
+        : error instanceof Error
+          ? error.message
+          : 'The operation failed.';
     operation.durationMs = Date.now() - started;
   }
 }
@@ -540,44 +658,66 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-export function summarizeOperations(operations: PlannedOperation[], clarification: string | null): string {
+export function summarizeOperations(
+  operations: PlannedOperation[],
+  clarification: string | null,
+): string {
   if (clarification) return clarification;
   const lines = operations.map((operation) => {
     const label = operation.summary ?? operation.action;
     if (operation.status === 'completed') return `Completed: ${label}`;
     if (operation.status === 'failed') return `Failed: ${label}`;
     if (operation.status === 'skipped') return `Skipped: ${label}`;
-    if (operation.status === 'awaiting_confirmation') return `Needs confirmation: ${label}`;
+    if (operation.status === 'awaiting_confirmation')
+      return `Needs confirmation: ${label}`;
     return label;
   });
   return lines.join('\n');
 }
 
-export function orchestrationStatus(operations: PlannedOperation[], clarification: string | null): string {
+export function orchestrationStatus(
+  operations: PlannedOperation[],
+  clarification: string | null,
+): string {
   if (clarification) return 'awaiting_clarification';
-  if (operations.some((operation) => operation.status === 'awaiting_confirmation')) {
-    return operations.some((operation) => operation.status === 'failed') ? 'partial' : 'awaiting_confirmation';
+  if (
+    operations.some((operation) => operation.status === 'awaiting_confirmation')
+  ) {
+    return operations.some((operation) => operation.status === 'failed')
+      ? 'partial'
+      : 'awaiting_confirmation';
   }
-  if (operations.every((operation) => operation.status === 'completed')) return 'completed';
-  if (operations.some((operation) => operation.status === 'completed')) return 'partial';
-  if (operations.every((operation) => operation.status === 'skipped')) return 'skipped';
+  if (operations.every((operation) => operation.status === 'completed'))
+    return 'completed';
+  if (operations.some((operation) => operation.status === 'completed'))
+    return 'partial';
+  if (operations.every((operation) => operation.status === 'skipped'))
+    return 'skipped';
   return 'failed';
 }
 
 function extractCompanyName(text: string): string | undefined {
   const match =
-    text.match(/\b(?:company|business)\s+(?:called|named)\s+["']?([^,"'\n.]+)/i) ??
-    text.match(/\bproposal\s+for\s+["']?([^,"'\n.]+)/i);
+    text.match(
+      /\b(?:company|business)\s+(?:called|named)\s+["']?([^,"'\n.]+)/i,
+    ) ?? text.match(/\bproposal\s+for\s+["']?([^,"'\n.]+)/i);
   const name = match?.[1]?.trim();
-  if (!name || name.length < 2 || /^(its|a|the|me|this)$/i.test(name)) return undefined;
+  if (!name || name.length < 2 || /^(its|a|the|me|this)$/i.test(name))
+    return undefined;
   return name.slice(0, 255);
 }
 
-function extractPerson(text: string): { firstName?: string; lastName?: string; jobTitle?: string } {
+function extractPerson(text: string): {
+  firstName?: string;
+  lastName?: string;
+  jobTitle?: string;
+} {
   const jobTitle = /\bceo\b/i.test(text) ? 'CEO' : undefined;
   const match =
     text.match(/\b(?:named|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/) ??
-    text.match(/\badd\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+as\s+(?:a\s+)?(?:lead|contact|the\s+ceo|ceo)\b/) ??
+    text.match(
+      /\badd\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+as\s+(?:a\s+)?(?:lead|contact|the\s+ceo|ceo)\b/,
+    ) ??
     text.match(/\bCEO\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
   const raw = match?.[1]?.trim();
   if (!raw || /^(Its|The|A)$/.test(raw)) {

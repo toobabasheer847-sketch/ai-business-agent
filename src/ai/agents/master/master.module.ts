@@ -4,6 +4,7 @@ import { CommunicationHubModule } from '../../../modules/communication-hub/commu
 import { CompanyModule } from '../../../modules/company/company.module.js';
 import { ConversationModule } from '../../../modules/conversation/conversation.module';
 import { AnalyticsModule } from '../../../modules/analytics/analytics.module.js';
+import { BusinessIntelligenceModule } from '../../../modules/business-intelligence/business-intelligence.module';
 import { DashboardModule } from '../../../modules/dashboard/dashboard.module.js';
 import { LeadModule } from '../../../modules/lead/lead.module.js';
 import { MasterSettingsModule } from '../../../modules/master-settings/master-settings.module';
@@ -26,6 +27,7 @@ import { MasterOrchestratorService } from './orchestrator/orchestrator.service.j
     ConversationModule,
     DashboardModule,
     AnalyticsModule,
+    BusinessIntelligenceModule,
     LeadModule,
     MasterSettingsModule,
     ProposalModule,
@@ -35,7 +37,11 @@ import { MasterOrchestratorService } from './orchestrator/orchestrator.service.j
     TeamAgentModule,
   ],
   controllers: [MasterAgentController],
-  providers: [MasterAgentService, AdkAgentFactoryService, MasterOrchestratorService],
+  providers: [
+    MasterAgentService,
+    AdkAgentFactoryService,
+    MasterOrchestratorService,
+  ],
   exports: [MasterAgentService],
 })
 export class MasterAgentModule {}

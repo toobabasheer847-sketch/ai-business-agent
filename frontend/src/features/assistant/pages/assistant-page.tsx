@@ -209,6 +209,11 @@ export function AssistantPage() {
                 <Link to="/workflows">Review a workflow</Link>
               </Button>
             ) : null}
+            {canAccess(['analytics.view']) ? (
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link to="/business-intelligence">Business intelligence</Link>
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

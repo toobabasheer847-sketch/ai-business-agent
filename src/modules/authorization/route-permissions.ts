@@ -275,4 +275,14 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'WorkflowAnalyticsController.updateStatus': [Permission.WorkflowManage],
   'WorkflowAnalyticsController.workflow': [Permission.WorkflowManage],
   'WorkflowAnalyticsController.workflows': [Permission.WorkflowManage],
+
+  'BusinessIntelligenceController.overview': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.salesForecast': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.leadInsights': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.revenuePipeline': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.workloadForecast': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.risks': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.insights': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.refresh': [Permission.AnalyticsView],
+  'BusinessIntelligenceController.forecast': [Permission.AnalyticsView],
 };

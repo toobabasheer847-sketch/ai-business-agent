@@ -20,6 +20,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ExceptionModule } from './modules/exceptions/exception.module';
 import { WorkflowModule } from './modules/workflows/workflow.module';
+import { BusinessIntelligenceModule } from './modules/business-intelligence/business-intelligence.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -52,6 +53,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     DashboardModule,
     ExceptionModule,
     WorkflowModule,
+    BusinessIntelligenceModule,
     AnalyticsModule,
     MessageModule,
     CommunicationHubModule,
