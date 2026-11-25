@@ -30,6 +30,9 @@ import { CommunicationHubPage } from '@/features/communication-hub/pages/communi
 import { GmailConfigurationPage } from '@/features/gmail-configuration/pages/gmail-configuration-page'
 import { ProposalsPage } from '@/features/proposals/pages/proposals-page'
 import { PublicProposalPage } from '@/features/public-proposal/pages/public-proposal-page'
+import { PublicCustomerChatPage } from '@/features/customer-facing/pages/public-customer-chat-page'
+import { CustomerConversationsPage } from '@/features/customer-facing/pages/customer-conversations-page'
+import { CustomerAiSettingsPage } from '@/features/customer-facing/pages/customer-ai-settings-page'
 import { KnowledgebasesPage } from '@/features/knowledgebases/pages/knowledgebases-page'
 import { UsersPage } from '@/features/users/pages/users-page'
 import { TasksPage } from '@/features/tasks/pages/tasks-page'
@@ -69,6 +72,8 @@ export function AppRouter() {
           <Route path="/prospects" element={<ProspectsPage />} />
           <Route path="/conversations" element={<ConversationsPage />} />
           <Route path="/communication-hub" element={<CommunicationHubPage />} />
+          <Route path="/customer-conversations" element={<Permit permissions={[Permission.CommunicationView, Permission.CommunicationViewOwn]}><CustomerConversationsPage /></Permit>} />
+          <Route path="/customer-ai" element={<Permit permissions={[Permission.BrandManage]}><CustomerAiSettingsPage /></Permit>} />
           <Route path="/proposals" element={<ProposalsPage />} />
           <Route path="/knowledgebases" element={<Permit permissions={[Permission.KnowledgeManage]}><KnowledgebasesPage /></Permit>} />
           <Route path="/gmail-configuration" element={<Permit permissions={[Permission.IntegrationManage]}><GmailConfigurationPage /></Permit>} />
@@ -79,6 +84,7 @@ export function AppRouter() {
       </Route>
 
       <Route path="/p/:token" element={<PublicProposalPage />} />
+      <Route path="/chat/:publicKey" element={<PublicCustomerChatPage />} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

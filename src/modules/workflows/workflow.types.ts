@@ -29,6 +29,12 @@ export const TRIGGER_TYPES = [
   'proposal_expiring',
   'approval_completed',
   'exception_detected',
+  'customer_conversation_started',
+  'customer_lead_created',
+  'customer_handoff',
+  'customer_complaint',
+  'customer_unresolved',
+  'customer_resolved',
 ] as const;
 
 export const ACTION_TYPES = [

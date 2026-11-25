@@ -199,6 +199,24 @@ export const mainNav: NavItem[] = [
     available: true,
   },
   {
+    title: 'Customer chats',
+    href: '/customer-conversations',
+    icon: MessagesSquare,
+    module: 'customer-conversations',
+    available: true,
+    description: 'Public AI conversations and handoffs',
+    permissions: ['communication.view', 'communication.view_own'],
+  },
+  {
+    title: 'Customer AI',
+    href: '/customer-ai',
+    icon: Bot,
+    module: 'customer-ai',
+    available: true,
+    description: 'Public assistant name, welcome, and lead capture',
+    permissions: ['brand.manage'],
+  },
+  {
     title: 'Proposals',
     href: '/proposals',
     icon: FileText,
@@ -257,9 +275,9 @@ export const mainNav: NavItem[] = [
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
   { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/business-intelligence', '/strategic-decisions', '/continuous-improvement', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
-  { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
+  { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/customer-conversations', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },
-  { id: 'settings', label: 'Settings', hrefs: ['/gmail-configuration', '/phone-numbers', '/tenant', '/master-settings', '/system'] },
+  { id: 'settings', label: 'Settings', hrefs: ['/gmail-configuration', '/phone-numbers', '/customer-ai', '/tenant', '/master-settings', '/system'] },
 ]
 
 /** Named so later phases can add routes. These are not rendered as links. */

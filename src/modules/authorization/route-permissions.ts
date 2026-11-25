@@ -344,4 +344,12 @@ export const ROUTE_PERMISSIONS: Record<string, readonly PermissionName[]> = {
   'ContinuousImprovementController.review': [Permission.AnalyticsView],
   'ContinuousImprovementController.completeReview': [Permission.AnalyticsView],
   'ContinuousImprovementController.history': [Permission.AnalyticsView],
+  'CustomerAiController.conversations': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.conversation': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.assign': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.resolve': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.reopen': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.note': [Permission.CommunicationView, Permission.CommunicationViewOwn],
+  'CustomerAiController.settings': [Permission.BrandManage],
+  'CustomerAiController.updateSettings': [Permission.BrandManage],
 };

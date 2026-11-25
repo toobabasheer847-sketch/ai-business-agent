@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ArrowUpRight,
   Inbox,
@@ -153,10 +154,15 @@ export function CommunicationHubPage() {
         title="Communication Hub"
         description="Stored email, SMS, call, and web conversations. Sending email depends on the tenant Gmail connection. SMS depends on a configured phone number. This page does not mark either integration as connected."
         actions={
-          <Button variant="outline" size="sm" onClick={() => historyQuery.refetch()}>
-            <RefreshCcw className="size-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/customer-conversations">Customer chats</Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => historyQuery.refetch()}>
+              <RefreshCcw className="size-4" />
+              Refresh
+            </Button>
+          </div>
         }
       />
 

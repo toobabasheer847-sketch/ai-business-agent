@@ -203,6 +203,29 @@ export class WorkflowService {
     }
   }
 
+  async dispatchEvent(tenantId: string, triggerType: string, reference: string) {
+    const listed = await this.records.list(tenantId, { status: 'active', limit: 50, offset: 0 });
+    let started = 0;
+    for (const workflow of listed.data) {
+      if (workflow.triggerType !== triggerType || !workflow.createdBy) continue;
+      try {
+        await this.engine.execute({
+          tenantId,
+          userId: workflow.createdBy,
+          role: 'member',
+          workflowId: workflow.id,
+          triggerSource: 'event',
+          triggerReference: reference.slice(0, 160),
+          context: {},
+        });
+        started += 1;
+      } catch {
+        // A workflow failure must not block the customer conversation.
+      }
+    }
+    return { started };
+  }
+
   async execute(actor: Actor, id: string) {
     this.assertManager(actor.role);
     const execution = await this.engine.execute({

@@ -15,6 +15,13 @@ const PUBLIC_HANDLERS = new Set([
   'PublicProposalController.pdf',
   'PublicProposalController.accept',
   'PublicProposalController.reject',
+  'PublicCustomerChatController.bootstrap',
+  'PublicCustomerChatController.start',
+  'PublicCustomerChatController.history',
+  'PublicCustomerChatController.send',
+  'PublicCustomerChatController.details',
+  'PublicCustomerChatController.handoff',
+  'PublicCustomerChatController.end',
 ]);
 
 function controllerFiles(dir: string): string[] {
@@ -76,6 +83,7 @@ describe('route permission coverage', () => {
     expect(ROUTE_PERMISSIONS['GmailController.authorize']).toEqual([Permission.IntegrationManage]);
     expect(ROUTE_PERMISSIONS['PublicProposalController.get']).toBeUndefined();
     expect(ROUTE_PERMISSIONS['PublicProposalController.accept']).toBeUndefined();
+    expect(ROUTE_PERMISSIONS['PublicCustomerChatController.send']).toBeUndefined();
   });
 
   it('requires assistant access for authenticated status endpoints', () => {

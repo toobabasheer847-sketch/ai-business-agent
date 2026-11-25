@@ -41,6 +41,7 @@ async function bootstrap() {
       'Authorization',
       'Accept',
       'X-Request-Id',
+      'x-customer-session',
     ],
     exposedHeaders: ['X-Request-Id'],
     credentials: false,
