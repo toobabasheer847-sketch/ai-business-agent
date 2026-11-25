@@ -25,3 +25,4 @@ export * from './operational-exception.schema';
 export * from './workflow.schema';
 export * from './business-intelligence.schema';
 export * from './strategic-decision.schema';
+export * from './continuous-improvement.schema';

@@ -13,6 +13,7 @@ import { ExceptionsPage } from '@/features/exceptions/pages/exceptions-page'
 import { WorkflowAnalyticsPage } from '@/features/workflow-analytics/pages/workflow-analytics-page'
 import { BusinessIntelligencePage } from '@/features/business-intelligence/pages/business-intelligence-page'
 import { StrategicDecisionsPage } from '@/features/strategic-decisions/pages/strategic-decisions-page'
+import { ContinuousImprovementPage } from '@/features/continuous-improvement/pages/continuous-improvement-page'
 import { WorkflowsPage } from '@/features/workflows/pages/workflows-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { AssistantPage } from '@/features/assistant/pages/assistant-page'
@@ -54,6 +55,7 @@ export function AppRouter() {
           <Route path="/workflow-analytics" element={<Permit permissions={[Permission.WorkflowManage]}><WorkflowAnalyticsPage /></Permit>} />
           <Route path="/business-intelligence" element={<Permit permissions={[Permission.AnalyticsView]}><BusinessIntelligencePage /></Permit>} />
           <Route path="/strategic-decisions" element={<Permit permissions={[Permission.AnalyticsView]}><StrategicDecisionsPage /></Permit>} />
+          <Route path="/continuous-improvement" element={<Permit permissions={[Permission.AnalyticsView]}><ContinuousImprovementPage /></Permit>} />
           <Route path="/approvals" element={<Permit permissions={[Permission.AuditView, Permission.AssistantUse]}><ApprovalsPage /></Permit>} />
           <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/tasks/analytics" element={<TaskAnalyticsPage />} />

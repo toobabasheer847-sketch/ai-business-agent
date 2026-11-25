@@ -62,11 +62,23 @@ export const strategicPlans = pgTable(
     targetDate: timestamp('target_date', { withTimezone: true }).notNull(),
     ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null', onUpdate: 'cascade' }),
     status: varchar('status', { length: 20 }).notNull(),
+    planKind: varchar('plan_kind', { length: 20 }).notNull().default('strategic'),
+    relatedGoalId: uuid('related_goal_id'),
+    relatedRecommendationId: uuid('related_recommendation_id').references(() => strategicRecommendations.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+    evidence: jsonb('evidence'),
+    reviewSchedule: varchar('review_schedule', { length: 20 }),
+    nextReviewAt: timestamp('next_review_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null', onUpdate: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index('strategic_plans_tenant_idx').on(table.tenantId, table.status)],
+  (table) => [
+    index('strategic_plans_tenant_idx').on(table.tenantId, table.status),
+    index('strategic_plans_kind_idx').on(table.tenantId, table.planKind),
+  ],
 );
 
 export const strategicPlanMilestones = pgTable(

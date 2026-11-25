@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, count, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, lte, ne, sql } from 'drizzle-orm';
 
 import { TaskService } from '../../ai/agents/task/task.service';
 import {
@@ -74,6 +74,7 @@ export class StrategicDecisionService {
         .where(
           and(
             eq(strategicPlans.tenantId, tenantId),
+            eq(strategicPlans.planKind, 'strategic'),
             eq(strategicPlans.status, 'ACTIVE'),
           ),
         )
@@ -91,7 +92,12 @@ export class StrategicDecisionService {
       this.db
         .select()
         .from(strategicRecommendations)
-        .where(eq(strategicRecommendations.tenantId, tenantId))
+        .where(
+          and(
+            eq(strategicRecommendations.tenantId, tenantId),
+            ne(strategicRecommendations.category, 'improvement'),
+          ),
+        )
         .orderBy(desc(strategicRecommendations.priorityScore))
         .limit(20),
     ]);
@@ -136,8 +142,12 @@ export class StrategicDecisionService {
       ? and(
           eq(strategicRecommendations.tenantId, tenantId),
           eq(strategicRecommendations.status, status),
+          ne(strategicRecommendations.category, 'improvement'),
         )
-      : eq(strategicRecommendations.tenantId, tenantId);
+      : and(
+          eq(strategicRecommendations.tenantId, tenantId),
+          ne(strategicRecommendations.category, 'improvement'),
+        );
     const [rows, total] = await Promise.all([
       this.db
         .select()
@@ -214,6 +224,7 @@ export class StrategicDecisionService {
         and(
           eq(strategicRecommendations.tenantId, tenantId),
           eq(strategicRecommendations.status, 'open'),
+          ne(strategicRecommendations.category, 'improvement'),
           lte(strategicRecommendations.expiresAt, now),
         ),
       );
@@ -276,6 +287,11 @@ export class StrategicDecisionService {
 
   async decide(actor: Actor, id: string, status: 'accepted' | 'rejected') {
     const recommendation = await this.requireRecommendation(actor.tenantId, id);
+    if (recommendation.category === 'improvement') {
+      throw new ConflictException(
+        'Review this recommendation in Continuous Improvement. It was not changed here.',
+      );
+    }
     this.assertFresh(recommendation.expiresAt);
     if (recommendation.status !== 'open') {
       throw new ConflictException(
@@ -312,7 +328,7 @@ export class StrategicDecisionService {
     const rows = await this.db
       .select()
       .from(strategicPlans)
-      .where(eq(strategicPlans.tenantId, tenantId))
+      .where(and(eq(strategicPlans.tenantId, tenantId), eq(strategicPlans.planKind, 'strategic')))
       .orderBy(desc(strategicPlans.createdAt))
       .limit(50);
     return {
@@ -508,6 +524,11 @@ export class StrategicDecisionService {
       actor.tenantId,
       recommendationId,
     );
+    if (recommendation.category === 'improvement') {
+      throw new ConflictException(
+        'Create the improvement plan from Continuous Improvement. No action plan was created.',
+      );
+    }
     if (recommendation.status !== 'accepted') {
       throw new ConflictException(
         'Accept the recommendation before creating an action plan.',
@@ -1130,6 +1151,7 @@ export class StrategicDecisionService {
       .where(
         and(
           eq(strategicPlans.tenantId, actor.tenantId),
+          eq(strategicPlans.planKind, 'strategic'),
           eq(strategicPlans.title, 'Reduce overdue tasks'),
           inArray(strategicPlans.status, ['DRAFT', 'ACTIVE', 'ON_HOLD']),
         ),
@@ -1280,7 +1302,9 @@ export class StrategicDecisionService {
         and(eq(strategicPlans.id, id), eq(strategicPlans.tenantId, tenantId)),
       )
       .limit(1);
-    if (!rows[0]) throw new NotFoundException('Plan not found.');
+    if (!rows[0] || rows[0].planKind === 'improvement') {
+      throw new NotFoundException('Plan not found.');
+    }
     return rows[0];
   }
 

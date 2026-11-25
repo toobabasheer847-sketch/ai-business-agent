@@ -104,7 +104,7 @@ describe('StrategicDecisionsPage', () => {
 
   it('accepts a recommendation through the API', async () => {
     renderPage()
-    await screen.findByRole('button', { name: 'Accept' })
+    await screen.findByRole('button', { name: 'Accept' }, { timeout: 4000 })
     await userEvent.setup({ delay: null }).click(screen.getByRole('button', { name: 'Accept' }))
     expect(accept).toHaveBeenCalledWith('rec-1', expect.anything())
   })

@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
   TASK_REMINDER: 'task-reminder-queue',
   EXCEPTION_DETECTION: 'exception-detection-queue',
   WORKFLOW_EXECUTION: 'workflow-execution-queue',
+  CONTINUOUS_IMPROVEMENT: 'continuous-improvement-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -47,6 +48,7 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
       { name: QUEUE_NAMES.TASK_REMINDER },
       { name: QUEUE_NAMES.EXCEPTION_DETECTION },
       { name: QUEUE_NAMES.WORKFLOW_EXECUTION },
+      { name: QUEUE_NAMES.CONTINUOUS_IMPROVEMENT },
     ),
   ],
   providers: [],

@@ -14,6 +14,13 @@ export function isBusinessIntelligenceQuestion(message: string): boolean {
   );
 }
 
+export function isImprovementQuestion(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  return /\b(?:why are my business goals not progressing|business processes need improvement|bottlenecks are affecting|action plans have measurable|improvements should we prioritize|review my active strategic plans|changed since our last business review|which recommendations were useful|what should we improve next|plan to improve our task completion)\b/.test(
+    text,
+  );
+}
+
 export function isStrategicQuestion(message: string): boolean {
   const text = message.trim().toLowerCase();
   return /\b(?:focus on today|top three business priorities|business priorities|improve my sales pipeline|business opportunities|plan to reduce overdue|business goals progressing|recommendations have been successful|team work on next|recommendation marked high priority|strategic decisions)\b/.test(
@@ -55,6 +62,7 @@ export const ALLOWED_ACTIONS = [
   'analytics.tasks',
   'business.intelligence',
   'strategic.decision',
+  'improvement.review',
 ] as const;
 
 export type OrchestrationAction = (typeof ALLOWED_ACTIONS)[number];
@@ -92,6 +100,7 @@ const ACTION_AGENT: Record<OrchestrationAction, OrchestrationAgent> = {
   'analytics.tasks': 'analytics',
   'business.intelligence': 'analytics',
   'strategic.decision': 'analytics',
+  'improvement.review': 'analytics',
 };
 
 const READ_ACTIONS = new Set<OrchestrationAction>([
@@ -109,6 +118,7 @@ const READ_ACTIONS = new Set<OrchestrationAction>([
   'analytics.tasks',
   'business.intelligence',
   'strategic.decision',
+  'improvement.review',
 ]);
 
 const SENSITIVE_ACTIONS = new Set<OrchestrationAction>([
@@ -261,8 +271,11 @@ export function detectIntents(message: string): DetectionResult {
     if (!selected.includes(action)) selected.push(action);
   };
 
+  const wantsImprovement = isImprovementQuestion(text);
   const wantsStrategic = isStrategicQuestion(text);
-  if (wantsStrategic) {
+  if (wantsImprovement) {
+    push('improvement.review');
+  } else if (wantsStrategic) {
     push('strategic.decision');
   } else {
     if (wantsCompany) push('company.create');

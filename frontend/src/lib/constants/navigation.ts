@@ -18,6 +18,7 @@ import {
   Settings,
   Sparkles,
   Target,
+  TrendingUp,
   Users,
   BriefcaseBusiness,
   BookOpen,
@@ -111,6 +112,15 @@ export const mainNav: NavItem[] = [
     module: 'strategic-decisions',
     available: true,
     description: 'Priorities, plans, and goals from stored evidence',
+    permissions: ['analytics.view'],
+  },
+  {
+    title: 'Continuous improvement',
+    href: '/continuous-improvement',
+    icon: TrendingUp,
+    module: 'continuous-improvement',
+    available: true,
+    description: 'Plan progress, deviations, and measured outcomes',
     permissions: ['analytics.view'],
   },
   {
@@ -245,7 +255,7 @@ export const mainNav: NavItem[] = [
 ]
 
 export const navSections: Array<{ id: string; label: string; hrefs: string[] }> = [
-  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/business-intelligence', '/strategic-decisions', '/approvals'] },
+  { id: 'workspace', label: 'Workspace', hrefs: ['/dashboard', '/assistant', '/analytics', '/ai-monitoring', '/exceptions', '/workflows', '/workflow-analytics', '/business-intelligence', '/strategic-decisions', '/continuous-improvement', '/approvals'] },
   { id: 'crm', label: 'CRM', hrefs: ['/companies', '/leads', '/prospects', '/proposals'] },
   { id: 'work', label: 'Work', hrefs: ['/tasks', '/conversations', '/communication-hub', '/knowledgebases'] },
   { id: 'team', label: 'Team', hrefs: ['/users', '/brands'] },

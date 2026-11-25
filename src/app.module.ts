@@ -22,6 +22,7 @@ import { ExceptionModule } from './modules/exceptions/exception.module';
 import { WorkflowModule } from './modules/workflows/workflow.module';
 import { BusinessIntelligenceModule } from './modules/business-intelligence/business-intelligence.module';
 import { StrategicDecisionModule } from './modules/strategic-decisions/strategic-decision.module';
+import { ContinuousImprovementModule } from './modules/continuous-improvement/continuous-improvement.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -56,6 +57,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     WorkflowModule,
     BusinessIntelligenceModule,
     StrategicDecisionModule,
+    ContinuousImprovementModule,
     AnalyticsModule,
     MessageModule,
     CommunicationHubModule,

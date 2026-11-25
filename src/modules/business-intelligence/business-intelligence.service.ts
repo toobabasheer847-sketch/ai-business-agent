@@ -404,6 +404,7 @@ export class BusinessIntelligenceService {
       workflowFailures: picture.operations.failures,
       openExceptions: picture.operations.openExceptions,
       expiringProposals: picture.expiringProposals,
+      oldPendingProposals: picture.oldPendingProposals,
       risks: picture.risks,
     };
   }

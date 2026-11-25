@@ -262,6 +262,8 @@ export function actionStepsFor(title: string) {
 
 export const PLAN_STATUSES = [
   'DRAFT',
+  'REVIEW_REQUIRED',
+  'APPROVED',
   'ACTIVE',
   'ON_HOLD',
   'COMPLETED',
@@ -270,7 +272,9 @@ export const PLAN_STATUSES = [
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 const PLAN_MOVES: Record<PlanStatus, PlanStatus[]> = {
-  DRAFT: ['ACTIVE', 'CANCELLED'],
+  DRAFT: ['REVIEW_REQUIRED', 'ACTIVE', 'CANCELLED'],
+  REVIEW_REQUIRED: ['APPROVED', 'DRAFT', 'CANCELLED'],
+  APPROVED: ['ACTIVE', 'CANCELLED'],
   ACTIVE: ['ON_HOLD', 'COMPLETED', 'CANCELLED'],
   ON_HOLD: ['ACTIVE', 'CANCELLED'],
   COMPLETED: [],
