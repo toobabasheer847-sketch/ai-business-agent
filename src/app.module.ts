@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { CommunicationHubModule } from './modules/communication-hub/communication-hub.module';
+import { OmnichannelModule } from './modules/omnichannel/omnichannel.module';
 import { CompanyModule } from './modules/company/company.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -63,6 +64,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     AnalyticsModule,
     MessageModule,
     CommunicationHubModule,
+    OmnichannelModule,
     GmailConfigurationModule,
     KnowledgebaseModule,
     ProposalModule,

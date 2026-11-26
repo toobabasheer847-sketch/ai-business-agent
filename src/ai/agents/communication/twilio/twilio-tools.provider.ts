@@ -9,6 +9,8 @@ import { SmsManagementService } from '../../../../integrations/twilio/sms-manage
 import { CallManagementService } from '../../../../integrations/twilio/call-management';
 import { ApprovalService } from '../../../approvals/approval.service';
 import { uncertainDelivery } from '../../../approvals/approval-executor.registry';
+import { OmnichannelService } from '../../../../modules/omnichannel/omnichannel.service';
+import type { Purpose } from '../../../../modules/omnichannel/communication-rules';
 
 // ---------------------------------------------------------------------------
 // Zod schemas — compatible with the installed @google/adk FunctionTool API
@@ -106,6 +108,7 @@ export class TwilioToolsProvider {
     private readonly smsService: SmsManagementService,
     private readonly callService: CallManagementService,
     @Optional() private readonly approvals?: ApprovalService,
+    @Optional() private readonly omnichannel?: OmnichannelService,
   ) {}
 
   /**
@@ -163,9 +166,24 @@ export class TwilioToolsProvider {
     });
   }
 
-  async deliverApprovedSms(input: { tenantId: string; to: string; body: string; fromPhoneNumberId: string }) {
+  async deliverApprovedSms(input: { tenantId: string; to: string; body: string; fromPhoneNumberId: string; purpose?: Purpose }) {
+    await this.omnichannel?.assertAllowed({
+      tenantId: input.tenantId,
+      channel: 'sms',
+      purpose: input.purpose ?? 'customer_requested',
+      recipient: input.to,
+    });
     try {
       const result = await this.smsService.sendSms(input);
+      await this.omnichannel?.recordExternalAcceptance({
+        tenantId: input.tenantId,
+        channel: 'sms',
+        to: input.to,
+        body: input.body,
+        provider: 'twilio',
+        providerMessageId: result.messageSid,
+        purpose: input.purpose ?? 'customer_requested',
+      }).catch(() => undefined);
       return { reference: result.messageSid, uncertain: false as const };
     } catch (error) {
       if (uncertainDelivery(error)) return { reference: null, uncertain: true as const };

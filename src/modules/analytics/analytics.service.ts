@@ -217,9 +217,10 @@ export class AnalyticsService {
         sms: compareMetric(current.smsConversations, previous?.smsConversations ?? null),
         call: compareMetric(current.callConversations, previous?.callConversations ?? null),
         web: compareMetric(current.webConversations, previous?.webConversations ?? null),
+        whatsapp: compareMetric(current.whatsappConversations ?? 0, previous?.whatsappConversations ?? null),
       },
       status: statuses,
-      note: 'Counts are conversations by channel, not emails, SMS messages, or calls sent. Message direction and response time are not stored.',
+      note: 'Conversation counts are stored records by channel. Delivery, read, and failure counts belong to communication engagement analytics and are not estimated here.',
     };
   }
 

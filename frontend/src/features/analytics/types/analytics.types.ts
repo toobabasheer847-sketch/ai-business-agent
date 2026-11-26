@@ -124,6 +124,7 @@ export type CommunicationAnalytics = {
     smsConversations: number
     callConversations: number
     webConversations: number
+    whatsappConversations?: number
   }
   comparisons: { total: AnalyticsComparison }
   status: Array<{ status: string; count: number }>

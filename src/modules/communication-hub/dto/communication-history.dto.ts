@@ -14,6 +14,7 @@ export enum CommunicationChannel {
   SMS = 'sms',
   CALL = 'call',
   WEB = 'web',
+  WHATSAPP = 'whatsapp',
   ALL = 'all',
 }
 
@@ -35,6 +36,18 @@ export class GetCommunicationHistoryDto {
   @IsOptional()
   @IsUUID()
   prospectId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  leadId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assignedUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 
   @IsOptional()
   @IsString()

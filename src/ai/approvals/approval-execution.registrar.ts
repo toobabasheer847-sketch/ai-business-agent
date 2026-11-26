@@ -7,21 +7,40 @@ import { ProposalDeliveryService } from '../agents/proposal/proposal-delivery.se
 import { ProposalRepository } from '../agents/proposal/proposal.repository';
 import { TaskService } from '../agents/task/task.service';
 import { CompanyService } from '../../modules/company/company.service';
+import { OmnichannelService } from '../../modules/omnichannel/omnichannel.service';
 import { uncertainDelivery } from './approval-executor.registry';
 import { ApprovalExecutorRegistry } from './approval-executor.registry';
 import type { ApprovalRecord } from './approval.types';
+
+const PURPOSE = z.enum(['transactional', 'customer_requested', 'marketing']).optional();
 
 const EMAIL_PAYLOAD = z.object({
   to: z.string().email(),
   subject: z.string().trim().min(1).max(4000),
   body: z.string().trim().min(1).max(4000),
   fromEmail: z.string().email().optional(),
+  purpose: PURPOSE,
+  dispatchId: z.string().uuid().optional(),
 });
 
 const SMS_PAYLOAD = z.object({
   to: z.string().trim().min(1).max(40),
   body: z.string().trim().min(1).max(4000),
   fromPhoneNumberId: z.string().uuid(),
+  purpose: PURPOSE,
+  dispatchId: z.string().uuid().optional(),
+});
+
+const WHATSAPP_PAYLOAD = z.object({
+  to: z.string().trim().min(1).max(40),
+  body: z.string().trim().max(4096).optional(),
+  purpose: PURPOSE,
+  dispatchId: z.string().uuid(),
+  providerTemplateRef: z.string().trim().max(120).optional(),
+});
+
+const CAMPAIGN_PAYLOAD = z.object({
+  campaignId: z.string().uuid(),
 });
 
 const CALL_PAYLOAD = z.object({
@@ -53,6 +72,7 @@ export class ApprovalExecutionRegistrar implements OnModuleInit {
     private readonly mail: CommunicationToolsProvider,
     private readonly sms: TwilioToolsProvider,
     private readonly tasks: TaskService,
+    private readonly outbound: OmnichannelService,
   ) {}
 
   onModuleInit() {
@@ -89,12 +109,14 @@ export class ApprovalExecutionRegistrar implements OnModuleInit {
       validate: async (record) => { parsePayload(EMAIL_PAYLOAD, record); },
       execute: (record) => {
         const payload = parsePayload(EMAIL_PAYLOAD, record);
+        if (payload.dispatchId) return this.outbound.fulfillApproved(record.tenantId, payload.dispatchId);
         return this.mail.deliverApprovedEmail({
           tenantId: record.tenantId,
           to: payload.to,
           subject: payload.subject,
           body: payload.body,
           fromEmail: payload.fromEmail,
+          purpose: payload.purpose,
         });
       },
     });
@@ -102,12 +124,33 @@ export class ApprovalExecutionRegistrar implements OnModuleInit {
       validate: async (record) => { parsePayload(SMS_PAYLOAD, record); },
       execute: (record) => {
         const payload = parsePayload(SMS_PAYLOAD, record);
+        if (payload.dispatchId) return this.outbound.fulfillApproved(record.tenantId, payload.dispatchId);
         return this.sms.deliverApprovedSms({
           tenantId: record.tenantId,
           to: payload.to,
           body: payload.body,
           fromPhoneNumberId: payload.fromPhoneNumberId,
+          purpose: payload.purpose,
         });
+      },
+    });
+    this.registry.register('whatsapp.send', {
+      validate: async (record) => { parsePayload(WHATSAPP_PAYLOAD, record); },
+      execute: (record) => {
+        const payload = parsePayload(WHATSAPP_PAYLOAD, record);
+        return this.outbound.fulfillApproved(record.tenantId, payload.dispatchId);
+      },
+    });
+    this.registry.register('campaign.send', {
+      validate: async (record) => { parsePayload(CAMPAIGN_PAYLOAD, record); },
+      execute: async (record) => {
+        const payload = parsePayload(CAMPAIGN_PAYLOAD, record);
+        const completed = await this.outbound.executeCampaign(
+          record.tenantId,
+          record.approverUserId ?? record.requesterUserId ?? '',
+          payload.campaignId,
+        );
+        return { reference: completed?.id ?? payload.campaignId };
       },
     });
     this.registry.register('call.initiate', {

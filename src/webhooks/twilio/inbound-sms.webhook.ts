@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { TwilioWebhookService } from '../../integrations/twilio/twilio-webhooks';
+import { OmnichannelService } from '../../modules/omnichannel/omnichannel.service';
 import { AppLogger } from '../../infrastructure/logging/logger.service';
 import type { TwilioWebhookRequest } from './twilio-webhook.types';
 
@@ -30,6 +31,7 @@ export class InboundSmsWebhookController {
   constructor(
     private readonly webhookService: TwilioWebhookService,
     private readonly logger: AppLogger,
+    private readonly omnichannel: OmnichannelService,
   ) {}
 
   @Post('sms/inbound')
@@ -70,6 +72,10 @@ export class InboundSmsWebhookController {
         messageSid: sms.MessageSid,
       },
     );
+
+    if (tenantId) {
+      await this.omnichannel.recordTwilioInbound(tenantId, body);
+    }
 
     // Return empty TwiML to acknowledge receipt without sending an auto-reply.
     return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';

@@ -22,6 +22,12 @@ const PUBLIC_HANDLERS = new Set([
   'PublicCustomerChatController.details',
   'PublicCustomerChatController.handoff',
   'PublicCustomerChatController.end',
+  'InboundSmsWebhookController.handleInboundSms',
+  'InboundCallWebhookController.handleInboundCall',
+  'CallStatusWebhookController.handleCallStatus',
+  'SmsStatusWebhookController.handleStatus',
+  'WhatsAppWebhookController.verify',
+  'WhatsAppWebhookController.receive',
 ]);
 
 function controllerFiles(dir: string): string[] {

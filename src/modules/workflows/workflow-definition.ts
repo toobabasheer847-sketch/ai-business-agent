@@ -324,11 +324,14 @@ function validateActionInput(
     if (!input.subject) errors.push(`Action ${key} needs a subject.`);
     if (!input.body) errors.push(`Action ${key} needs a body.`);
   }
-  if (type === 'send_sms') {
+  if (type === 'send_sms' || type === 'send_whatsapp') {
     if (!input.to) errors.push(`Action ${key} needs a recipient phone number.`);
-    if (!input.body) errors.push(`Action ${key} needs a message body.`);
-    if (!input.fromPhoneNumberId)
+    if (!input.body && !input.providerTemplateRef) errors.push(`Action ${key} needs a message body.`);
+    if (type === 'send_sms' && !input.fromPhoneNumberId)
       errors.push(`Action ${key} needs fromPhoneNumberId.`);
+    if (input.purpose && !['transactional', 'customer_requested', 'marketing'].includes(input.purpose)) {
+      errors.push(`Action ${key} has an unsupported purpose.`);
+    }
   }
   if (type === 'create_email_draft' && !input.body)
     errors.push(`Action ${key} needs a draft body.`);

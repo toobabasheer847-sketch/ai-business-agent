@@ -61,6 +61,7 @@ describe('DashboardService', () => {
       smsConversations: 0,
       callConversations: 0,
       webConversations: 0,
+      whatsappConversations: 0,
     });
     repository.recentCommunications.mockResolvedValue([]);
     service = new DashboardService(repository as any);
@@ -121,6 +122,7 @@ describe('DashboardService', () => {
       smsConversations: 1,
       callConversations: 1,
       webConversations: 0,
+      whatsappConversations: 0,
     }));
     repository.recentCommunications.mockResolvedValue([
       { id: 'c1', channel: 'email', title: 'Follow up', status: 'active', updatedAt: '2026-11-14T00:00:00.000Z' },

@@ -35,6 +35,14 @@ export const TRIGGER_TYPES = [
   'customer_complaint',
   'customer_unresolved',
   'customer_resolved',
+  'customer_reply',
+  'proposal_sent',
+  'proposal_viewed',
+  'proposal_accepted',
+  'proposal_rejected',
+  'task_completed',
+  'human_handoff_requested',
+  'follow_up_due',
 ] as const;
 
 export const ACTION_TYPES = [
@@ -48,6 +56,7 @@ export const ACTION_TYPES = [
   'create_sms_draft',
   'send_email',
   'send_sms',
+  'send_whatsapp',
   'create_proposal_reminder',
   'prepare_proposal_follow_up',
 ] as const;
@@ -55,6 +64,7 @@ export const ACTION_TYPES = [
 export const SENSITIVE_ACTIONS = new Set<ActionType>([
   'send_email',
   'send_sms',
+  'send_whatsapp',
 ]);
 
 export const CONDITION_FIELDS = [

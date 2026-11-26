@@ -61,6 +61,7 @@ describe('AnalyticsService', () => {
       smsConversations: 0,
       callConversations: 1,
       webConversations: 0,
+      whatsappConversations: 0,
     });
     analytics.leadConversion.mockResolvedValue({ leads: 4, withProspect: 1 });
     analytics.statusCounts.mockResolvedValue([{ status: 'new', count: 4 }]);
@@ -126,6 +127,7 @@ describe('AnalyticsService', () => {
     const communications = await service.communications(tenantA, { range: '30d' });
     expect(teamResult.members).toEqual([]);
     expect(communications.conversations.emailConversations).toBe(2);
-    expect(communications.note).toContain('not emails');
+    expect(communications.note).toContain('stored records by channel');
+    expect(communications.note).toContain('not estimated');
   });
 });

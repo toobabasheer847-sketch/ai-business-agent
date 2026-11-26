@@ -165,7 +165,7 @@ export function AnalyticsPage() {
             {communications ? (
               <>
                 <p className="flex items-center gap-2"><MessagesSquare className="size-4" /> {communications.conversations.totalConversations} conversations.</p>
-                <p>Email {communications.conversations.emailConversations}. SMS {communications.conversations.smsConversations}. Calls {communications.conversations.callConversations}. Web {communications.conversations.webConversations}. Other channels {Math.max(0, communications.conversations.totalConversations - communications.conversations.emailConversations - communications.conversations.smsConversations - communications.conversations.callConversations - communications.conversations.webConversations)}.</p>
+                <p>Email {communications.conversations.emailConversations}. SMS {communications.conversations.smsConversations}. Calls {communications.conversations.callConversations}. Web {communications.conversations.webConversations}. WhatsApp {communications.conversations.whatsappConversations ?? 0}. Other channels {Math.max(0, communications.conversations.totalConversations - communications.conversations.emailConversations - communications.conversations.smsConversations - communications.conversations.callConversations - communications.conversations.webConversations - (communications.conversations.whatsappConversations ?? 0))}.</p>
                 <p>{comparisonText(communications.comparisons.total)}</p>
                 <p className="text-muted-foreground">{communications.note}</p>
               </>

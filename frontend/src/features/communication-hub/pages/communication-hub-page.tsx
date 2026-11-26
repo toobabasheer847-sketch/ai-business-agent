@@ -19,11 +19,15 @@ import {
   useCommunicationHubSmsThreads,
   useCommunicationHubStats,
 } from '@/features/communication-hub/hooks/use-communication-hub'
+import { engagementApi } from '@/features/communication-hub/api/communication-hub.api'
+import { EngagementPanels } from '@/features/communication-hub/components/engagement-panels'
 import type {
   CommunicationChannel,
   CommunicationHubHistoryItem,
 } from '@/features/communication-hub/types/communication-hub.types'
+import { useLeads } from '@/features/leads/hooks/use-leads'
 import { useProspects } from '@/features/prospects/hooks/use-prospects'
+import { useUsers } from '@/features/users/hooks/use-users'
 import { PageHeader } from '@/components/layout/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -64,6 +68,7 @@ const channelOptions: Array<{ value: 'all' | CommunicationChannel; label: string
   { value: 'sms', label: 'SMS' },
   { value: 'call', label: 'Call' },
   { value: 'web', label: 'Web' },
+  { value: 'whatsapp', label: 'WhatsApp' },
 ]
 
 function formatDate(value?: string) {
@@ -99,19 +104,28 @@ export function CommunicationHubPage() {
   const fullCommunication = hasPermission(Permission.CommunicationView)
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState<'all' | CommunicationChannel>('all')
+  const [direction, setDirection] = useState<'all' | 'inbound' | 'outbound'>('all')
+  const [status, setStatus] = useState('all')
   const [prospectId, setProspectId] = useState('')
+  const [leadId, setLeadId] = useState('')
+  const [assignedUserId, setAssignedUserId] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [actionError, setActionError] = useState('')
 
   const listQuery = useMemo(
     () => ({
       search: search.trim() || undefined,
       channel: channel === 'all' ? undefined : channel,
+      direction: direction === 'all' ? undefined : direction,
+      status: status === 'all' ? undefined : status,
       prospectId: prospectId || undefined,
+      leadId: leadId || undefined,
+      assignedUserId: assignedUserId || undefined,
       page,
       limit: 8,
     }),
-    [channel, page, prospectId, search],
+    [assignedUserId, channel, direction, leadId, page, prospectId, search, status],
   )
 
   const statsQuery = useCommunicationHubStats(fullCommunication)
@@ -120,11 +134,15 @@ export function CommunicationHubPage() {
   const smsThreadsQuery = useCommunicationHubSmsThreads({ page: 1, limit: 4 }, fullCommunication)
   const detailQuery = useCommunicationHubDetail(selectedId ?? undefined, Boolean(selectedId))
   const prospectsQuery = useProspects()
+  const leadsQuery = useLeads()
+  const usersQuery = useUsers({ isActive: true })
 
   const history = historyQuery.data?.data ?? []
   const stats = statsQuery.data
   const totalPages = historyQuery.data?.totalPages ?? 1
   const prospects = prospectsQuery.data ?? []
+  const leads = leadsQuery.data ?? []
+  const teammates = usersQuery.data ?? []
 
   const prospectNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -139,12 +157,16 @@ export function CommunicationHubPage() {
     return map
   }, [prospects])
 
-  const hasFilters = Boolean(search || channel !== 'all' || prospectId)
+  const hasFilters = Boolean(search || channel !== 'all' || prospectId || leadId || assignedUserId || direction !== 'all' || status !== 'all')
 
   function resetFilters() {
     setSearch('')
     setChannel('all')
+    setDirection('all')
+    setStatus('all')
     setProspectId('')
+    setLeadId('')
+    setAssignedUserId('')
     setPage(1)
   }
 
@@ -172,7 +194,7 @@ export function CommunicationHubPage() {
         </p>
       ) : null}
 
-      {fullCommunication ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      {fullCommunication ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <DashboardKpiCard
           title="Total conversations"
           value={stats?.totalConversations}
@@ -199,6 +221,15 @@ export function CommunicationHubPage() {
           isLoading={statsQuery.isLoading}
           isError={statsQuery.isError}
           errorMessage={statsQuery.error ? 'Could not load SMS totals.' : undefined}
+        />
+        <DashboardKpiCard
+          title="WhatsApp"
+          value={stats?.whatsappConversations}
+          description="WhatsApp conversations"
+          icon={MessageSquareText}
+          isLoading={statsQuery.isLoading}
+          isError={statsQuery.isError}
+          errorMessage={statsQuery.error ? 'Could not load WhatsApp totals.' : undefined}
         />
         <DashboardKpiCard
           title="Calls"
@@ -260,6 +291,70 @@ export function CommunicationHubPage() {
               </SelectContent>
             </Select>
 
+            <Select value={direction} onValueChange={(value) => { setPage(1); setDirection(value as 'all' | 'inbound' | 'outbound') }}>
+              <SelectTrigger className="w-full lg:w-[160px]" aria-label="Direction">
+                <SelectValue placeholder="Direction" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All directions</SelectItem>
+                <SelectItem value="inbound">Inbound</SelectItem>
+                <SelectItem value="outbound">Outbound</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={status} onValueChange={(value) => { setPage(1); setStatus(value) }}>
+              <SelectTrigger className="w-full lg:w-[160px]" aria-label="Status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="handoff">Handoff</SelectItem>
+                <SelectItem value="resolved">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={leadId || 'all'}
+              onValueChange={(value) => {
+                setPage(1)
+                setLeadId(value === 'all' ? '' : value)
+              }}
+            >
+              <SelectTrigger className="w-full lg:w-[180px]" aria-label="Lead">
+                <SelectValue placeholder="Lead" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All leads</SelectItem>
+                {leads.map((lead) => (
+                  <SelectItem key={lead.id} value={lead.id}>
+                    {[lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unnamed lead'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={assignedUserId || 'all'}
+              onValueChange={(value) => {
+                setPage(1)
+                setAssignedUserId(value === 'all' ? '' : value)
+              }}
+            >
+              <SelectTrigger className="w-full lg:w-[180px]" aria-label="Assigned team member">
+                <SelectValue placeholder="Assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All assignees</SelectItem>
+                {teammates.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    {person.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select
               value={prospectId || 'all'}
               onValueChange={(value) => {
@@ -310,6 +405,7 @@ export function CommunicationHubPage() {
                   <TableRow>
                     <TableHead>Title</TableHead>
                     <TableHead>Channel</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Prospect</TableHead>
                     <TableHead>Messages</TableHead>
                     <TableHead>Updated</TableHead>
@@ -342,6 +438,7 @@ export function CommunicationHubPage() {
                             {item.channel}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-sm">{item.status}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {prospectName}
                         </TableCell>
@@ -388,6 +485,8 @@ export function CommunicationHubPage() {
           )}
         </CardContent>
       </Card>
+
+      <EngagementPanels />
 
       {fullCommunication ? <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -473,6 +572,34 @@ export function CommunicationHubPage() {
                   {detailQuery.data.channel} · {detailQuery.data.status}
                 </DialogDescription>
               </DialogHeader>
+              {fullCommunication ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Button type="button" size="sm" variant="outline" onClick={() => engagementApi.resolve(detailQuery.data.id).then(() => { void detailQuery.refetch(); void historyQuery.refetch() })}>Resolve</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => engagementApi.reopen(detailQuery.data.id).then(() => { void detailQuery.refetch(); void historyQuery.refetch() })}>Reopen</Button>
+                  <Select
+                    value={detailQuery.data.assignedUserId || 'unassigned'}
+                    onValueChange={(value) => {
+                      if (value === 'unassigned') return
+                      setActionError('')
+                      void engagementApi.assign(detailQuery.data.id, value).then(() => {
+                        void detailQuery.refetch()
+                        void historyQuery.refetch()
+                      }).catch(() => setActionError('The conversation could not be assigned.'))
+                    }}
+                  >
+                    <SelectTrigger className="w-full sm:w-[200px]" aria-label="Assign conversation">
+                      <SelectValue placeholder="Assign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {teammates.map((person) => (
+                        <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
 
               <div className="space-y-4">
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -487,11 +614,35 @@ export function CommunicationHubPage() {
                       <div key={message.id} className="rounded-lg border p-3">
                         <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                           <span className="font-medium uppercase tracking-wide text-foreground">
-                            {message.role}
+                            {message.authorKind === 'ai' ? 'AI' : message.role}
+                            {message.direction ? ` · ${message.direction}` : ''}
+                            {message.deliveryStatus ? ` · ${message.deliveryStatus}` : ''}
                           </span>
                           <span>{formatDate(message.createdAt)}</span>
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        {message.errorCode || message.errorDetail ? (
+                          <p className="mt-2 text-xs text-destructive">
+                            {message.errorCode ? message.errorCode : 'Provider error'}
+                            {message.errorDetail ? ` — ${message.errorDetail}` : ''}
+                          </p>
+                        ) : null}
+                        {fullCommunication && message.deliveryStatus === 'failed' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-2"
+                            onClick={() => {
+                              setActionError('')
+                              void engagementApi.retry(message.id).then(() => detailQuery.refetch()).catch(() => {
+                                setActionError('This message cannot be retried. Permanent provider failures stay failed until someone changes the recipient or content.')
+                              })
+                            }}
+                          >
+                            Retry
+                          </Button>
+                        ) : null}
                       </div>
                     ))
                   )}

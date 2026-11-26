@@ -7,6 +7,8 @@ import { getTrustedAiContext } from '../../context/ai-request-context.js';
 import { Permission } from '../../../modules/authorization/permissions';
 import { GmailService, TenantGmailCredentials } from './gmail/gmail.service';
 import { ApprovalService } from '../../approvals/approval.service';
+import { OmnichannelService } from '../../../modules/omnichannel/omnichannel.service';
+import type { Purpose } from '../../../modules/omnichannel/communication-rules';
 import { uncertainDelivery } from '../../approvals/approval-executor.registry';
 import type { MailSummary, MailDraft } from '../../../integrations/gmail/mail-operations';
 
@@ -98,6 +100,7 @@ export class CommunicationToolsProvider {
   constructor(
     private readonly gmailService: GmailService,
     @Optional() private readonly approvals?: ApprovalService,
+    @Optional() private readonly omnichannel?: OmnichannelService,
   ) {}
 
   private async resolveCredentials(
@@ -116,7 +119,13 @@ export class CommunicationToolsProvider {
     return creds;
   }
 
-  async deliverApprovedEmail(input: { tenantId: string; to: string; subject: string; body: string; fromEmail?: string }) {
+  async deliverApprovedEmail(input: { tenantId: string; to: string; subject: string; body: string; fromEmail?: string; purpose?: Purpose }) {
+    await this.omnichannel?.assertAllowed({
+      tenantId: input.tenantId,
+      channel: 'email',
+      purpose: input.purpose ?? 'customer_requested',
+      recipient: input.to,
+    });
     const creds = await this.resolveCredentials(input.tenantId, input.fromEmail);
     try {
       const sent = await this.gmailService.mailOperations.sendEmail({
@@ -129,6 +138,16 @@ export class CommunicationToolsProvider {
         tokenExpiry: creds.tokenExpiry,
         refreshAccessToken: this.refreshCallback(creds),
       });
+      await this.omnichannel?.recordExternalAcceptance({
+        tenantId: input.tenantId,
+        channel: 'email',
+        to: input.to,
+        subject: input.subject,
+        body: input.body,
+        provider: 'gmail',
+        providerMessageId: sent.messageId || null,
+        purpose: input.purpose ?? 'customer_requested',
+      }).catch(() => undefined);
       return { reference: sent.messageId, uncertain: false as const };
     } catch (error) {
       if (uncertainDelivery(error)) return { reference: null, uncertain: true as const };

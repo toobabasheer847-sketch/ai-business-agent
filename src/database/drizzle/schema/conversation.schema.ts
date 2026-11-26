@@ -7,6 +7,8 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 
+import { companies } from './company.schema';
+import { leads } from './lead.schema';
 import { tenants } from './tenant.schema';
 import { users } from './user.schema';
 import { prospects } from './prospect.schema';
@@ -32,6 +34,23 @@ export const conversations = pgTable(
       onDelete: 'set null',
       onUpdate: 'cascade',
     }),
+
+    leadId: uuid('lead_id').references(() => leads.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    companyId: uuid('company_id').references(() => companies.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    assignedUserId: uuid('assigned_user_id').references(() => users.id, {
+      onDelete: 'set null',
+      onUpdate: 'cascade',
+    }),
+
+    externalAddress: varchar('external_address', { length: 255 }),
 
     title: varchar('title', {
       length: 255,
@@ -75,5 +94,12 @@ export const conversations = pgTable(
       table.userId,
       table.updatedAt,
     ),
+    index('conversations_tenant_channel_address_idx').on(
+      table.tenantId,
+      table.channel,
+      table.externalAddress,
+    ),
+    index('conversations_tenant_lead_idx').on(table.tenantId, table.leadId),
+    index('conversations_tenant_assigned_idx').on(table.tenantId, table.assignedUserId),
   ],
 );

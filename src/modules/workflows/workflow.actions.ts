@@ -56,7 +56,7 @@ export class WorkflowActionRegistry {
   }): Promise<ActionOutcome> {
     const { step, context } = input;
     const fields = step.inputSnapshot;
-    if (step.actionType === 'send_email' || step.actionType === 'send_sms') {
+    if (step.actionType === 'send_email' || step.actionType === 'send_sms' || step.actionType === 'send_whatsapp') {
       return this.requestSend(input);
     }
     if (
@@ -146,14 +146,17 @@ export class WorkflowActionRegistry {
     step: WorkflowStep;
   }): Promise<ActionOutcome> {
     const fields = input.step.inputSnapshot;
-    const actionType =
-      input.step.actionType === 'send_email' ? 'email.send' : 'sms.send';
+    const actionType = input.step.actionType === 'send_email'
+      ? 'email.send'
+      : input.step.actionType === 'send_whatsapp'
+        ? 'whatsapp.send'
+        : 'sms.send';
     const proposed = await this.approvals.propose({
       tenantId: input.tenantId,
       userId: input.userId,
       role: input.role,
       actionType,
-      title: actionType === 'email.send' ? 'Workflow email' : 'Workflow SMS',
+      title: actionType === 'email.send' ? 'Workflow email' : actionType === 'whatsapp.send' ? 'Workflow WhatsApp' : 'Workflow SMS',
       description:
         'A workflow is waiting for a person to approve this customer message.',
       targetEntityType: 'workflow_step',

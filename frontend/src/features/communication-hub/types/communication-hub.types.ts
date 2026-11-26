@@ -1,4 +1,4 @@
-export const COMMUNICATION_CHANNELS = ['email', 'sms', 'call', 'web'] as const
+export const COMMUNICATION_CHANNELS = ['email', 'sms', 'call', 'web', 'whatsapp'] as const
 
 export type CommunicationChannel = (typeof COMMUNICATION_CHANNELS)[number]
 export type CommunicationChannelFilter = CommunicationChannel | 'all'
@@ -11,6 +11,8 @@ export type CommunicationHubHistoryItem = {
   channel: CommunicationChannel
   direction: CommunicationDirection
   prospectId: string | null
+  leadId?: string | null
+  assignedUserId?: string | null
   title: string | null
   summary: string | null
   status: string
@@ -34,6 +36,7 @@ export type CommunicationHubStats = {
   smsConversations: number
   callConversations: number
   webConversations: number
+  whatsappConversations?: number
   activeConversations: number
 }
 
@@ -44,6 +47,12 @@ export type CommunicationHubMessage = {
   metadata: unknown
   tokenCount: number | null
   createdAt: string
+  direction?: string | null
+  deliveryStatus?: string | null
+  authorKind?: string | null
+  errorCode?: string | null
+  errorDetail?: string | null
+  channel?: string | null
 }
 
 export type CommunicationHubDetail = {
@@ -51,6 +60,7 @@ export type CommunicationHubDetail = {
   tenantId: string
   userId: string | null
   prospectId: string | null
+  assignedUserId?: string | null
   title: string | null
   slug?: string
   channel: CommunicationChannel
@@ -63,7 +73,11 @@ export type CommunicationHubDetail = {
 
 export type CommunicationHubListQuery = {
   channel?: CommunicationChannelFilter
+  direction?: 'inbound' | 'outbound' | 'all'
   prospectId?: string
+  leadId?: string
+  assignedUserId?: string
+  status?: string
   search?: string
   page?: number
   limit?: number

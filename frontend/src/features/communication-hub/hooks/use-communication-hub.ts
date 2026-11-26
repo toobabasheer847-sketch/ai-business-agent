@@ -9,7 +9,11 @@ import type {
 function normalizeListQuery(query: CommunicationHubListQuery = {}) {
   return {
     channel: query.channel && query.channel !== 'all' ? query.channel : undefined,
+    direction: query.direction && query.direction !== 'all' ? query.direction : undefined,
     prospectId: query.prospectId?.trim() || undefined,
+    leadId: query.leadId?.trim() || undefined,
+    assignedUserId: query.assignedUserId?.trim() || undefined,
+    status: query.status?.trim() || undefined,
     search: query.search?.trim() || undefined,
     page: query.page,
     limit: query.limit,

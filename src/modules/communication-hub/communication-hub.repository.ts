@@ -7,19 +7,29 @@ import { conversations, messages } from '../../database/drizzle/schema';
 import { CommunicationChannel, CommunicationDirection } from './dto/communication-history.dto';
 import { CommunicationStats } from './entities/communication-history.entity';
 
-const MSG_COLUMNS = {
+  const MSG_COLUMNS = {
   id: messages.id,
   role: messages.role,
   content: messages.content,
   metadata: messages.metadata,
   tokenCount: messages.totalTokens,
   createdAt: messages.createdAt,
+  direction: messages.direction,
+  deliveryStatus: messages.deliveryStatus,
+  provider: messages.provider,
+  errorCode: messages.errorCode,
+  errorDetail: messages.errorDetail,
+  authorKind: messages.authorKind,
+  channel: messages.channel,
 } as const;
 
 interface ListHistoryOptions {
   channel?: CommunicationChannel;
   direction?: CommunicationDirection;
   prospectId?: string;
+  leadId?: string;
+  assignedUserId?: string;
+  status?: string;
   search?: string;
   page: number;
   limit: number;
@@ -33,7 +43,7 @@ export class CommunicationHubRepository {
   ) {}
 
   async listHistory(tenantId: string, options: ListHistoryOptions) {
-    const { channel, prospectId, search, page, limit } = options;
+    const { channel, direction, prospectId, leadId, assignedUserId, status, search, page, limit } = options;
     const offset = (page - 1) * limit;
 
     const conditions = [eq(conversations.tenantId, tenantId)];
@@ -48,6 +58,19 @@ export class CommunicationHubRepository {
 
     if (prospectId) {
       conditions.push(eq(conversations.prospectId, prospectId));
+    }
+    if (leadId) conditions.push(eq(conversations.leadId, leadId));
+    if (assignedUserId) conditions.push(eq(conversations.assignedUserId, assignedUserId));
+    if (status && ['active', 'resolved', 'open', 'handoff'].includes(status)) {
+      conditions.push(eq(conversations.status, status));
+    }
+    if (direction && direction !== CommunicationDirection.ALL) {
+      conditions.push(sql`exists (
+        select 1 from ${messages}
+        where ${messages.conversationId} = ${conversations.id}
+          and ${messages.tenantId} = ${conversations.tenantId}
+          and ${messages.direction} = ${direction}
+      )`);
     }
 
     if (search && search.trim()) {
@@ -66,6 +89,8 @@ export class CommunicationHubRepository {
         id: conversations.id,
         tenantId: conversations.tenantId,
         prospectId: conversations.prospectId,
+        leadId: conversations.leadId,
+        assignedUserId: conversations.assignedUserId,
         title: conversations.title,
         channel: conversations.channel,
         status: conversations.status,
@@ -94,9 +119,11 @@ export class CommunicationHubRepository {
       data: rows.map((row) => ({
         id: row.id,
         tenantId: row.tenantId,
-        channel: row.channel as 'email' | 'sms' | 'call' | 'web',
+        channel: row.channel as 'email' | 'sms' | 'call' | 'web' | 'whatsapp',
         direction: null as 'inbound' | 'outbound' | 'internal' | null,
         prospectId: row.prospectId ?? null,
+        leadId: row.leadId ?? null,
+        assignedUserId: row.assignedUserId ?? null,
         title: row.title ?? null,
         summary: row.summary ?? null,
         status: row.status,
@@ -301,6 +328,7 @@ export class CommunicationHubRepository {
       smsConversations: 0,
       callConversations: 0,
       webConversations: 0,
+      whatsappConversations: 0,
       activeConversations: 0,
     };
 
@@ -312,6 +340,7 @@ export class CommunicationHubRepository {
       else if (row.channel === 'sms') stats.smsConversations += n;
       else if (row.channel === 'call') stats.callConversations += n;
       else if (row.channel === 'web') stats.webConversations += n;
+      else if (row.channel === 'whatsapp') stats.whatsappConversations += n;
 
       if (row.status === 'active') stats.activeConversations += n;
     }

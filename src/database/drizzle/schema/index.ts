@@ -27,3 +27,4 @@ export * from './business-intelligence.schema';
 export * from './strategic-decision.schema';
 export * from './continuous-improvement.schema';
 export * from './customer-facing.schema';
+export * from './omnichannel.schema';

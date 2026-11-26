@@ -6,11 +6,13 @@ import { CommunicationToolsProvider } from './communication-tools.provider';
 import { GmailModule } from './gmail/gmail.module';
 import { TwilioToolsProvider } from './twilio/twilio-tools.provider';
 import { TwilioIntegrationModule } from '../../../integrations/twilio/twilio.module';
+import { OmnichannelModule } from '../../../modules/omnichannel/omnichannel.module';
 
 @Module({
   imports: [
     GmailModule,
     TwilioIntegrationModule,
+    OmnichannelModule,
   ],
 
   controllers: [

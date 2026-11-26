@@ -40,6 +40,20 @@ const ALWAYS: Record<string, Omit<ApprovalPolicy, 'actionType' | 'required'> & {
     permission: Permission.CommunicationView,
     editableFields: ['body'],
   },
+  'whatsapp.send': {
+    required: true,
+    riskLevel: 'high',
+    reason: 'A WhatsApp message is sent only after a person approves the recipient and content.',
+    permission: Permission.CommunicationView,
+    editableFields: ['body'],
+  },
+  'campaign.send': {
+    required: true,
+    riskLevel: 'high',
+    reason: 'A bulk customer campaign is sent only after a person approves the audience and template.',
+    permission: Permission.CommunicationView,
+    editableFields: [],
+  },
   'call.initiate': {
     required: true,
     riskLevel: 'high',

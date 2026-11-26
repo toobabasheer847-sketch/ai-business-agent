@@ -59,6 +59,7 @@ export type CommunicationCounts = {
   smsConversations: number;
   callConversations: number;
   webConversations: number;
+  whatsappConversations: number;
 };
 
 export type RecentCommunication = {
@@ -280,6 +281,7 @@ export class DashboardRepository {
       smsConversations: 0,
       callConversations: 0,
       webConversations: 0,
+      whatsappConversations: 0,
     };
     for (const row of rows) {
       const total = Number(row.total ?? 0);
@@ -288,6 +290,7 @@ export class DashboardRepository {
       else if (row.channel === 'sms') stats.smsConversations += total;
       else if (row.channel === 'call') stats.callConversations += total;
       else if (row.channel === 'web') stats.webConversations += total;
+      else if (row.channel === 'whatsapp') stats.whatsappConversations += total;
     }
     return stats;
   }
