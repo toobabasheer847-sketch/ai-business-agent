@@ -483,6 +483,20 @@ async function main() {
     );
     console.log('Applied 0012_omnichannel.sql');
 
+    await applySqlFile(
+      client,
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'database',
+        'drizzle',
+        'migrations',
+        '0013_customer_retention.sql',
+      ),
+    );
+    console.log('Applied 0013_customer_retention.sql');
+
     await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (

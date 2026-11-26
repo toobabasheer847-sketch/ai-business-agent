@@ -10,6 +10,7 @@ import {
   BarChart3,
   LayoutDashboard,
   GitBranch,
+  HeartHandshake,
   Landmark,
   ListTodo,
   Mail,
@@ -59,6 +60,15 @@ export const mainNav: NavItem[] = [
     available: true,
     description: 'Period comparisons and business insights',
     permissions: ['analytics.view', 'analytics.view_own'],
+  },
+  {
+    title: 'Customer retention',
+    href: '/customer-retention',
+    icon: HeartHandshake,
+    module: 'customer-retention',
+    available: true,
+    description: 'Heuristic relationship health for companies with an accepted proposal',
+    permissions: ['analytics.view'],
   },
   {
     title: 'AI Monitoring',

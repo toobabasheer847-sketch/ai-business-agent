@@ -7,6 +7,7 @@ import { AppShellLayout } from '@/layouts/app-shell-layout'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { RegisterPage } from '@/features/auth/pages/register-page'
 import { AnalyticsPage } from '@/features/analytics/pages/analytics-page'
+import { CustomerRetentionPage } from '@/features/customer-retention/pages/customer-retention-page'
 import { AiMonitoringPage } from '@/features/ai-monitoring/pages/ai-monitoring-page'
 import { ApprovalsPage } from '@/features/approvals/pages/approvals-page'
 import { ExceptionsPage } from '@/features/exceptions/pages/exceptions-page'
@@ -52,6 +53,7 @@ export function AppRouter() {
         <Route element={<AppShellLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/customer-retention" element={<Permit permissions={[Permission.AnalyticsView]}><CustomerRetentionPage /></Permit>} />
           <Route path="/ai-monitoring" element={<Permit permissions={[Permission.AuditView, Permission.AssistantUse]}><AiMonitoringPage /></Permit>} />
           <Route path="/exceptions" element={<Permit permissions={[Permission.AuditView]}><ExceptionsPage /></Permit>} />
           <Route path="/workflows" element={<Permit permissions={[Permission.WorkflowManage]}><WorkflowsPage /></Permit>} />

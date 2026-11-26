@@ -199,6 +199,13 @@ export function AnalyticsPage() {
           </Card>
         ))}
       </section> : null}
+      {fullAnalytics ? <Card>
+        <CardHeader><CardTitle>Customer retention</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>Relationship health is a heuristic over companies with an accepted proposal. Churn rate, retention rate, and customer lifetime value are not calculated here.</p>
+          <a className="text-sm underline" href="/customer-retention">Open customer retention</a>
+        </CardContent>
+      </Card> : null}
     </div>
   )
 }

@@ -43,6 +43,13 @@ export const TRIGGER_TYPES = [
   'task_completed',
   'human_handoff_requested',
   'follow_up_due',
+  'customer_at_risk',
+  'relationship_health_changed',
+  'customer_inactivity_detected',
+  'unanswered_message_detected',
+  'customer_feedback_received',
+  'retention_plan_created',
+  'retention_action_completed',
 ] as const;
 
 export const ACTION_TYPES = [

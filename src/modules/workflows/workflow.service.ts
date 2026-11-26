@@ -519,7 +519,7 @@ function generationPrompt(instruction: string) {
   return [
     'Convert the instruction into one workflow JSON object.',
     'schemaVersion must be 1.',
-    'trigger.type must be one of: manual, scheduled, new_lead, task_overdue, proposal_expiring, approval_completed, exception_detected, customer_conversation_started, customer_lead_created, customer_handoff, customer_complaint, customer_unresolved, customer_resolved, customer_reply, proposal_sent, proposal_viewed, proposal_accepted, proposal_rejected, task_completed, human_handoff_requested, follow_up_due.',
+    'trigger.type must be one of: manual, scheduled, new_lead, task_overdue, proposal_expiring, approval_completed, exception_detected, customer_conversation_started, customer_lead_created, customer_handoff, customer_complaint, customer_unresolved, customer_resolved, customer_reply, proposal_sent, proposal_viewed, proposal_accepted, proposal_rejected, task_completed, human_handoff_requested, follow_up_due, customer_at_risk, relationship_health_changed, customer_inactivity_detected, unanswered_message_detected, customer_feedback_received, retention_plan_created, retention_action_completed.',
     'actions.type must be one of: create_task, update_task, assign_task, update_lead, create_internal_notification, generate_business_summary, create_email_draft, create_sms_draft, send_email, send_sms, send_whatsapp, create_proposal_reminder, prepare_proposal_follow_up.',
     'Do not invent email addresses, phone numbers, or ids.',
     'Do not include code, SQL, or secrets.',

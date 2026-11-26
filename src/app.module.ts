@@ -25,6 +25,7 @@ import { BusinessIntelligenceModule } from './modules/business-intelligence/busi
 import { StrategicDecisionModule } from './modules/strategic-decisions/strategic-decision.module';
 import { ContinuousImprovementModule } from './modules/continuous-improvement/continuous-improvement.module';
 import { CustomerFacingModule } from './modules/customer-facing/customer-facing.module';
+import { CustomerRetentionModule } from './modules/customer-retention/customer-retention.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -61,6 +62,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     StrategicDecisionModule,
     ContinuousImprovementModule,
     CustomerFacingModule,
+    CustomerRetentionModule,
     AnalyticsModule,
     MessageModule,
     CommunicationHubModule,
