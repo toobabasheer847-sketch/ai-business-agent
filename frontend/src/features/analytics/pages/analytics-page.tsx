@@ -206,6 +206,13 @@ export function AnalyticsPage() {
           <a className="text-sm underline" href="/customer-retention">Open customer retention</a>
         </CardContent>
       </Card> : null}
+      {fullAnalytics ? <Card>
+        <CardHeader><CardTitle>Growth opportunities</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>Growth counts come from stored opportunities. Proposal amounts are not treated as revenue, and no conversion rate is calculated here.</p>
+          <a className="text-sm underline" href="/growth-opportunities">Open growth opportunities</a>
+        </CardContent>
+      </Card> : null}
     </div>
   )
 }

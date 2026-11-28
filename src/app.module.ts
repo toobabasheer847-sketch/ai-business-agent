@@ -26,6 +26,7 @@ import { StrategicDecisionModule } from './modules/strategic-decisions/strategic
 import { ContinuousImprovementModule } from './modules/continuous-improvement/continuous-improvement.module';
 import { CustomerFacingModule } from './modules/customer-facing/customer-facing.module';
 import { CustomerRetentionModule } from './modules/customer-retention/customer-retention.module';
+import { RevenueGrowthModule } from './modules/revenue-growth/revenue-growth.module';
 import { GmailConfigurationModule } from './modules/gmail-configuration/gmail-configuration.module';
 import { KnowledgebaseModule } from './modules/knowledgebase/knowledgebase.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -63,6 +64,7 @@ import { TwilioWebhooksModule } from './webhooks/twilio/twilio-webhooks.module';
     ContinuousImprovementModule,
     CustomerFacingModule,
     CustomerRetentionModule,
+    RevenueGrowthModule,
     AnalyticsModule,
     MessageModule,
     CommunicationHubModule,

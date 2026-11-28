@@ -71,6 +71,15 @@ export const mainNav: NavItem[] = [
     permissions: ['analytics.view'],
   },
   {
+    title: 'Growth opportunities',
+    href: '/growth-opportunities',
+    icon: TrendingUp,
+    module: 'revenue-growth',
+    available: true,
+    description: 'Evidence-backed follow-ups from leads, proposals, and messages',
+    permissions: ['analytics.view'],
+  },
+  {
     title: 'AI Monitoring',
     href: '/ai-monitoring',
     icon: Activity,

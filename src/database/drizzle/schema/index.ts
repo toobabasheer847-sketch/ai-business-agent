@@ -29,3 +29,4 @@ export * from './continuous-improvement.schema';
 export * from './customer-facing.schema';
 export * from './omnichannel.schema';
 export * from './customer-retention.schema';
+export * from './revenue-growth.schema';

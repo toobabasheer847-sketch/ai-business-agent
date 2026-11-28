@@ -50,6 +50,17 @@ export const TRIGGER_TYPES = [
   'customer_feedback_received',
   'retention_plan_created',
   'retention_action_completed',
+  'growth_opportunity_identified',
+  'growth_priority_changed',
+  'growth_opportunity_assigned',
+  'growth_opportunity_qualified',
+  'growth_opportunity_stalled',
+  'proposal_follow_up_required',
+  'customer_expansion_detected',
+  'lead_conversion_recommended',
+  'growth_plan_created',
+  'growth_action_completed',
+  'growth_status_changed',
 ] as const;
 
 export const ACTION_TYPES = [
